@@ -1,0 +1,14 @@
+# Secrets — never commit
+.env
+*.env
+!*.env.example
+*.key
+models.yaml
+
+# Local language scheme and engine mappings (kept locally as examples, not tracked)
+languages/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/

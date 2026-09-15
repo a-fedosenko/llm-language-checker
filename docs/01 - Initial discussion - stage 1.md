@@ -257,7 +257,11 @@ That is not sloppiness, it is a structural fact: the value is a **string somebod
 
 The second group is unvalidated in both directions: nobody checked that the tag elicits the language, and nobody checked that the model can write the language at all. It is also the same failure mode as the fake-language control, one step removed — *"what tag would you understand for Acehnese (Indonesia) with Arabic script?"* is exactly the question a model answers fluently and confabulates freely, whether or not it can produce a word of Acehnese.
 
-**Testable prediction:** the original method, run on an invented language, would have returned a plausible-looking tag. Worth running — it validates the honesty probe and measures how much of the current column is decoration.
+**Testable prediction:** the original method, run on an invented language, would have returned a plausible-looking tag.
+
+**CONFIRMED — 2026-09-15, across three models.** See `02 - Experiment - invented language control.md`. GPT-4o produced a confident tag for **10/10 nonexistent languages** under the original phrasing, and did so by silently substituting a real neighbour (Nurdagh → Turkish, Lombric → French, Zhalgari → Kazakh). Adding an explicit escape hatch fixed that completely (10/10 refused) but then over-refused 3 of 10 real languages. Most importantly, of 7 real languages that produced a confident tag, **only 2 would actually write the language** — tag-presence predicts writing ability at ~29%. The ~322 self-reported entries therefore need re-derivation, and Probe 1 must run both phrasings to measure over-claim and over-refusal as separate per-model coefficients.
+
+Repeated with reasoning disabled on `gemini-3-8-flash` (7/10 fabricated) and `deepseek-v4-pro` (10/10), so this is not a GPT-4o quirk. Two further results: stronger models fabricate *more* convincingly — precise invented ISO codes with invented language families attached — and self-report fails in **both** directions within one model (DeepSeek refused an Aromanian tag, then wrote Aromanian on request). Two harness rules follow: **reasoning must be disabled** for every measurement call, and **"OpenAI-compatible" is not uniform** — `reasoning_effort` is honoured by some routes and rejected outright by others, so the pipeline needs a per-model capability probe at job start.
 
 **Designator selection becomes part of the method.** Rung 1 of the ladder tries candidates and keeps the winner:
 
@@ -405,15 +409,141 @@ Password-type input, `autocomplete="off"`, held in memory for the job's lifetime
 
 ---
 
+## Dialects, macrolanguages and markers (decided 2026-09-15)
+
+This supersedes the earlier "defer Probe 4" recommendation. Variant coverage is never blocked: the marker corpus is a **growable asset**, not a precondition. Ship with zero marker lists — every dialect inherits from its macrolanguage — then add lists over time and watch tags upgrade from inherited to proven.
+
+### A macrolanguage tag is an addressing convention, not a linguistic entity
+
+`kk`, `en`, `ar`, `ru` exist because many systems carry only coarse tags. Testing `kk` answers *"does this model do Kazakh at all"* — it does **not** prove anything about `kk-Cyrl` or `kk-Latn` as dialects, and a single observation of Cyrillic output is not even a stable claim about how `kk` resolves.
+
+Three separate questions, three separate answers:
+
+| Question | How it is answered | Result field |
+|---|---|---|
+| Does the model support the macrolanguage? | probe `kk` | tier |
+| What does `kk` resolve to in this model? | observed, never decided | **`resolves_to`** — a reference field |
+| Can the model produce `kk-Latn` when asked? | **its own probe, its own designator** | dialect tier + `variant_evidence` |
+
+`resolves_to` is recorded as a **distribution**, not a single value — LID already runs on every generated item, so `{"kaz_Cyrl": 6, "kaz_Latn": 0}` is free and honest about variability.
+
+Useful byproduct: `resolves_to` across all 74 macrolanguages tells you what each model *defaults to* — whether `ar` yields MSA or a dialect, `zh` yields Hans or Hant, `en` leans US or UK. Operationally valuable for the TMS (you know what you get when you send a coarse tag) and an interesting published result in its own right.
+
+### Dialect testing logic
+
+1. Test the macrolanguage → tier + `resolves_to` distribution.
+2. Test **each dialect with its own designator** — a separate probe, always.
+3. Score that probe by whichever mechanism applies:
+   - **script check** (GlotLID) where the family splits by script;
+   - **marker comparison** where a marker list exists;
+   - **`not-distinguishable`** where the marker file explicitly says the variants do not differ in everyday register;
+   - otherwise **`untested`** → inherit the macrolanguage's tier as a placeholder.
+4. Record `variant_evidence`.
+
+### `variant_evidence` — four states, not two
+
+| State | Meaning |
+|---|---|
+| `proven` | markers (or script) existed, tested, passed |
+| **`proven-failed`** | tested and the model did **not** mark the variant — must **not** silently inherit "supported" from the macrolanguage |
+| `not-distinguishable` | explicitly flagged (e.g. `ru-BY`); inheritance is *correct*, not a fallback |
+| `untested` | no markers authored yet; inheritance is a *placeholder* and a tracked coverage gap |
+
+Separating `not-distinguishable` from `untested` is what makes remaining work countable — a finished decision must be distinguishable from an unfilled gap.
+
+### Script-split families need no markers, but still need testing
+
+Of 239 variant tags in non-singleton classes, **22 belong to families that split by script** (`ace`, `kaz`, `zho`, `srp`, `bos`, `pan`, `snd`, `mon`, `tzm`, `jav`, `kas`, `knc`, `min`, `mnk`, `shi`, `taq`, `vai`, `bjn`). GlotLID returns language *and* script, so these need **no authored marker list**.
+
+They are not free of *testing*: each still gets its own probe with its own designator, because "emitted Cyrillic when asked for `kk`" is not "produces Cyrillic when asked for `kk-Cyrl`". The script check is the **scoring mechanism**, not a substitute for the test.
+
+The remaining **217 are country-only** (`ar-*` ×19, `es-*` ×22, `af-NA`/`af-ZA`, `sq-MK`/`sq-XK`, `gsw-*`). These need markers or the `not-distinguishable` flag. The flag likely disposes of a large fraction cheaply — `af-NA` vs `af-ZA` is probably in the same category as `ru-BY`, whereas `ar-EG` vs `ar-MA` genuinely is not.
+
+### Marker file schema
+
+Markers are **not** accompanied by a prompt telling the model to use them. Naming the markers measures instruction-following rather than competence, and "write with Australian vocabulary" invites a word list instead of natural text. The file carries marker pairs plus **elicitation contexts** — semantic specs that make the marker unavoidable without naming it. Same primitive as Probe 3.
+
+```json
+{
+  "en-AU": {
+    "status": "markers",
+    "sibling": "en-US",
+    "markers": [
+      { "axis": "lexis",       "variant": ["boot", "petrol", "ute"],
+                               "sibling": ["trunk", "gas", "pickup"] },
+      { "axis": "orthography", "variant": ["-ise", "-our", "tyre"],
+                               "sibling": ["-ize", "-or", "tire"] },
+      { "axis": "grammar",     "variant": ["in hospital", "different to"],
+                               "sibling": ["in the hospital", "different from"] }
+    ],
+    "elicitation": [
+      "Describe loading luggage into the back of a car and stopping to fill the fuel tank.",
+      "Describe someone being taken to hospital after a fall, and how their treatment differed from what was expected."
+    ]
+  },
+  "ru-BY": { "status": "not-distinguishable",
+             "note": "No markers in everyday register; inherits from ru." }
+}
+```
+
+Two scoring rules follow:
+
+- **Comparative, not absolute.** Score = variant markers vs sibling markers. Writing "trunk" for `en-AU` is a miss; "boot" is a hit.
+- **Void the item if neither appears.** That means the elicitation context failed, not the model. Otherwise models are punished for bad contexts, and bad contexts are never detected.
+
+The variant may be named in the prompt — that is the designator. The markers never are.
+
+## Deployment pivot — self-hosted only (decided 2026-09-15)
+
+**We do not deploy.** The project is packaged as microservices that anyone runs locally or in their own cloud: clone, supply a `.env`, `docker compose up`, UI on localhost. Target is minutes from clone to a working environment.
+
+This resolves three of the hardest open problems at once:
+
+| Problem | Resolution |
+|---|---|
+| Hosting cost (Challenge 2 in v0) | None. No VPS, no domain, no GPU machine to rent. |
+| API-key custody | Gone. No password field, no UI key entry, no liability. Each user supplies their own `.env`. |
+| Back-translator free/paid toggle | Gone. Each user pays their own costs directly; no metering, no abuse surface. |
+
+It also changes the positioning: the README now presents an **empirical heuristic tool**, explicitly not a linguistic authority and not a leaderboard, with its limits stated on the front page.
+
+Consequence for scope: the queue, worker pool and multi-tenancy concerns from `Basic idea v0.md` shrink dramatically. This is a single-tenant local application, not a service.
+
+### Hardware profiles
+
+The stack detects hardware at startup and picks a profile; `HARDWARE_PROFILE` in `.env` can override.
+
+| Detected | Back-translator | Coverage |
+|---|---|---|
+| GPU ≥ 6 GB VRAM | MADLAD-400-3B-MT, fp16 | ~400 languages |
+| GPU 4–6 GB VRAM | MADLAD-400-3B-MT, int8 | ~400 languages |
+| CPU only, or < 4 GB | NLLB-200-distilled-600M, or a remote API back-translator | ~200 languages, or as configured |
+
+GlotLID runs on CPU everywhere; no GPU required for language identification.
+
+### Reference hardware (verified 2026-09-15)
+
+Andrei's development machine, checked directly:
+
+- **RTX 4060 Laptop, 8 GB VRAM**, driver 596.08, compute capability 8.9 (Ada — native bf16/FP8)
+- **Docker 27.5.1 with the `nvidia` container runtime already registered**; `docker run --gpus all` verified to see all 8188 MiB inside a container
+- 20 CPU cores, 15 GB RAM (WSL2), 928 GB free disk
+- torch not yet installed
+
+Memory fit at 8 GB VRAM: GlotLID is CPU-only (~1.2 GB RAM); DeBERTa-v3 NLI ≈ 0.9 GB fp16; MADLAD-400-3B-MT ≈ 6 GB fp16 (marginal with activations) or ≈ 3 GB int8 (comfortable). All required components co-resident at int8 ≈ 5 GB. MADLAD-400-10B does not fit. **8 GB decides quantisation, not feasibility** — the heavy path runs on a laptop, which is what makes the self-hosted promise credible.
+
+## Decisions taken 2026-09-15
+
+1. **Engine namespace stays `mt.*` for both MT engines and LLMs.** An LLM can be used as an MT engine, and the TMS generates one list of available MT engines that includes them. This supersedes open question 7; no `llm.*` namespace is introduced.
+2. **No dialect marker resources exist in the TMS.** Rather than defer variant testing, marker lists are made optional and incremental — see *Dialects, macrolanguages and markers* above. Coverage is never blocked by their absence. This supersedes open question 2.
+
 ## Open questions carried into Stage 3
 
 1. Does the content-controlled-generation + fact-recall design land, or should the gold-reference translation path stay **primary** for the ~200 languages that have one? (Recommendation: run both on those 200 — that is the calibration study.)
-2. **Dialect marker lists** — does the TMS already hold variant-distinguishing resources (style guides, glossaries, per-locale QA rules)? That would be a large head start on Probe 4 and would change its scope.
 3. **Judge model** — a preference, or design it provider-agnostic behind the OpenAI-compatible interface and pin whichever the company key routes to?
 4. Confirm the **tier → workflow mapping** matches how the TMS actually reasons about locale readiness, or supply the real categories.
 5. **MADLAD-400-3B-MT is unproven for us.** First concrete experiment: run the back-translator qualification test over as much of the 600-language list as has aligned text, and find out what its real coverage is. This gates the cost model in Stage 3.
 6. How far can the **qualifiable set** be stretched past FLORES+ using NTREX, Tatoeba, OPUS and Bible corpora — and at what licensing cost?
-7. **Engine namespace:** keep the `mt.*` prefix (drop-in for the TMS, consistent with the existing `mt.chatgpt`) or introduce `llm.*`? Recommendation: keep `mt.*` but make it versioned — `mt.openai-gpt-4o` rather than `mt.chatgpt` — retaining the old key as a legacy alias.
 8. **Which tiers earn a designator in the master file?** Presence there reads as "we will send this locale to this engine." Recommendation: `Basic` and above, with tiers carried in the side file so the TMS can route workflows accordingly. Andrei's call.
 9. Should the **existing `mt.chatgpt` column be re-derived** by this pipeline rather than trusted? Its designators were authored ad hoc, so some of its negatives are plausibly designator failures. Re-running it would also be the first end-to-end validation of the method.
 
