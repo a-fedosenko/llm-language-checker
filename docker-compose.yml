@@ -1,0 +1,41 @@
+# Default profile is CPU so `docker compose up` works on any machine.
+# `docker compose --profile gpu up` adds the GPU-backed back-translator (arrives in S3).
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: llmlc
+      POSTGRES_PASSWORD: llmlc
+      POSTGRES_DB: llmlc
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llmlc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://llmlc:llmlc@postgres:5432/llmlc
+      SCHEME: ${SCHEME:-default}
+      HARDWARE_PROFILE: ${HARDWARE_PROFILE:-auto}
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Schemes mounted read-only: bring your own locale list, no rebuild.
+      - ./schemes:/app/schemes:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:

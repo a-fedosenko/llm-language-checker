@@ -12,3 +12,13 @@ languages/
 __pycache__/
 *.py[cod]
 .venv/
+
+# Downloaded source tables (regenerate with scripts/build_default_scheme.py --refresh)
+data/cache/
+
+# Build artifacts
+*.egg-info/
+
+# User-supplied locale lists are never committed; the public catalogue is.
+schemes/*.json
+!schemes/default.json
