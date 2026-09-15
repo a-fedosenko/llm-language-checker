@@ -4,7 +4,7 @@
 
 Vendor language lists are marketing. "Supports 100+ languages" has no definition behind it, and for the long tail nobody publishes anything at all. This project measures it instead: you point it at a model, it generates text, checks the text, and reports a graded verdict with its evidence and its uncertainty.
 
-> **Status: design phase.** The methodology is documented and partially validated by experiment (see `docs/`). The service itself is not yet implemented.
+> **Status: early development.** The methodology is documented and partially validated by experiment (see `docs/`). The skeleton, language catalogue and read-only API work; the measurement pipeline is being built.
 
 ## What it is not
 
@@ -22,26 +22,47 @@ Anything it reports is evidence, not proof.
 There is no hosted service and no public deployment. **You run it locally or in your own cloud**, with your own API keys in your own `.env`. Nothing is sent anywhere except to the model endpoints you configure, and no key is ever stored by the application or entered through a web form.
 
 ```bash
-git clone <this repo>
+git clone https://github.com/a-fedosenko/llm-language-checker
 cd llm-language-checker
 cp .env.example .env      # add your OpenAI-compatible endpoint + key
 docker compose up
-# UI on http://localhost:8080
 ```
 
-Target: minutes from clone to a working environment.
+- API and interactive docs: <http://localhost:8000/docs>
+- UI: arrives with the pipeline
+
+No network fetch is needed at setup — the language catalogue ships in the repo.
+
+Without Docker:
+
+```bash
+pip install -e ".[dev]"
+uvicorn llmlc.api.main:app --reload
+pytest
+```
+
+## Bring your own locale list
+
+The core speaks canonical **BCP-47** (`kk`, `kk-Latn`, `sr-Cyrl-RS`). Any other tag convention — including orders that put the script last — reaches it through a **scheme adapter**, so no organisation's locale list is baked into the tool.
+
+- `schemes/default.json` ships with the project: **9,589 tags** built from ISO 639-3 code tables, the official ISO 639-3 macrolanguage mapping, and SIL langtags. It carries macrolanguage/member relations, default script and region, and endonyms.
+- Drop your own list in `schemes/<name>.json` and set `SCHEME=<name>`. Your list is gitignored; results come back keyed to your tags.
+- Regenerate the shipped catalogue with `python scripts/build_default_scheme.py --refresh`.
 
 ### Hardware
 
 The stack detects available hardware at startup and selects a profile automatically:
 
-| Detected | Back-translator | Coverage |
-|---|---|---|
-| GPU ≥ 6 GB VRAM | MADLAD-400-3B-MT, fp16 | ~400 languages |
-| GPU 4–6 GB VRAM | MADLAD-400-3B-MT, int8 | ~400 languages |
-| CPU only, or < 4 GB | NLLB-200-distilled-600M, or a remote API back-translator | ~200 languages, or as configured |
+| Detected | Profile | Back-translator | Coverage |
+|---|---|---|---|
+| GPU ≥ 10 GB VRAM | `gpu-fp16` | MADLAD-400-3B-MT, fp16 | ~400 languages |
+| GPU 4–10 GB VRAM | `gpu-int8` | MADLAD-400-3B-MT, int8 | ~400 languages |
+| CPU only, or < 4 GB | `cpu` | NLLB-200-distilled-600M | ~200 languages |
+| `BT_REMOTE_MODEL` set | `api` | a configured remote model | as qualified per language |
 
-Language identification (GlotLID) runs on CPU everywhere and needs no GPU. Reference hardware for development: RTX 4060 Laptop (8 GB), 20 cores, 15 GB RAM.
+`GET /hardware` reports the resolved profile, and it is recorded on every result — results produced by different back-translators are not comparable.
+
+Language identification runs on CPU everywhere and needs no GPU. Override detection with `HARDWARE_PROFILE` in `.env`. Reference machine: RTX 4060 Laptop (8 GB) → `gpu-int8`; fp16 is deliberately reserved for larger cards, since MADLAD-3B is ~6 GB before activations.
 
 ## How it works
 
@@ -72,7 +93,15 @@ and a separate full-evidence report carrying scores, intervals, designators trie
 | `docs/Basic idea v0.md` | Original concept |
 | `docs/01 - Initial discussion - stage 1.md` | Prior art, datasets, full methodology, output contract |
 | `docs/02 - Experiment - invented language control.md` | Experiment: why self-reported language support cannot be trusted |
+| `docs/03 - Architecture and development stages.md` | Architecture, data model, cost model, staging, implementation log |
+
+## Attribution
+
+The shipped language catalogue is derived from:
+
+- **ISO 639-3** code tables and macrolanguage mapping © SIL International, used under the ISO 639-3 terms of use.
+- **SIL langtags** © SIL International — <https://ldml.api.sil.org/langtags.json>
 
 ## License
 
-MIT.
+MIT for the code. Derived data retains the terms of its sources, above.

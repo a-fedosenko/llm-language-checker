@@ -194,6 +194,10 @@ S1 is the one that matters. A working end-to-end path for a single language, how
 
 ---
 
+## Open question raised by S0
+
+**Should the shipped catalogue offer named subsets?** All 9,589 tags is the right *catalogue* but the wrong *default job*. Candidate subsets: `flores200` (so the S7 calibration study has a natural target), `cldr-core`, `top-100-by-speakers`, `living-only`. A user's own locale list remains the other path. Deciding this affects the UI's default view at S3 and what `check --all` means.
+
 ## Decisions taken 2026-09-15
 
 1. **UI comes early.** Needed for manual testing, so it is pulled forward from S5 to a thin read-only view at S3, widened at S5. Not a blocker for the pipeline stages.
@@ -236,7 +240,7 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 
 | # | Stage | Done when |
 |---|---|---|
-| **S0** | Skeleton: compose, Postgres, Alembic, hardware detect, **scheme adapter + generated `schemes/default.json`** | `docker compose up` runs; `GET /languages` returns the canonical scheme with family links resolved, loaded from either the shipped template or a user-supplied list |
+| **S0** ✅ | Skeleton: compose, Postgres, hardware detect, **scheme adapter + generated `schemes/default.json`** | **Done 2026-09-15** — `docker compose up` runs; `GET /languages` returns 9,589 tags with family links resolved, from the shipped catalogue or a user-supplied list |
 | **S1** | **Thin vertical slice, one language, CLI only** | `check --engine mt.openai-gpt-4o --tag cv` runs generate → LID gate → back-translate → judge → tier, and writes both artifacts |
 | **S2** | The ladder: class collapse, designator selection, pruning, adaptive rungs | A 20-language batch runs end to end with per-class economics visible |
 | **S3** | Back-translator qualification, evidence classes, **thin read-only UI** | Every result carries an honest `evidence`; results browsable in a browser |
@@ -247,3 +251,76 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 | **S8** | README, methodology page, limitations | A reader can reproduce a result and knows what it does not mean |
 
 S1 remains the stage that matters: a working end-to-end path for a single language de-risks every assumption in doc 01.
+
+---
+
+# Implementation log
+
+## S0 — skeleton, scheme adapter, public catalogue (done 2026-09-15, commit `f22b5e1`)
+
+**Built:** `src/llmlc/` with `scheme` (canonical model, loader, adapter protocol), `hardware` (profile detection), `config`, and a read-only FastAPI surface (`/health`, `/hardware`, `/scheme`, `/languages`, `/languages/{tag}`). `docker compose up` brings up Postgres and the API. 28 tests, none requiring network or GPU.
+
+**The public catalogue works.** `schemes/default.json` — 9,589 tags, 185 macrolanguages, 8,314 living — generated from ISO 639-3 code tables, the official ISO 639-3 macrolanguage mapping, and SIL langtags. It is **committed** (3.4 MB), not generated on first run: "minutes from clone" is the product promise and requiring a network fetch at setup would break it. `--refresh` regenerates.
+
+Note for whoever regenerates: **SIL moved the ISO 639-3 download URLs.** The working path is `iso639-3.sil.org/sites/iso639-3/files/downloads/…`, not `.../sites/default/files/downloads/…`, which now 404s. Recorded in the generator.
+
+### Findings
+
+**1. SIL langtags already resolves default scripts and regions.** `kk` → `kk-Cyrl-KZ`, `kk-AF` → `kk-Arab-AF`. So a standards-based default resolution exists independently of anything we measure.
+
+That makes the per-model **observed** `resolves_to` more interesting, not less. *"The standard says `kk` means Cyrillic-Kazakhstan; this model actually produced X"* is a comparison worth publishing, and it is free — LID runs on every item anyway.
+
+**2. Class collapse is scheme-dependent, and barely helps the public catalogue.** 9,589 tags collapse to only 9,103 classes, because langtags is a **language**-level catalogue while the Logrus scheme is **locale**-level (602 tags → 423 classes). Largest classes in the default catalogue: `en|Latn` (97), `fr|Latn` (27), `ar|Arab` (26), `es|Latn` (25).
+
+Consequence for the cost model in this document: **the ~5,700-call estimate is for a locale-level scheme of roughly 600 tags.** A full run over all 9,589 default-catalogue tags is a much larger job and should not be the default action. This raises a new question — see open questions below.
+
+**3. Hardware detection behaves as intended on the reference machine.** Host: `gpu-int8`, RTX 4060 Laptop, 8188 MiB, MADLAD-400-3B. Inside the `api` container: `cpu`, correctly, since no GPU is passed through to it. Detection becomes authoritative in the `bt` service at S3; until then `/hardware` reports what the calling process can see, which is worth knowing when reading it from inside Docker.
+
+### Deviations from the plan
+
+| Planned | Actual | Why |
+|---|---|---|
+| Alembic at S0 | **Deferred to S4** | There is no schema yet. Scaffolding migrations over an empty model is ceremony; S4 introduces persistence and will introduce Alembic with a real baseline. |
+| `schemes/default.json` generated locally | **Committed** | Clone-to-run must not require a network fetch. |
+| Hardware detection in `api` | Library-level, reported by `api` | Becomes authoritative in `bt` at S3. |
+
+---
+
+# S1 — thin vertical slice (next)
+
+**Goal:** one language, end to end, CLI only. `llmlc check --engine <model> --tag cv` runs the full path and writes both artifacts. Crude is fine; complete is not optional. Every later stage widens this path rather than replacing it.
+
+This is the stage that de-risks doc 01, because it is the first time the method runs as a whole rather than as an argument.
+
+## Path to implement
+
+```
+scheme lookup  ->  designator  ->  generate  ->  gate  ->  back-translate  ->  judge  ->  tier  ->  artifacts
+```
+
+| Step | Component | S1 scope |
+|---|---|---|
+| Designator | `probe/designator.py` | Build candidates A–E from the scheme entry (name+region, endonym, tag, ISO 639-3 + script, incumbent). S1 uses candidate A only; the sweep is S2. |
+| Generate | `client/openai.py` | OpenAI-compatible call. **Reasoning off**, with the per-model fallback proven in doc 02. Content-controlled prompt from a fact spec. |
+| Gate | `probe/gate.py` | Refusal, copy, script block, degeneration, memorised boilerplate. GlotLID lands here; S1 may start with script+heuristics and add GlotLID within the stage. |
+| Back-translate | `bt/` | S1 uses the **`api` profile** — a pinned aggregator model, different vendor from the model under test. Local MADLAD is S3. |
+| Judge | `probe/judge.py` | Blind, pivot-only, three-valued per fact (`present` / `missing` / `contradicted`), JSON out, `gpt-4o-mini` default. |
+| Tier | `probe/score.py` | `S_lang`, `S_content`, tier thresholds, bootstrap CI, `borderline` when the interval straddles a boundary. |
+| Artifacts | `export/` | Minimal mergeable JSON + full-evidence record. |
+
+## Fact specs
+
+S1 needs a small set of content specifications — scenario prose plus the fact checklist that grades it. Three to five, hand-written, stored as data (`data/specs/*.json`) rather than embedded in code, since S2 will need many more and S7 will re-grade old generations against them.
+
+## Definition of done
+
+- `llmlc check --engine openai-gpt-4o --tag cv` produces a tier, an interval, an evidence class, and both artifacts.
+- The same command on a language the model cannot write produces `None` with a `deterministic-negative` evidence class and **no judge call**.
+- Every model call is recorded to disk with its prompt, designator and token usage — the raw corpus starts here, since S7 re-grades it.
+- Grading is testable offline against recorded fixtures, with no network. The 204 responses already in `experiments/results/` seed this.
+- Tests cover the gate and the scorer without touching an API.
+
+## Open questions for S1
+
+1. **Pivot language** — English by default. Worth a flag now, since doc 01 proposes closer pivots (Russian for Turkic, Arabic for Semitic) and the plumbing is cheaper to add than to retrofit.
+2. **Back-translator for S1** — which aggregator model? It must differ from the model under test. `gemini-gemini-3-8-flash` is the obvious pick against an OpenAI model under test.
