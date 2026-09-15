@@ -249,8 +249,28 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 | **S6** | Dialects: marker files, script-split scoring, `variant_evidence` | `en-AU` proven from markers; `ru-BY` `not-distinguishable`; `kk-Latn` scored by script |
 | **S7** | **Calibration study** — fact-recall vs chrF++ against FLORES+ | Published error bars for the proxy metric |
 | **S8** | README, methodology page, limitations | A reader can reproduce a result and knows what it does not mean |
+| **S9** | **Public landing page** | The project is explicable to someone who has never run it |
 
 S1 remains the stage that matters: a working end-to-end path for a single language de-risks every assumption in doc 01.
+
+## S9 — landing page (planned)
+
+A public page describing the project, added once the tool works and its results are proven. Deliberately last: a landing page for software that does not yet run is a liability.
+
+**Purpose.** The tool is self-hosted, so the page is not a product front-end — nobody signs up for anything. It exists to explain the project to someone who has not cloned it: what question it answers, how, and — given the whole design rests on saying so — what the answers do not mean.
+
+**Content, in rough priority order:**
+
+1. The problem: vendor language lists are unfalsifiable, and for the long tail nothing is published at all.
+2. The method in one diagram: content-controlled generation → local gate → back-translation → fact recall → graded tier.
+3. **The limitations, prominently** — not in a footer. Heuristic, small samples, `unverified` where the instrument cannot read the language, and comparable only within one back-translator/judge/method version.
+4. The evidence: the invented-language experiment (doc 02) and the S7 calibration study are the two things that make the method credible rather than merely plausible. Both are publishable as they stand.
+5. How to run it, pointing at the README.
+6. Attribution for ISO 639-3, SIL langtags, FLORES+.
+
+**Form.** Static, no backend — GitHub Pages from `docs/` is the obvious host, since it costs nothing and keeps the page in the same repository as the thing it describes. It should also be the natural home for published result sets as they accumulate.
+
+**Open:** whether the page hosts browsable results (which model supports which language, generated from real scans) or only describes the method. Results-on-the-page is the more useful artifact and the better portfolio piece, but it implies a publishing pipeline and a decision about which scans are canonical. Worth deciding at S7, when there are results worth publishing.
 
 ---
 
