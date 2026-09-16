@@ -93,3 +93,57 @@ def test_good_output_passes():
 ])
 def test_script_detection(text, script):
     assert detect_script(text) == script
+
+
+# -- macrolanguage members and weak LID calls --------------------------------
+
+def test_macrolanguage_member_is_the_answer_not_a_substitution():
+    """Asking for Swahili (swa) and getting Coastal Swahili (swh) is the
+    macrolanguage resolving to a member. Live run scored this None before the fix."""
+    r = check("Mwanamke alikosa basi la asubuhi. Alitembea kwenda kazini mvuani.",
+              prompt=PROMPT, expect_lang="swa", expect_script="Latn",
+              accept_lang={"swc", "swh"}, relatives={"kon"},
+              lid_result=lid("swh_Latn", "swh", "Latn", 0.95))
+    assert r.passed
+
+
+def test_member_is_not_treated_as_a_neighbour_even_if_also_listed():
+    r = check("Mwanamke alikosa basi la asubuhi na alitembea kwenda kazini.",
+              prompt=PROMPT, expect_lang="swa", expect_script="Latn",
+              accept_lang={"swh"}, relatives={"swh"},
+              lid_result=lid("swh_Latn", "swh", "Latn", 0.99))
+    assert r.passed, "accept_lang must win over relatives"
+
+
+def test_weak_lid_disagreement_voids_the_item_rather_than_convicting():
+    """Hindi was scored Token off a 0.53-confidence call of Angika."""
+    r = check("एक महिला सुबह की बस चूक गई और बारिश में काम पर चली गई।",
+              prompt=PROMPT, expect_lang="hin", expect_script="Deva",
+              lid_result=LidResult("anp_Deva", "anp", "Deva", 0.53, "test", []))
+    assert r.verdict is GateVerdict.LOW_CONFIDENCE
+    assert not r.is_negative, "a weak LID call is not evidence against the model"
+
+
+def test_confident_wrong_language_still_convicts():
+    r = check("Я говорю по-русски и сегодня очень хорошая погода в городе.",
+              prompt=PROMPT, expect_lang="chv", expect_script="Cyrl",
+              lid_result=LidResult("rus_Cyrl", "rus", "Cyrl", 0.99, "test", []))
+    assert r.verdict is GateVerdict.WRONG_LANGUAGE
+    assert r.is_negative
+
+
+def test_target_ranked_second_above_threshold_passes():
+    r = check("एक महिला सुबह की बस चूक गई और बारिश में काम पर चली गई।",
+              prompt=PROMPT, expect_lang="hin", expect_script="Deva",
+              lid_result=LidResult("anp_Deva", "anp", "Deva", 0.45, "test",
+                                   [("hin_Deva", 0.40), ("bho_Deva", 0.05)]))
+    assert r.passed
+    assert "ranked below" in r.detail
+
+
+def test_target_ranked_second_but_negligible_does_not_rescue():
+    r = check("Я говорю по-русски и сегодня очень хорошая погода в городе тут.",
+              prompt=PROMPT, expect_lang="chv", expect_script="Cyrl",
+              lid_result=LidResult("rus_Cyrl", "rus", "Cyrl", 0.97, "test",
+                                   [("chv_Cyrl", 0.01)]))
+    assert r.verdict is GateVerdict.WRONG_LANGUAGE

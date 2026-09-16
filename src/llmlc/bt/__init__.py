@@ -1,5 +1,6 @@
-from .qualify import Qualification, QualStatus, load_controls, qualify
+from .qualify import (Qualification, QualificationCache, QualStatus, load_controls,
+                      qualify, route)
 from .remote import BackTranslation, RemoteBackTranslator
 
-__all__ = ["BackTranslation", "RemoteBackTranslator", "qualify", "Qualification",
-           "QualStatus", "load_controls"]
+__all__ = ["BackTranslation", "RemoteBackTranslator", "qualify", "route",
+           "Qualification", "QualStatus", "QualificationCache", "load_controls"]

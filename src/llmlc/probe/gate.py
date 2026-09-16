@@ -32,6 +32,7 @@ class GateVerdict(str, Enum):
     DEGENERATE = "degenerate"
     MEMORISED = "memorised"
     TOO_SHORT = "too_short"
+    LOW_CONFIDENCE = "low_confidence"
 
 
 #: Verdicts that are a negative about the model, as opposed to a void item.
@@ -55,6 +56,13 @@ MEMORISED_MARKERS = (
 )
 
 MIN_CHARS = 25
+
+#: Below this, a top-1 LID label is too weak to convict a model on. Correct calls
+#: have been observed as low as 0.63, so a weak disagreement voids the item
+#: rather than counting as evidence against the model.
+LID_CONFIDENT = 0.60
+#: The expected language appearing anywhere in the top-k above this counts as a match.
+LID_ALTERNATIVE_FLOOR = 0.15
 
 
 @dataclass
@@ -89,11 +97,15 @@ def _normalise(s: str) -> str:
 
 def check(text: str | None, *, prompt: str, expect_lang: str | None,
           expect_script: str | None, relatives: set[str] | None = None,
+          accept_lang: set[str] | None = None,
           lid_result: LidResult | None = None) -> GateResult:
     """Screen one generation.
 
-    `expect_lang` is an ISO 639-3 code; `relatives` are ISO 639-3 codes of
-    high-resource neighbours whose appearance means substitution rather than a
+    `expect_lang` is an ISO 639-3 code. `accept_lang` holds other codes that also
+    satisfy the request -- chiefly the members of a macrolanguage: asking for
+    Swahili (`swa`) and receiving Coastal Swahili (`swh`) is the macrolanguage
+    resolving to a member, which is the answer, not a substitution.
+    `relatives` are neighbours whose appearance means substitution rather than a
     generic miss.
     """
     checks: dict[str, bool] = {}
@@ -132,8 +144,26 @@ def check(text: str | None, *, prompt: str, expect_lang: str | None,
                           detail=f"expected {expect_script}, got {lid.script}", checks=checks)
     checks["script"] = True
 
-    if expect_lang and lid.lang and lid.lang != expect_lang:
+    accepted = {expect_lang, *(accept_lang or set())} - {None}
+    if expect_lang and lid.lang and lid.lang not in accepted:
         got = lid.lang
+
+        # The target may still be present further down the ranking; a top-1 miss
+        # with the target close behind is not evidence of the wrong language.
+        alt = {label.partition("_")[0]: p for label, p in lid.alternatives}
+        hit = next((c for c in accepted if alt.get(c, 0.0) >= LID_ALTERNATIVE_FLOOR), None)
+        if hit:
+            checks["language"] = True
+            return GateResult(GateVerdict.PASS, lid=lid,
+                              detail=f"{expect_lang} ranked below {got} but above threshold",
+                              checks=checks)
+
+        if lid.confidence < LID_CONFIDENT:
+            return GateResult(GateVerdict.LOW_CONFIDENCE, lid=lid,
+                              detail=f"LID unsure: {got} at {lid.confidence:.2f}; "
+                                     "too weak to count against the model",
+                              checks=checks)
+
         if relatives and got in relatives:
             return GateResult(GateVerdict.RELATIVE_SUBSTITUTION, lid=lid,
                               detail=f"expected {expect_lang}, produced neighbour {got}",

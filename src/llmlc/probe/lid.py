@@ -71,7 +71,7 @@ def available() -> bool:
     return MODEL_PATH.exists()
 
 
-def identify(text: str, k: int = 3) -> LidResult:
+def identify(text: str, k: int = 5) -> LidResult:
     script = detect_script(text)
     if not available():
         return LidResult(None, None, script, 0.0, "script-only", [])

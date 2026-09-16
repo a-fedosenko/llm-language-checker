@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from llmlc.bt import Qualification, QualStatus, RemoteBackTranslator, qualify
+from llmlc.bt import Qualification, QualificationCache, RemoteBackTranslator, route
 from llmlc.client import OpenAICompatClient
 from llmlc.probe import designator as dsg
 from llmlc.probe.corpus import Corpus, Record
@@ -54,6 +54,16 @@ class CheckResult:
     resolves_to: dict[str, int] = field(default_factory=dict)
 
 
+def _accepted(scheme: Scheme, lang: Language) -> set[str]:
+    """Codes that also satisfy a request for `lang`.
+
+    A macrolanguage is an addressing convention, not a linguistic entity: asking
+    for `sw` and getting `swh` means the macrolanguage resolved to a member,
+    which is the answer. Which member it resolved to is recorded in resolves_to.
+    """
+    return set(lang.members) if lang.is_macro else set()
+
+
 def _relatives(scheme: Scheme, lang: Language) -> set[str]:
     """High-resource neighbours whose appearance means substitution.
 
@@ -66,10 +76,9 @@ def _relatives(scheme: Scheme, lang: Language) -> set[str]:
         for other in scheme.languages.values():
             if other.iso639_3 == lang.macro and other.members:
                 out.update(other.members)
-    if lang.members:
-        out.update(lang.members)
     out.discard(lang.iso639_3 or "")
-    return out
+    # A macrolanguage's own members are not neighbours -- they are valid answers.
+    return out - _accepted(scheme, lang)
 
 
 def check_language(
@@ -78,12 +87,13 @@ def check_language(
     tag: str,
     engine: str,
     client: OpenAICompatClient,
-    backtranslator: RemoteBackTranslator,
+    backtranslators: list[RemoteBackTranslator],
     judge_model: str,
     specs: list[Spec],
     corpus: Corpus,
     pivot: str = "en",
     n_sentences: int = 3,
+    cache: QualificationCache | None = None,
 ) -> CheckResult:
     lang = scheme.get(tag)
     if lang is None:
@@ -91,11 +101,12 @@ def check_language(
 
     des = dsg.best(lang)
     relatives = _relatives(scheme, lang)
+    accept = _accepted(scheme, lang)
 
-    # Qualify the instrument before trusting it. A back-translator that cannot
-    # read the language turns a correct model into a failing score, and does so
-    # silently -- it fabricates rather than refusing.
-    qual = qualify(backtranslator, client, judge_model, tag)
+    # Qualify the instrument before trusting it, and choose it per language: a
+    # back-translator that cannot read the language turns a correct model into a
+    # failing score, silently, because it fabricates rather than refusing.
+    backtranslator, qual = route(backtranslators, client, judge_model, tag, cache=cache)
     items: list[ItemOutcome] = []
     resolves: dict[str, int] = {}
 
@@ -107,7 +118,8 @@ def check_language(
                             {"designator_kind": des.kind}))
 
         gate = gate_check(gen.text, prompt=prompt, expect_lang=lang.iso639_3,
-                          expect_script=lang.script, relatives=relatives)
+                          expect_script=lang.script, relatives=relatives,
+                          accept_lang=accept)
         if gate.lid and gate.lid.label:
             resolves[gate.lid.label] = resolves.get(gate.lid.label, 0) + 1
 
