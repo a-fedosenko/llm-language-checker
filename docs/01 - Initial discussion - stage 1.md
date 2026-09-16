@@ -174,6 +174,10 @@ Note: MADLAD-400-3B-MT is a proposal, not yet verified. Its real per-language re
 
 **Rule 1 — Independence.** The back-translator is never the model under test, and preferably not the same model family. Otherwise we are back to measuring self-consistency — the exact flaw in the v0 round-trip design.
 
+> **Correction, 2026-09-16 (measured).** This section originally argued that "reading is a much lower bar than writing, so far more systems clear it." That is wrong in the dangerous direction. On the first live run, `gpt-4o` **refused to write** Chuvash but silently **fabricated a reading** of it, rendering a correct Chuvash passage as *"The sun rises in the east."* and known control text as *"A man is walking. He is wearing a white shirt."*
+>
+> A model that cannot read a language does not refuse — it invents. So **reading failures are more dangerous than writing failures**, not less: writing failures are visible (refusal, degeneration, wrong language — all caught free by the gate), while reading failures are invisible without a control and corrupt the score of a model that did nothing wrong. In the observed case the verdict moved from `Token` (0.13) to `Strong` (0.93) once the back-translator was qualified. Qualification is therefore mandatory before any fact-recall score is reported, not a refinement.
+
 **Rule 2 — Qualify the instrument before trusting it.** To qualify *any* back-translator (local or frontier) for language L, hand it aligned text in L whose pivot meaning is already known, and check that it recovers the facts. If it cannot recover facts from a professional human translation, it is broken for L: any low score it then produces for the model under test is uninterpretable, and L is marked `unverified` rather than "unsupported."
 
 This is a **direct reading test**. It runs once per language per back-translator — one call, not a full ladder — and it guarantees that a failure of *our instrument* is never misreported as a failure of *the model*.

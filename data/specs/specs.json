@@ -1,0 +1,63 @@
+{
+  "meta": {
+    "note": "Content specifications for content-controlled generation. The model is told WHAT to say and chooses every word; the facts are the grading checklist. Novel everyday content, so a memorised passage cannot satisfy it.",
+    "pivot": "en"
+  },
+  "specs": [
+    {
+      "id": "bus-rain-office",
+      "scenario": "A woman misses her morning bus. She walks to work in the rain. When she arrives, the office is closed.",
+      "facts": [
+        "A woman missed a bus.",
+        "It was morning.",
+        "She walked in the rain.",
+        "She was going to work.",
+        "The office was closed when she arrived."
+      ]
+    },
+    {
+      "id": "market-fish-price",
+      "scenario": "An old man buys fish at the market. The price has doubled since last year. He buys less than he planned and walks home.",
+      "facts": [
+        "An old man bought fish.",
+        "He was at a market.",
+        "The price had doubled since last year.",
+        "He bought less than he intended.",
+        "He walked home."
+      ]
+    },
+    {
+      "id": "child-dog-river",
+      "scenario": "A child finds a lost dog near a river. The child brings it home. The parents say it may stay one night.",
+      "facts": [
+        "A child found a dog.",
+        "The dog was lost.",
+        "It happened near a river.",
+        "The child took the dog home.",
+        "The parents allowed it to stay for one night."
+      ]
+    },
+    {
+      "id": "roof-storm-neighbour",
+      "scenario": "A storm damages the roof of a house at night. In the morning a neighbour brings a ladder and helps with the repair. They finish before noon.",
+      "facts": [
+        "A storm damaged a roof.",
+        "The damage happened at night.",
+        "A neighbour brought a ladder.",
+        "The neighbour helped repair it.",
+        "They finished before noon."
+      ]
+    },
+    {
+      "id": "letter-late-train",
+      "scenario": "A student writes a letter to her brother. She posts it on the way to the station, then discovers her train is two hours late.",
+      "facts": [
+        "A student wrote a letter.",
+        "The letter was for her brother.",
+        "She posted it on the way to a station.",
+        "Her train was late.",
+        "The delay was two hours."
+      ]
+    }
+  ]
+}

@@ -241,7 +241,7 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 | # | Stage | Done when |
 |---|---|---|
 | **S0** ✅ | Skeleton: compose, Postgres, hardware detect, **scheme adapter + generated `schemes/default.json`** | **Done 2026-09-15** — `docker compose up` runs; `GET /languages` returns 9,589 tags with family links resolved, from the shipped catalogue or a user-supplied list |
-| **S1** | **Thin vertical slice, one language, CLI only** | `check --engine mt.openai-gpt-4o --tag cv` runs generate → LID gate → back-translate → judge → tier, and writes both artifacts |
+| **S1** ✅ | **Thin vertical slice, one language, CLI only** | **Done 2026-09-16** — `llmlc check --tag cv --engine <model>` runs the full path and writes both artifacts |
 | **S2** | The ladder: class collapse, designator selection, pruning, adaptive rungs | A 20-language batch runs end to end with per-class economics visible |
 | **S3** | Back-translator qualification, evidence classes, **thin read-only UI** | Every result carries an honest `evidence`; results browsable in a browser |
 | **S4** | Persistence, job API, export adapters, staleness view | A full scan runs, resumes after a kill, and merges into a copy of a master file without touching other engines |
@@ -257,7 +257,7 @@ S1 remains the stage that matters: a working end-to-end path for a single langua
 
 A public page describing the project, added once the tool works and its results are proven. Deliberately last: a landing page for software that does not yet run is a liability.
 
-**Purpose.** The tool is self-hosted, so the page is not a product front-end — nobody signs up for anything. It exists to explain the project to someone who has not cloned it: what question it answers, how, and — given the whole design rests on saying so — what the answers do not mean.
+**Purpose.** The page is **Andrei's personal portfolio piece** (decided 2026-09-16). The tool is self-hosted, so it is not a product front-end — nobody signs up for anything. It exists to show the work to someone who has not cloned it: what question it answers, how, what the answers do not mean, and what was actually found. Richer is better; depth is the point.
 
 **Content, in rough priority order:**
 
@@ -270,7 +270,17 @@ A public page describing the project, added once the tool works and its results 
 
 **Form.** Static, no backend — GitHub Pages from `docs/` is the obvious host, since it costs nothing and keeps the page in the same repository as the thing it describes. It should also be the natural home for published result sets as they accumulate.
 
-**Open:** whether the page hosts browsable results (which model supports which language, generated from real scans) or only describes the method. Results-on-the-page is the more useful artifact and the better portfolio piece, but it implies a publishing pipeline and a decision about which scans are canonical. Worth deciding at S7, when there are results worth publishing.
+**Decided 2026-09-16: the page publishes browsable results**, not only the method. Which model supports which language, from real scans, with tiers, intervals and evidence classes visible. That implies a small publishing pipeline and a decision about which scans are canonical — both worth the cost, because a page that *shows measurements nobody else has* is a far stronger portfolio piece than one describing a method.
+
+Content that earns its place on a portfolio page, beyond the basics:
+
+- **The comparison table nobody else publishes:** N models × the supported-language counts each actually demonstrates, versus what each vendor claims.
+- **The invented-language experiment** (doc 02) as an interactive exhibit — the verbatim fabrications are more persuasive than any summary of them.
+- **`resolves_to` across macrolanguages:** what each model defaults to for `ar`, `zh`, `en`, `kk`, against what the standard says. Free from the scan, and genuinely novel.
+- **The calibration study** (S7): fact-recall versus chrF++ with published error bars — the piece that shows the method was validated, not merely asserted.
+- **Disagreements between models** on the same language: where one writes fluently and another refuses.
+
+**Open:** which scans become canonical, and how often they are refreshed as models change.
 
 ---
 
@@ -342,5 +352,59 @@ S1 needs a small set of content specifications — scenario prose plus the fact 
 
 ## Open questions for S1
 
-1. **Pivot language** — English by default. Worth a flag now, since doc 01 proposes closer pivots (Russian for Turkic, Arabic for Semitic) and the plumbing is cheaper to add than to retrofit.
-2. **Back-translator for S1** — which aggregator model? It must differ from the model under test. `gemini-gemini-3-8-flash` is the obvious pick against an OpenAI model under test.
+Both resolved 2026-09-16:
+
+1. **Pivot language: English**, exposed as `--pivot` from the start so closer pivots (Russian for Turkic, Arabic for Semitic) need no retrofit.
+2. **S1 back-translator: `gemini-gemini-3-8-flash`** via the `api` profile — a different vendor from the OpenAI models under test, which satisfies the independence rule in doc 01.
+
+## S1 — thin vertical slice (done 2026-09-16)
+
+**Built:** `client` (OpenAI-compatible, reasoning off with per-model fallback), `probe/` (specs, designator, LID, gate, judge, score, corpus, pipeline), `bt/` (remote back-translator + qualification), `export/` (both artifacts + merge), and the `llmlc` CLI. 70 tests, none requiring network or GPU.
+
+GlotLID is wired in — 2,102 language-script labels, CPU, 1.6 GB model, downloaded separately and absent-tolerant (the gate degrades to a script-only check and says so).
+
+### The finding that changed the code
+
+The first real run produced a **wrong answer**, and it was the failure doc 01 predicted.
+
+Gemini writes correct Chuvash. Asked for the bus/rain/office scenario it produced *"Пӗр хӗрарӑм ирхи автобуса ӗлкӗреймерӗ. Вӑл ҫумӑр айӗнче ӗҫе ҫуран кайрӗ."* — an accurate rendering. But `gpt-4o`, used as the back-translator, rendered it as *"The sun rises in the east. Its light spreads across the sky."* The pipeline scored Gemini `Token` (0.13).
+
+A control test settled it. Given Chuvash whose meaning we already knew:
+
+| Back-translator | Output for *"I know Chuvash. The weather is very good today."* |
+|---|---|
+| `gpt-4o` | *"A man is walking. He is wearing a white shirt."* — fabricated |
+| `deepseek-v4-pro` | *"I know Chuvash. The weather is very nice today."* — correct |
+| `gemini-3-8-flash` | *"I know Chuvash. Today the weather is very nice."* — correct |
+| `anthropic-claude-sonnet-4` | HTTP 404 — not actually available on the aggregator |
+
+With a qualified back-translator, the same Gemini output scores **`Strong` (0.93)**. The verdict moved two tiers on the instrument alone.
+
+**Consequence, and a correction to docs/01:** a model that cannot read a language does not refuse, it invents. Reading failures are therefore *more* dangerous than writing failures — writing failures are visible and caught free by the gate; reading failures are silent and corrupt the score of a model that did nothing wrong. **Back-translator qualification was pulled forward from S3 into S1** and is now mandatory before any fact-recall score is reported. Where a control exists and fails, or no control exists at all, the result is `unverified` with the reason named.
+
+Control texts live in `data/controls/controls.json`, seeded by hand for `cv`, `de`, `ru`. S3 extends them from FLORES+ human reference translations.
+
+### Other results from the first runs
+
+| Case | Result |
+|---|---|
+| `de` via gpt-4o | `Strong` 0.93, `resolves_to: {deu_Latn: 3}` |
+| `cv` via gpt-4o | `None`, **deterministic-negative, zero judge calls** — two refusals plus degenerate output at repetition ratio 0.70, exactly as docs/02 found |
+| `cv` via gemini, bt gpt-4o | `unverified` — instrument named as the reason |
+| `cv` via gemini, bt deepseek | `Strong` 0.93 |
+
+GlotLID confirmed two design decisions on live data: Gemini's "Acehnese in Arabic script" identifies as **`min_Arab` (Minangkabau)** — the nearest-relative substitution the gate exists to catch — and gpt-4o's degenerate Chuvash still scores `chv_Cyrl` at **1.000**, so the repetition detector is necessary rather than redundant.
+
+### Deviations
+
+| Planned | Actual | Why |
+|---|---|---|
+| Qualification at S3 | **S1** | It changes verdicts by two tiers; shipping S1 without it would have produced confidently wrong results. |
+| `fasttext` via its Python wrapper | Raw C++ `predict` | `fasttext-wheel` is incompatible with numpy 2, which torch will need at S3. |
+| `anthropic-claude-sonnet-4` usable | **Not available** | The aggregator lists it but returns HTTP 404. Worth knowing before it is picked as a judge or back-translator. |
+
+### Open for S2
+
+1. **Designator sweep.** S1 uses candidate A only. The collision-merge is in place, so the sweep can report whether selection beat the incumbent.
+2. **Control coverage is the binding constraint.** Three languages have controls; everything else is `no-control`, and `no-control` is deliberately not a pass. FLORES+ ingestion is now on the critical path, earlier than planned.
+3. **Per-language back-translator routing.** No single back-translator reads every language — gpt-4o fails Chuvash, deepseek passes. Qualification results should pick the back-translator per language rather than per run.

@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "note": "Known-good text with known meaning, used to qualify a back-translator per language BEFORE its output is trusted. If it cannot recover these facts from text whose meaning we already know, it cannot read the language, and any low score it produces for a model under test is uninterpretable.",
+    "provenance": "Hand-verified seeds. S3 extends these from FLORES+ human reference translations.",
+    "pivot": "en"
+  },
+  "controls": {
+    "cv": [
+      {
+        "text": "Эпĕ чăвашла пĕлетĕп. Паян çанталăк питĕ аван.",
+        "facts": ["The speaker knows Chuvash.", "The weather is good.", "This is about today."]
+      }
+    ],
+    "de": [
+      {
+        "text": "Ich habe den Bus verpasst. Es hat den ganzen Morgen geregnet.",
+        "facts": ["The speaker missed a bus.", "It rained.", "This happened in the morning."]
+      }
+    ],
+    "ru": [
+      {
+        "text": "Вчера мой брат купил новую машину. Она красного цвета.",
+        "facts": ["The speaker's brother bought a car.", "The car is new.", "The car is red.", "It happened yesterday."]
+      }
+    ]
+  }
+}

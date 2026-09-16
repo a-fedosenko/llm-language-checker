@@ -22,3 +22,8 @@ data/cache/
 # User-supplied locale lists are never committed; the public catalogue is.
 schemes/*.json
 !schemes/default.json
+
+# Model weights and run output (large, regenerable)
+data/models/
+data/corpus/
+data/results/
