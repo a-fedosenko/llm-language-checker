@@ -129,3 +129,38 @@ def index():
     if not page.exists():
         return {"message": "UI not installed", "docs": "/docs"}
     return FileResponse(page)
+
+
+@app.get("/jobs")
+def jobs(limit: int = Query(25, ge=1, le=200)) -> dict:
+    """Recent scans. Jobs are created by the CLI; a job API that starts them is
+    deliberately out of scope while this is a single-tenant local tool."""
+    from sqlalchemy import select
+
+    from llmlc.db import create_all, session
+    from llmlc.db.models import Job
+    create_all()
+    with session() as s:
+        rows = list(s.scalars(select(Job).order_by(Job.id.desc()).limit(limit)))
+        return {"items": [
+            {"id": j.id, "engine": j.engine, "status": j.status,
+             "method_version": j.method_version, "calls_used": j.calls_used,
+             "requested": len(j.requested_tags or []),
+             "unknown": j.unknown_tags or [],
+             "hardware_profile": j.hardware_profile,
+             "created_at": j.created_at.isoformat() if j.created_at else None,
+             "finished_at": j.finished_at.isoformat() if j.finished_at else None}
+            for j in rows]}
+
+
+@app.get("/stale")
+def stale_results(engine: str | None = Query(None)) -> dict:
+    """Results measured under an older method version -- the re-run set."""
+    from llmlc.db import create_all, session
+    from llmlc.db.repo import stale
+    from llmlc.export.artifacts import METHOD_VERSION
+    create_all()
+    with session() as s:
+        rows = stale(s, METHOD_VERSION, engine=engine)
+        return {"current_method_version": METHOD_VERSION, "count": len(rows),
+                "tags": sorted({r.tag for r in rows})}

@@ -31,12 +31,12 @@ services:
     volumes:
       # Schemes mounted read-only: bring your own locale list, no rebuild.
       - ./schemes:/app/schemes:ro
-      - ./data:/app/data:ro
+      - ./data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
 
 volumes:
   pgdata:

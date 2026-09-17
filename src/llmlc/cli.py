@@ -5,6 +5,7 @@ import argparse
 import json
 import pathlib
 import sys
+from datetime import datetime, timezone
 
 from llmlc.bt import QualificationCache, RemoteBackTranslator
 from llmlc.client import OpenAICompatClient
@@ -13,6 +14,14 @@ from llmlc.export import write as write_artifacts
 from llmlc.probe.corpus import Corpus
 from llmlc.probe.pipeline import check_language
 from llmlc.probe.scan import ScanBudget, plan, scan
+from llmlc import hardware
+from llmlc.db import create_all, session
+from llmlc.db.qualcache import DbQualificationCache
+from llmlc.db.models import Job
+from llmlc.db.repo import add_job_items, create_job, results_for, stale
+from llmlc.db.store import save as save_result
+from llmlc.export.adapters import CanonicalAdapter, MappedAdapter, build_support, merge_support
+from llmlc.export.artifacts import METHOD_VERSION
 from llmlc.probe.specs import load_specs
 from llmlc.scheme import load_scheme
 
@@ -137,10 +146,25 @@ def cmd_scan(a: argparse.Namespace) -> int:
     panel = [m.strip() for m in a.backtranslator.split(",") if m.strip() and m.strip() != a.engine]
     client = OpenAICompatClient(settings.aggregator_base_url, settings.aggregator_admin_api_key)
     bts = [RemoteBackTranslator(client, m, a.pivot) for m in panel]
-    cache = QualificationCache()
+    create_all()
+    cache = DbQualificationCache()
     budget = ScanBudget(max_calls=a.max_calls)
+    profile = hardware.detect(settings.hardware_profile).profile
+
+    with session() as s:
+        job = create_job(s, engine=a.engine, scheme=scheme.meta.name, pivot=a.pivot,
+                         judge=a.judge or settings.judge_model,
+                         backtranslator_panel=panel, method_version=METHOD_VERSION,
+                         hardware_profile=profile, status="running",
+                         requested_tags=tags, unknown_tags=unknown,
+                         max_calls=a.max_calls)
+        add_job_items(s, job, groups)
+        job_id = job.id
+    print(f"{GREY}job {job_id}{RESET}")
 
     def progress(r):
+        with session() as s:
+            save_result(s, r, job_id=job_id, hardware_profile=profile)
         mark = f"{GREY}inherited{RESET}" if r.inherited_from else f"r{r.rungs_run}"
         print(f"  {r.tag:14}{r.score.tier.value:9}{r.score.evidence.value:24}{mark}")
 
@@ -163,10 +187,81 @@ def cmd_scan(a: argparse.Namespace) -> int:
           f"{calls['judge']} judge)   {total / max(1, len(result.results)):.1f} per tag")
     _summarise(result.results)
 
+    with session() as s:
+        job = s.get(Job, job_id)
+        if job:
+            job.status = "stopped" if result.stopped_early else "done"
+            job.calls_used = total
+            job.finished_at = datetime.now(timezone.utc)
+
     for r in result.results:
         sup, ev = write_artifacts(r, pathlib.Path(a.out))
     print(f"\n{GREY}support {RESET}{sup}\n{GREY}evidence{RESET} {ev}"
-          f"\n{GREY}corpus  {RESET}{corpus_path}")
+          f"\n{GREY}corpus  {RESET}{corpus_path}   {GREY}job{RESET} {job_id}")
+    return 0
+
+
+def cmd_status(a: argparse.Namespace) -> int:
+    """What has been measured, and what is out of date."""
+    create_all()
+    with session() as s:
+        rows = results_for(s, engine=a.engine)
+        behind = stale(s, METHOD_VERSION, engine=a.engine)
+    if not rows:
+        print("No results yet. Run `llmlc scan --engine <model> --tag de,fr`.")
+        return 0
+
+    by_engine: dict[str, list] = {}
+    for r in rows:
+        by_engine.setdefault(r.engine, []).append(r)
+
+    print(f"{BOLD}method {METHOD_VERSION}{RESET}   {len(rows)} result(s)\n")
+    for engine, rs in sorted(by_engine.items()):
+        tiers: dict[str, int] = {}
+        for r in rs:
+            tiers[r.tier] = tiers.get(r.tier, 0) + 1
+        unver = sum(1 for r in rs if r.evidence == "unverified")
+        inh = sum(1 for r in rs if r.inherited_from)
+        print(f"  {BOLD}{engine}{RESET}  {len(rs)} tag(s)")
+        print(f"    {'  '.join(f'{k} {v}' for k, v in sorted(tiers.items()))}")
+        print(f"    {GREY}unverified {unver} · inherited {inh}{RESET}")
+
+    if behind:
+        print(f"\n{BOLD}stale{RESET}  {len(behind)} result(s) measured under an older method")
+        print(f"  re-run with: llmlc scan --engine <model> --tag "
+              f"{','.join(sorted({r.tag for r in behind})[:8])}...")
+    else:
+        print(f"\n{GREY}nothing stale{RESET}")
+    return 0
+
+
+def cmd_export(a: argparse.Namespace) -> int:
+    """Produce the mergeable artifact, optionally merged into an existing file."""
+    create_all()
+    with session() as s:
+        rows = [{"tag": r.tag, "engine": r.engine, "tier": r.tier,
+                 "designator": r.designator} for r in results_for(s, engine=a.engine)]
+    if not rows:
+        print("No results to export.", file=sys.stderr)
+        return 1
+
+    adapter = CanonicalAdapter()
+    if a.map:
+        mapping = json.loads(pathlib.Path(a.map).read_text(encoding="utf-8"))
+        adapter = MappedAdapter(pathlib.Path(a.map).stem, mapping)
+
+    support = build_support(rows, adapter)
+    target = pathlib.Path(a.out)
+    if a.merge_into:
+        existing = json.loads(pathlib.Path(a.merge_into).read_text(encoding="utf-8"))
+        before = len(existing)
+        support = merge_support(existing, support)
+        print(f"{GREY}merged into {a.merge_into}: {before} -> {len(support)} key(s); "
+              f"nothing removed{RESET}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(support, ensure_ascii=False, indent=1), encoding="utf-8")
+    claimed = sum(1 for v in support.values() if v)
+    print(f"wrote {target}  {len(support)} key(s), {claimed} with at least one engine")
     return 0
 
 
@@ -235,6 +330,18 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--scheme", default=None)
     sc.add_argument("--out", default="data/results")
     sc.set_defaults(func=cmd_scan)
+
+    st = sub.add_parser("status", help="what has been measured, and what is stale")
+    st.add_argument("--engine", default=None)
+    st.set_defaults(func=cmd_status)
+
+    ex = sub.add_parser("export", help="write the mergeable support artifact")
+    ex.add_argument("--engine", default=None)
+    ex.add_argument("--map", default=None,
+                    help="JSON map canonical->external tag, for another system's scheme")
+    ex.add_argument("--merge-into", default=None, help="existing master file to merge into")
+    ex.add_argument("--out", default="data/results/support.json")
+    ex.set_defaults(func=cmd_export)
 
     l = sub.add_parser("languages", help="search the loaded scheme")
     l.add_argument("query", nargs="?", default=None)

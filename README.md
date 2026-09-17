@@ -33,11 +33,14 @@ docker compose up
 
 No network fetch is needed at setup — the language catalogue ships in the repo.
 
-Without Docker:
+Without Docker — results go to a local SQLite file, so no services are needed:
 
 ```bash
 pip install -e ".[dev]"
-uvicorn llmlc.api.main:app --reload
+llmlc scan --engine <model> --tag de,fr,cv    # measure
+llmlc status                                   # what is measured, what is stale
+llmlc export --merge-into your-master.json     # mergeable artifact
+uvicorn llmlc.api.main:app                     # UI on :8000
 pytest
 ```
 

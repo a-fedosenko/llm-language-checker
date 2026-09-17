@@ -1,34 +1,55 @@
-"""Read-only access to result artifacts on disk.
+"""Read-only access to results.
 
-The UI is deliberately a reader: scans are started from the CLI, and the browser
-shows what has been measured. Persistence and a job API arrive in S4.
+Reads the database when one is reachable, and falls back to the evidence files
+on disk otherwise -- so the UI still works for someone who has only ever run the
+CLI, and a browser session never becomes a reason to stand up Postgres.
 """
 from __future__ import annotations
 
 import json
 import pathlib
-from functools import lru_cache
 
 RESULTS_DIR = pathlib.Path("data/results")
 
 
-def evidence_files(root: pathlib.Path | None = None) -> list[pathlib.Path]:
-    return sorted((root or RESULTS_DIR).glob("evidence.*.jsonl"))
+def _from_db() -> list[dict] | None:
+    try:
+        from llmlc.db import create_all, session
+        from llmlc.db.repo import results_for
+    except ImportError:
+        return None
+    try:
+        create_all()
+        with session() as s:
+            rows = results_for(s)
+            return [_serialise(r) for r in rows]
+    except Exception:
+        return None
 
 
-@lru_cache(maxsize=1)
-def _cache_token() -> float:
-    return 0.0
+def _serialise(r) -> dict:
+    return {
+        "tag": r.tag, "engine": r.engine, "tier": r.tier, "evidence": r.evidence,
+        "s_lang": r.s_lang, "s_content": r.s_content, "ci": [r.ci_low, r.ci_high],
+        "borderline": r.borderline, "reliability": r.reliability, "refusals": r.refusals,
+        "designator": {"winner": r.designator, **(r.designator_detail or {})},
+        "provenance": r.provenance, "variant_evidence": r.variant_evidence,
+        "inherited_from": r.inherited_from, "resolves_to": r.resolves_to,
+        "backtranslator": r.backtranslator,
+        "backtranslator_qualification": r.backtranslator_qualification,
+        "judge": r.judge, "pivot": r.pivot, "hardware_profile": r.hardware_profile,
+        "method_version": r.method_version, "rungs_run": r.rungs_run,
+        "calls": r.calls, "items": r.items, "notes": r.notes,
+        "language": {"name": None},
+        "tested_at": r.tested_at.isoformat() if r.tested_at else None,
+        "source": "db",
+    }
 
 
-def load_results(root: pathlib.Path | None = None) -> list[dict]:
-    """Latest row per (engine, tag, method_version).
-
-    The evidence file is append-only, so a language measured twice appears twice;
-    the last write wins, which is what a reader wants to see.
-    """
+def _from_files(root: pathlib.Path | None = None) -> list[dict]:
+    """Latest row per (engine, tag, method_version) from the append-only files."""
     latest: dict[tuple[str, str, str], dict] = {}
-    for path in evidence_files(root):
+    for path in sorted((root or RESULTS_DIR).glob("evidence.*.jsonl")):
         with path.open(encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()
@@ -38,10 +59,17 @@ def load_results(root: pathlib.Path | None = None) -> list[dict]:
                     row = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                key = (row.get("engine", ""), row.get("tag", ""),
-                       row.get("method_version", ""))
-                latest[key] = row
-    return sorted(latest.values(), key=lambda r: (r.get("engine", ""), r.get("tag", "")))
+                row["source"] = "file"
+                latest[(row.get("engine", ""), row.get("tag", ""),
+                        row.get("method_version", ""))] = row
+    return list(latest.values())
+
+
+def load_results(root: pathlib.Path | None = None) -> list[dict]:
+    rows = _from_db() if root is None else None
+    if not rows:
+        rows = _from_files(root)
+    return sorted(rows, key=lambda r: (r.get("engine", ""), r.get("tag", "")))
 
 
 def summarise(rows: list[dict]) -> dict:

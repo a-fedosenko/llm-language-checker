@@ -59,3 +59,24 @@ def test_index_serves_the_ui():
     assert r.status_code == 200
     assert "Measured language support" in r.text
     assert "heuristic results, not proof" in r.text, "the limits must be on the page, not buried"
+
+
+# -- jobs and staleness ------------------------------------------------------
+
+def test_jobs_endpoint_lists_scans():
+    body = client.get("/jobs").json()
+    assert "items" in body
+    assert all({"id", "engine", "status"} <= set(j) for j in body["items"])
+
+
+def test_stale_endpoint_names_the_current_method():
+    body = client.get("/stale").json()
+    assert body["current_method_version"]
+    assert isinstance(body["tags"], list)
+
+
+def test_results_survive_with_no_database():
+    """The UI must work for someone who has only ever run the CLI."""
+    from llmlc.api import results as store
+    rows = store._from_files()
+    assert isinstance(rows, list)

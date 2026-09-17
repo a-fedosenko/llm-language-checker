@@ -244,7 +244,7 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 | **S1** ✅ | **Thin vertical slice, one language, CLI only** | **Done 2026-09-16** — `llmlc check --tag cv --engine <model>` runs the full path and writes both artifacts |
 | **S2** ✅ | **Trustworthy coverage:** FLORES+ controls, qualification cache, per-language back-translator routing, `gold-reference` evidence | **Done 2026-09-16** — a 20-language spread returned 20/20 real evidence, 0 `unverified` |
 | **S3** ✅ | The ladder: designator sweep, class collapse, pruning, adaptive rungs, batch mode, **thin read-only UI** | **Done 2026-09-17** — 18 tags in 165 calls (9.2/tag); results browsable at `/` |
-| **S4** | Persistence, job API, export adapters, staleness view | A full scan runs, resumes after a kill, and merges into a copy of a master file without touching other engines |
+| **S4** ✅ | Persistence, job API, export adapters, staleness view | **Done 2026-09-17** — results in SQLite/Postgres, `llmlc status`, `llmlc export --merge-into` verified non-destructive |
 | **S5** | Full UI | Pick engine and languages, trigger jobs, watch progress, download artifacts |
 | **S6** | Dialects: marker files, script-split scoring, `variant_evidence` | `en-AU` proven from markers; `ru-BY` `not-distinguishable`; `kk-Latn` scored by script |
 | **S7** | **Calibration study** — fact-recall vs chrF++ against FLORES+ | Published error bars for the proxy metric |
@@ -527,3 +527,41 @@ Full write-up in [protocol 009](../experiments/protocols/009-ladder-and-designat
 1. **`resolves_to` still not surfaced** as the macrolanguage-defaults comparison the landing page wants.
 2. **Back-translator panel order** affects qualification cost; a failing candidate costs 4 chrF++ calls before the next is tried.
 3. **The UI reads files directly.** S4 introduces persistence, at which point it should read the database.
+
+## S4 — persistence, export adapters, staleness (done 2026-09-17)
+
+**Built:** `db/` (SQLAlchemy models, session, repository, DB-backed qualification cache, result mapping), Alembic with a baseline migration, `llmlc status`, `llmlc export`, and `/jobs` + `/stale` endpoints. The UI now reads the database. 132 tests.
+
+### SQLite by default, Postgres when asked
+
+`DATABASE_URL` defaults to a local SQLite file, so `llmlc scan` works on a laptop with **no services running at all** — which is what the self-hosted promise requires. `docker compose` points it at Postgres. Alembic owns migrations; `create_all()` covers a fresh SQLite file and the test suite so neither needs a migration step.
+
+### The merge rule lives in one place
+
+`upsert_result` returns `inserted` / `updated` / **`kept`**, where `kept` means an existing row was newer and was left alone: **a stale re-run must never clobber a fresher measurement.** Higher `method_version` wins, then newer `tested_at`, with version comparison numeric rather than lexicographic — `1.10.0` is newer than `1.9.0`.
+
+**A result is unique on `(engine, tag, method_version, backtranslator)`.** The same language measured with a different back-translator is a *different result*, not an update, because results from different instruments are not comparable ([protocol 005](../experiments/protocols/005-backtranslator-fabrication.md)).
+
+**Portability bug found by the tests:** SQLite discards `tzinfo` on round-trip while Postgres preserves it, so the timestamp comparison raised on one backend and not the other. Timestamps are now normalised to aware UTC before comparison, with a regression test.
+
+### Export adapters
+
+The core emits canonical BCP-47; any consuming system gets an adapter. `CanonicalAdapter` is the identity; `MappedAdapter` is driven by a gitignored JSON map, which is how an organisation plugs its own locale list in without shipping it.
+
+Verified against a real master file: merging preserved an untouched key (`ru`) and an untouched engine (`cv`'s `mt.google`) while adding nothing for a language measured as Token.
+
+`removals()` **reports** rather than applies: dropping a support claim is always a deliberate act by the caller, never a side effect of a merge.
+
+### Staleness
+
+`llmlc status` shows what has been measured per engine and what is behind the current method version. `stale()` and `missing()` are the two halves of incremental growth: a method change is a batch over `stale()`, and new languages added to the scheme are a batch over `missing()`.
+
+### Deliberately out of scope
+
+**A job API that *starts* scans.** Jobs are created by the CLI and `/jobs` only reports them. For a single-tenant local tool, an HTTP endpoint that spends the user's API budget is a liability without authentication, and authentication is exactly what the self-hosted design removed the need for.
+
+### Open for S5
+
+1. The UI is still read-only; triggering a scan from the browser reopens the question above.
+2. `resolves_to` is persisted but still not surfaced as the macrolanguage-defaults comparison.
+3. Corpus rows still go to JSONL, not the `generation` table — the table exists and is unused until S7 needs offline re-grading.
