@@ -544,6 +544,23 @@ That produced the worst of the three options: **two backends to support**, and t
 
 Compose is now a **single container**. If this is ever hosted for concurrent writers, the job table is the seam and the URL is a one-line change.
 
+**Performance, measured on this schema (5,000 rows):**
+
+| Pattern | time | rate |
+|---|---|---|
+| commit per row, default journal | 24.0 s | 208 rows/s |
+| commit per row + WAL | 7.1 s | 705 rows/s |
+| **commit per row + WAL + `synchronous=NORMAL`** | **2.8 s** | **1,763 rows/s** |
+| single transaction, default journal | 1.9 s | 2,625 rows/s |
+
+Reads at that size: 59 ms for every row, 60 ms for an indexed filter, 67 ms for the staleness scan.
+
+**For scanning, the database is irrelevant.** One result costs ~0.6 ms to write against 1–25 s of API calls to produce it. The 18-tag scan in S3 took 298 s; database writes were a fraction of a second of that. Postgres would not have made it measurably faster, because the bottleneck is the network and the model.
+
+**WAL is enabled for concurrency, not speed.** In SQLite's default rollback-journal mode a writer blocks readers, which matters because the CLI writes on the host while the UI reads from the container through the same bind-mounted file. The 8.5× is a bonus.
+
+**The real scaling limit is not SQLite.** `/results` loads every row and serialises it; at a few thousand that is 59 ms, but a full catalogue across many models would be six figures of rows and the endpoint would need pagination. That is an API design limit, not a storage one.
+
 Alembic still owns migrations; `create_all()` covers a fresh SQLite file and the test suite so neither needs a migration step.
 
 ### The merge rule lives in one place

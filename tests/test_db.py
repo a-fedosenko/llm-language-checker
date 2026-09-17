@@ -130,3 +130,13 @@ def test_non_sqlite_url_is_rejected_with_a_reason():
             url()
     finally:
         settings.database_url = old
+
+
+def test_wal_is_enabled_for_reader_writer_concurrency():
+    """The CLI writes on the host while the UI reads from the container through
+    the same file; in rollback-journal mode a writer would block readers."""
+    from sqlalchemy import text
+    from llmlc.db import engine
+    with engine().connect() as c:
+        assert c.execute(text("PRAGMA journal_mode")).scalar().lower() == "wal"
+        assert c.execute(text("PRAGMA busy_timeout")).scalar() == 5000
