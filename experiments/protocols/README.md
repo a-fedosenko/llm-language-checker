@@ -22,7 +22,8 @@ changed as a result.
 | [006](006-chrf-as-qualification-metric.md) | 2026-09-16 | Can chrF++ replace a judge call for qualification? | Yes. Fabricated 10.5 vs faithful 81.9; threshold 30 |
 | [007](007-flores-sourcing-and-mapping.md) | 2026-09-16 | Is FLORES obtainable without auth, and does it map to our scheme? | Meta's tarball is ungated; 200/204 map; Chuvash absent |
 | [008](008-twenty-language-spread.md) | 2026-09-16 | Does the pipeline hold up across 20 languages? | 20/20 real evidence, and it exposed two systematic bugs |
-| [009](009-ladder-and-designator-sweep.md) | 2026-09-17 | Do the ladder, class collapse and designator sweep pay off? | 9.2 calls/tag; the endonym beats the English name on some long-tail languages; the raw tag never wins |
+| [009](009-ladder-and-designator-sweep.md) | 2026-09-17 | Do the ladder, class collapse and designator sweep pay off? | 9.2 calls/tag; the endonym beats the English name on some long-tail languages |
+| [010](010-country-qualified-designators.md) | 2026-09-17 | Should the designator name the country? | No — it does not help, and it produced the one wrong-language output. Underpowered |
 
 ## Writing one
 
