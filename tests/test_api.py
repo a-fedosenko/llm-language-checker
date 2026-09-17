@@ -35,3 +35,27 @@ def test_language_detail_exposes_class_and_family():
 
 def test_unknown_language_404():
     assert client.get("/languages/zz-nope").status_code == 404
+
+
+# -- results endpoints -------------------------------------------------------
+
+def test_results_endpoint_returns_a_summary():
+    body = client.get("/results").json()
+    assert "summary" in body and "items" in body
+    assert set(body["summary"]) == {"total", "tiers", "evidence", "engines"}
+
+
+def test_results_filtering_by_tier():
+    body = client.get("/results", params={"tier": "Strong"}).json()
+    assert all(r["tier"] == "Strong" for r in body["items"])
+
+
+def test_unknown_result_404s():
+    assert client.get("/results/no-such-engine/zz").status_code == 404
+
+
+def test_index_serves_the_ui():
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "Measured language support" in r.text
+    assert "heuristic results, not proof" in r.text, "the limits must be on the page, not buried"

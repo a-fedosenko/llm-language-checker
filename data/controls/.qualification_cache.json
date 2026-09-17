@@ -196,5 +196,50 @@
   "detail": "",
   "tag": "ga",
   "at": 1789577677.5802336
+ },
+ "remote:gemini-gemini-3-8-flash||af": {
+  "status": "qualified",
+  "score": 83.35,
+  "kind": "reference",
+  "backtranslator": "remote:gemini-gemini-3-8-flash",
+  "detail": "",
+  "tag": "af",
+  "at": 1789630645.2602832
+ },
+ "remote:gemini-gemini-3-8-flash||cv": {
+  "status": "qualified",
+  "score": 1.0,
+  "kind": "facts",
+  "backtranslator": "remote:gemini-gemini-3-8-flash",
+  "detail": "",
+  "tag": "cv",
+  "at": 1789630675.3406377
+ },
+ "remote:gemini-gemini-3-8-flash||ug": {
+  "status": "qualified",
+  "score": 69.04,
+  "kind": "reference",
+  "backtranslator": "remote:gemini-gemini-3-8-flash",
+  "detail": "",
+  "tag": "ug",
+  "at": 1789630776.8500445
+ },
+ "remote:gemini-gemini-3-8-flash||ti": {
+  "status": "qualified",
+  "score": 70.21,
+  "kind": "reference",
+  "backtranslator": "remote:gemini-gemini-3-8-flash",
+  "detail": "",
+  "tag": "ti",
+  "at": 1789630812.1958938
+ },
+ "remote:gemini-gemini-3-8-flash||bo": {
+  "status": "qualified",
+  "score": 59.55,
+  "kind": "reference",
+  "backtranslator": "remote:gemini-gemini-3-8-flash",
+  "detail": "",
+  "tag": "bo",
+  "at": 1789630835.5547493
  }
 }

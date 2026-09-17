@@ -7,11 +7,17 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+import pathlib
+
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 
 from llmlc import __version__, hardware
 from llmlc.config import settings
+from llmlc.api import results as results_store
 from llmlc.scheme import Language, Scheme, load_scheme
+
+STATIC = pathlib.Path(__file__).resolve().parent / "static"
 
 app = FastAPI(
     title="llm-language-checker",
@@ -82,3 +88,44 @@ def language(tag: str) -> dict:
         "variants": s.variants_of(tag),
         "inherits_from": macro.tag if macro else None,
     }
+
+
+# -- results -----------------------------------------------------------------
+
+@app.get("/results")
+def results(
+    engine: str | None = Query(None),
+    tier: str | None = Query(None),
+    evidence: str | None = Query(None),
+    q: str | None = Query(None, description="substring match on tag or language name"),
+) -> dict:
+    rows = results_store.load_results()
+    if engine:
+        rows = [r for r in rows if r.get("engine") == engine]
+    if tier:
+        rows = [r for r in rows if r.get("tier") == tier]
+    if evidence:
+        rows = [r for r in rows if r.get("evidence") == evidence]
+    if q:
+        ql = q.lower()
+        rows = [r for r in rows
+                if ql in r.get("tag", "").lower()
+                or ql in (r.get("language", {}).get("name") or "").lower()]
+    return {"summary": results_store.summarise(rows), "items": rows}
+
+
+@app.get("/results/{engine}/{tag}")
+def result_detail(engine: str, tag: str) -> dict:
+    rows = [r for r in results_store.load_results()
+            if r.get("engine") == engine and r.get("tag") == tag]
+    if not rows:
+        raise HTTPException(404, f"No result for {tag!r} on {engine!r}")
+    return rows[-1]
+
+
+@app.get("/", include_in_schema=False)
+def index():
+    page = STATIC / "index.html"
+    if not page.exists():
+        return {"message": "UI not installed", "docs": "/docs"}
+    return FileResponse(page)

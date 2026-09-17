@@ -1,4 +1,6 @@
 """Tiers, intervals and the refusal to round away uncertainty."""
+import pytest
+
 from llmlc.probe.score import Evidence, Tier, bootstrap_ci, score, tier_for
 
 
@@ -59,3 +61,39 @@ def test_bootstrap_is_deterministic_and_bounded():
 
 def test_single_item_interval_is_degenerate_not_invented():
     assert bootstrap_ci([0.7]) == (0.7, 0.7)
+
+
+# -- refusal is a willingness signal, not a capability one --------------------
+
+def test_refusals_do_not_make_a_capable_model_look_incapable():
+    """Real case: gpt-4o wrote perfect Uyghur twice and refused once. Scoring that
+    as Token ('recognises it, cannot use it') would be a false statement."""
+    s = score(lang_pass=[True, True], content=[1.0, 1.0], evidence=Evidence.FACT_RECALL,
+              refusals=1)
+    assert s.tier is Tier.STRONG
+    assert s.reliability == pytest.approx(2 / 3)
+    assert s.refusals == 1
+    assert any("Refused 1 of 3" in n for n in s.notes)
+
+
+def test_reliability_is_one_when_nothing_was_refused():
+    s = score(lang_pass=[True] * 3, content=[1.0] * 3, evidence=Evidence.FACT_RECALL)
+    assert s.reliability == 1.0
+    assert s.refusals == 0
+    assert not any("Refused" in n for n in s.notes)
+
+
+def test_wrong_language_still_counts_against_capability():
+    """Refusal is excluded from s_lang; producing the wrong language is not."""
+    s = score(lang_pass=[False, False, True], content=[0.9],
+              evidence=Evidence.FACT_RECALL)
+    assert s.s_lang == pytest.approx(1 / 3)
+    assert s.tier is Tier.NONE
+
+
+def test_total_refusal_is_a_deterministic_negative_with_zero_reliability():
+    s = score(lang_pass=[], content=[], evidence=Evidence.DETERMINISTIC_NEGATIVE,
+              refusals=3)
+    assert s.tier is Tier.NONE
+    assert s.reliability == 0.0
+    assert s.n_items == 3

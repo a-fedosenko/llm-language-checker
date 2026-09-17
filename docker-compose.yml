@@ -31,6 +31,7 @@ services:
     volumes:
       # Schemes mounted read-only: bring your own locale list, no rebuild.
       - ./schemes:/app/schemes:ro
+      - ./data:/app/data:ro
     depends_on:
       postgres:
         condition: service_healthy

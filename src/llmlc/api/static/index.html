@@ -1,0 +1,157 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>llm-language-checker</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --bg: #fbfbfa; --fg: #1a1a18; --muted: #6b6b63; --line: #e3e3dd;
+    --card: #fff; --accent: #2c5f4a;
+    --strong: #2c5f4a; --usable: #4a7c59; --basic: #b8860b; --token: #a0522d; --none: #8b3a3a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme=light]) {
+      --bg: #16161a; --fg: #e8e8e3; --muted: #9a9a92; --line: #2e2e34;
+      --card: #1e1e23; --accent: #7fb69a;
+      --strong: #7fb69a; --usable: #8fbf7f; --basic: #d4a94a; --token: #d08a5a; --none: #d47b7b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+  .note { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+          padding: 12px 16px; border-radius: 6px; font-size: 13.5px; color: var(--muted); margin-bottom: 26px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+          padding: 10px 14px; min-width: 96px; }
+  .stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  input, select { background: var(--card); color: var(--fg); border: 1px solid var(--line);
+                  border-radius: 6px; padding: 7px 10px; font: inherit; font-size: 14px; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th { text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase;
+       letter-spacing: .04em; color: var(--muted); padding: 11px 12px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  tr.r:hover { background: color-mix(in oklab, var(--accent) 7%, transparent); }
+  .tag { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .tier { font-weight: 600; }
+  .Strong { color: var(--strong); } .Usable { color: var(--usable); }
+  .Basic { color: var(--basic); } .Token { color: var(--token); } .None { color: var(--none); }
+  .num { font-variant-numeric: tabular-nums; text-align: right; }
+  .ev { font-size: 12px; color: var(--muted); }
+  .flag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 3px;
+          border: 1px solid var(--line); color: var(--muted); margin-left: 6px; }
+  .bar { height: 5px; border-radius: 3px; background: var(--line); width: 74px; display: inline-block;
+         vertical-align: middle; position: relative; overflow: hidden; }
+  .bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+  footer { margin-top: 30px; font-size: 12.5px; color: var(--muted); }
+  code { font-family: ui-monospace, monospace; font-size: 12.5px; }
+</style>
+
+<div class="wrap">
+  <h1>Measured language support</h1>
+  <p class="sub">What each model can actually produce — measured, not claimed.</p>
+
+  <div class="note">
+    <strong>These are heuristic results, not proof.</strong> Small samples, so every tier carries a
+    confidence interval and a <code>borderline</code> flag when the interval spans a boundary.
+    <code>unverified</code> means our back-translator could not read the language — a limit of the
+    instrument, not a verdict on the model. Results are comparable only within the same
+    back-translator, judge and method version.
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="filters">
+    <input id="q" placeholder="Search tag or language…" size="22">
+    <select id="engine"><option value="">All models</option></select>
+    <select id="tier"><option value="">All tiers</option></select>
+    <select id="evidence"><option value="">All evidence</option></select>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th>Tag</th><th>Language</th><th>Tier</th><th class="num">Content</th>
+        <th class="num">90% CI</th><th class="num">Reliab.</th><th>Evidence</th><th>Designator</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No results yet. Run <code>llmlc scan --engine &lt;model&gt; --tag de,fr</code>.</div>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let ALL = [];
+
+async function load() {
+  const r = await fetch('/results');
+  const d = await r.json();
+  ALL = d.items || [];
+  fill('#engine', [...new Set(ALL.map(x => x.engine))].sort());
+  fill('#tier', ['Strong','Usable','Basic','Token','None'].filter(t => ALL.some(x => x.tier === t)));
+  fill('#evidence', [...new Set(ALL.map(x => x.evidence))].sort());
+  render();
+}
+
+function fill(sel, values) {
+  const el = $(sel);
+  for (const v of values) {
+    const o = document.createElement('option');
+    o.value = o.textContent = v;
+    el.appendChild(o);
+  }
+}
+
+function render() {
+  const q = $('#q').value.toLowerCase();
+  const [eng, tier, ev] = ['#engine','#tier','#evidence'].map(s => $(s).value);
+  const rows = ALL.filter(r =>
+    (!eng || r.engine === eng) && (!tier || r.tier === tier) && (!ev || r.evidence === ev) &&
+    (!q || r.tag.toLowerCase().includes(q) || (r.language?.name || '').toLowerCase().includes(q)));
+
+  const counts = {};
+  for (const r of rows) counts[r.tier] = (counts[r.tier] || 0) + 1;
+  $('#stats').innerHTML =
+    `<div class="stat"><b>${rows.length}</b><span>languages</span></div>` +
+    ['Strong','Usable','Basic','Token','None'].filter(t => counts[t])
+      .map(t => `<div class="stat"><b class="${t}">${counts[t]}</b><span>${t}</span></div>`).join('') +
+    `<div class="stat"><b>${rows.filter(r => r.evidence === 'unverified').length}</b><span>unverified</span></div>`;
+
+  $('#rows').innerHTML = rows.map(r => {
+    const ci = r.ci ? `${r.ci[0].toFixed(2)}–${r.ci[1].toFixed(2)}` : '—';
+    const rel = (r.reliability != null && r.reliability < 1)
+      ? `<span class="bar"><i style="width:${Math.round(r.reliability*100)}%"></i></span> ${r.reliability.toFixed(2)}`
+      : '—';
+    return `<tr class="r">
+      <td class="tag">${r.tag}</td>
+      <td>${r.language?.name ?? ''}</td>
+      <td class="tier ${r.tier}">${r.tier}${r.borderline ? '<span class="flag">borderline</span>' : ''}
+          ${r.inherited_from ? `<span class="flag">via ${r.inherited_from}</span>` : ''}</td>
+      <td class="num">${r.s_content?.toFixed(2) ?? '—'}</td>
+      <td class="num ev">${ci}</td>
+      <td class="num ev">${rel}</td>
+      <td class="ev">${r.evidence}</td>
+      <td class="ev">${r.designator?.winner ?? ''}</td>
+    </tr>`;
+  }).join('');
+
+  $('#empty').hidden = rows.length > 0;
+  const m = rows[0];
+  $('#foot').textContent = m
+    ? `back-translator ${m.backtranslator} · judge ${m.judge} · method ${m.method_version} · pivot ${m.pivot}`
+    : '';
+}
+
+for (const s of ['#q','#engine','#tier','#evidence']) $(s).addEventListener('input', render);
+load();
+</script>

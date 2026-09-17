@@ -12,6 +12,7 @@ from llmlc.config import settings
 from llmlc.export import write as write_artifacts
 from llmlc.probe.corpus import Corpus
 from llmlc.probe.pipeline import check_language
+from llmlc.probe.scan import ScanBudget, plan, scan
 from llmlc.probe.specs import load_specs
 from llmlc.scheme import load_scheme
 
@@ -21,10 +22,11 @@ GREY, BOLD, RESET = "\033[90m", "\033[1m", "\033[0m"
 def _summarise(results) -> None:
     from llmlc.probe.score import Evidence
     print(f"\n{BOLD}summary{RESET}  {len(results)} language(s)")
-    print(f"  {'tag':10}{'tier':10}{'evidence':24}{'bt':34}{'s_content'}")
+    print(f"  {'tag':10}{'tier':10}{'evidence':24}{'content':>9}{'reliab':>9}  designator")
     for r in results:
+        rel = f"{r.score.reliability:.2f}" if r.score.reliability < 1.0 else "-"
         print(f"  {r.tag:10}{r.score.tier.value:10}{r.score.evidence.value:24}"
-              f"{r.backtranslator[:32]:34}{r.score.s_content:.2f}")
+              f"{r.score.s_content:>9.2f}{rel:>9}  {getattr(r, 'designator', '')[:32]}")
     unverified = sum(r.score.evidence is Evidence.UNVERIFIED for r in results)
     real = len(results) - unverified
     print(f"\n  real evidence: {real}/{len(results)}   unverified: {unverified}")
@@ -89,6 +91,8 @@ def _report(result, a) -> None:
           f"{'  (borderline)' if s.borderline else ''}   — {s.workflow}")
     print(f"  s_lang {s.s_lang:.2f}   s_content {s.s_content:.2f}   "
           f"90% CI [{s.ci[0]:.2f}, {s.ci[1]:.2f}]   evidence: {s.evidence.value}")
+    if s.reliability < 1.0:
+        print(f"  reliability {s.reliability:.2f}  ({s.refusals} refusal(s) of {s.n_items})")
     if result.resolves_to:
         print(f"  resolves_to: {result.resolves_to}")
     for note in s.notes:
@@ -103,6 +107,81 @@ def _report(result, a) -> None:
             print(f"      {GREY}out:{RESET} {i.generation[:100].replace(chr(10),' ')}")
             if i.back_translation:
                 print(f"      {GREY}bt :{RESET} {i.back_translation[:100].replace(chr(10),' ')}")
+
+
+def cmd_scan(a: argparse.Namespace) -> int:
+    if not settings.aggregator_base_url or not settings.aggregator_admin_api_key:
+        print("No endpoint configured. Copy .env.example to .env and fill it in.", file=sys.stderr)
+        return 2
+
+    scheme = load_scheme(a.scheme or settings.scheme)
+    tags = _resolve_tags(scheme, a)
+    if not tags:
+        print("No languages selected.", file=sys.stderr)
+        return 2
+
+    groups, unknown = plan(scheme, tags)
+    known = sum(len(m) for m in groups.values())
+    print(f"{BOLD}{known}{RESET} tag(s) -> {BOLD}{len(groups)}{RESET} class(es) "
+          f"({known - len(groups)} inherit without further calls)")
+    if unknown:
+        print(f"{GREY}not in scheme {scheme.meta.name!r}, skipped: "
+              f"{', '.join(unknown)}{RESET}", file=sys.stderr)
+    if a.dry_run:
+        for cls, members in list(groups.items())[: a.limit or len(groups)]:
+            print(f"  {cls:22} probe {members[0]:12} inherit: {', '.join(members[1:]) or '-'}")
+        est = len(groups) * (3 + 3 + 3)
+        print(f"\n{GREY}rough upper bound if nothing prunes: ~{est} calls{RESET}")
+        return 0
+
+    panel = [m.strip() for m in a.backtranslator.split(",") if m.strip() and m.strip() != a.engine]
+    client = OpenAICompatClient(settings.aggregator_base_url, settings.aggregator_admin_api_key)
+    bts = [RemoteBackTranslator(client, m, a.pivot) for m in panel]
+    cache = QualificationCache()
+    budget = ScanBudget(max_calls=a.max_calls)
+
+    def progress(r):
+        mark = f"{GREY}inherited{RESET}" if r.inherited_from else f"r{r.rungs_run}"
+        print(f"  {r.tag:14}{r.score.tier.value:9}{r.score.evidence.value:24}{mark}")
+
+    with Corpus() as corpus:
+        result = scan(scheme=scheme, tags=tags, engine=a.engine, client=client,
+                      backtranslators=bts, judge_model=a.judge or settings.judge_model,
+                      specs=load_specs(), corpus=corpus, pivot=a.pivot,
+                      sweep_all=a.sweep_all, cache=cache, budget=budget,
+                      on_result=progress)
+        corpus_path = corpus.path
+
+    calls = result.calls
+    total = sum(calls.values())
+    if result.unknown:
+        print(f"{GREY}skipped (not in scheme): {', '.join(result.unknown)}{RESET}")
+    print(f"\n{BOLD}scan{RESET} {len(result.results)} tag(s) in {result.seconds:.0f}s"
+          f"{'  (stopped: budget)' if result.stopped_early else ''}")
+    print(f"  classes probed {result.classes_probed}   inherited {result.tags_inherited}")
+    print(f"  calls: {total}  ({calls['generation']} gen, {calls['backtranslation']} bt, "
+          f"{calls['judge']} judge)   {total / max(1, len(result.results)):.1f} per tag")
+    _summarise(result.results)
+
+    for r in result.results:
+        sup, ev = write_artifacts(r, pathlib.Path(a.out))
+    print(f"\n{GREY}support {RESET}{sup}\n{GREY}evidence{RESET} {ev}"
+          f"\n{GREY}corpus  {RESET}{corpus_path}")
+    return 0
+
+
+def _resolve_tags(scheme, a) -> list[str]:
+    if a.tag:
+        return [t.strip() for t in a.tag.split(",") if t.strip()]
+    items = list(scheme.languages.values())
+    if a.living_only:
+        items = [x for x in items if x.type == "L"]
+    if a.with_controls:
+        from llmlc.bt import load_controls
+        have = set(load_controls())
+        items = [x for x in items if x.tag in have]
+    tags = [x.tag for x in items]
+    return tags[: a.limit] if a.limit else tags
 
 
 def cmd_languages(a: argparse.Namespace) -> int:
@@ -137,6 +216,25 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--out", default="data/results")
     c.add_argument("-v", "--verbose", action="store_true")
     c.set_defaults(func=cmd_check)
+
+    sc = sub.add_parser("scan", help="measure many languages with the adaptive ladder")
+    sc.add_argument("--engine", required=True, help="model under test")
+    sc.add_argument("--tag", default=None, help="comma-separated tags; omit to use filters")
+    sc.add_argument("--with-controls", action="store_true",
+                    help="only languages that have a back-translator control")
+    sc.add_argument("--living-only", action="store_true")
+    sc.add_argument("--limit", type=int, default=None)
+    sc.add_argument("--backtranslator",
+                    default="gemini-gemini-3-8-flash,deepseek-deepseek-v4-pro")
+    sc.add_argument("--judge", default=None)
+    sc.add_argument("--pivot", default="en")
+    sc.add_argument("--sweep-all", action="store_true",
+                    help="try every designator candidate even when the first succeeds")
+    sc.add_argument("--max-calls", type=int, default=None, help="budget; the scan fails closed")
+    sc.add_argument("--dry-run", action="store_true", help="print the plan and an estimate")
+    sc.add_argument("--scheme", default=None)
+    sc.add_argument("--out", default="data/results")
+    sc.set_defaults(func=cmd_scan)
 
     l = sub.add_parser("languages", help="search the loaded scheme")
     l.add_argument("query", nargs="?", default=None)

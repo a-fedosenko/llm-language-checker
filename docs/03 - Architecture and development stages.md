@@ -243,7 +243,7 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 | **S0** ✅ | Skeleton: compose, Postgres, hardware detect, **scheme adapter + generated `schemes/default.json`** | **Done 2026-09-15** — `docker compose up` runs; `GET /languages` returns 9,589 tags with family links resolved, from the shipped catalogue or a user-supplied list |
 | **S1** ✅ | **Thin vertical slice, one language, CLI only** | **Done 2026-09-16** — `llmlc check --tag cv --engine <model>` runs the full path and writes both artifacts |
 | **S2** ✅ | **Trustworthy coverage:** FLORES+ controls, qualification cache, per-language back-translator routing, `gold-reference` evidence | **Done 2026-09-16** — a 20-language spread returned 20/20 real evidence, 0 `unverified` |
-| **S3** | The ladder: designator sweep, class collapse, pruning, adaptive rungs, batch mode, **thin read-only UI** | A batch runs end to end with per-class economics visible; results browsable in a browser |
+| **S3** ✅ | The ladder: designator sweep, class collapse, pruning, adaptive rungs, batch mode, **thin read-only UI** | **Done 2026-09-17** — 18 tags in 165 calls (9.2/tag); results browsable at `/` |
 | **S4** | Persistence, job API, export adapters, staleness view | A full scan runs, resumes after a kill, and merges into a copy of a master file without touching other engines |
 | **S5** | Full UI | Pick engine and languages, trigger jobs, watch progress, download artifacts |
 | **S6** | Dialects: marker files, script-split scoring, `variant_evidence` | `en-AU` proven from markers; `ru-BY` `not-distinguishable`; `kk-Latn` scored by script |
@@ -484,3 +484,46 @@ The lesson is about method, not code: **a broad spread found in one run what sin
 1. **Designator sweep** — still candidate A only. The collision-merge from S1 is in place, so the sweep can report whether selection beat the incumbent.
 2. **Qualification cost** — routing qualifies candidates in order, so a back-translator that fails a language costs 4 chrF++ calls before the next is tried. Cached, so it is paid once, but the panel order matters.
 3. **`resolves_to` is recorded but not yet reported** as the macrolanguage-defaults comparison the landing page wants.
+
+## S3 — the ladder (done 2026-09-17)
+
+**Built:** `probe/steps.py` (the two primitives), `probe/ladder.py` (designator sweep + three rungs), `probe/scan.py` (class collapse, inheritance, budget), `llmlc scan` with `--dry-run`, and a read-only UI at `/` backed by `/results`. 112 tests.
+
+Full write-up in [protocol 009](../experiments/protocols/009-ladder-and-designator-sweep.md).
+
+### Economics
+
+18 tags → 15 classes → **165 calls (9.2 per tag)** in 298 s, against a naive ~27 per tag. `ee` resolved at rung 1 on gate checks alone; three tags inherited with zero calls.
+
+### The designator sweep pays for itself
+
+| Language | A English name | B endonym | C raw tag | D ISO+script |
+|---|---|---|---|---|
+| `ti` Tigrinya | 0.33 | **0.67 — ትግርኛ** | 0.00 | 0.00 |
+| `cv` Chuvash | 0.00 | **0.33 — чӑваш** | 0.00 | 0.00 |
+| `ug`, `bo`, `dv` | **won** | 0.00 | 0.00 | 0.00 |
+
+**The raw BCP-47 tag scored 0.00 on every language tested** — which indicts the incumbent method in the TMS, where many `mt.chatgpt` entries are tag-shaped (`sq-MK`, `gsw-CH`, `zh-Hans`). And for `cv` the endonym was the difference between measuring something and measuring nothing.
+
+### Scoring change: refusal is not incapacity
+
+`ug` wrote fluent Uyghur twice and refused once. `s_lang` 0.667 put it in **Token** — *"recognises it, cannot use it"* — a false statement about a model that had just used it twice at content 1.0.
+
+`s_lang` was conflating **willingness** (refusal) with **capability** (wrong language, degeneration). Refusals are now excluded from `s_lang` and reported as **`reliability`** with a refusal count and a note. `ug` now reads **Strong, reliability 0.33**; `bo` **Strong, reliability 0.67**.
+
+**Open for Andrei:** should low reliability cap the tier? "Strong — light review" at reliability 0.33 is true about quality and potentially misleading about availability. Both numbers are shown; the policy is a judgement call.
+
+### Catalogue bug fixed before the run
+
+298 tags lacked `iso639_3` — precisely the regional variants — so `de-AT` landed in class `de|Latn` while `de` was in `deu|Latn`, breaking class collapse exactly where it matters. The generator now backfills from the base tag. Classes: 9,103 → 9,055, and regional variants collapse correctly.
+
+### Other fixes
+
+- Unknown tags are **reported, not silently dropped** — the wrong failure mode for a tool whose job is saying what it did and did not measure.
+- `beat_incumbent` distinguishes `False` (a comparison selection lost) from `None` (no comparison possible).
+
+### Open for S4
+
+1. **`resolves_to` still not surfaced** as the macrolanguage-defaults comparison the landing page wants.
+2. **Back-translator panel order** affects qualification cost; a failing candidate costs 4 chrF++ calls before the next is tried.
+3. **The UI reads files directly.** S4 introduces persistence, at which point it should read the database.

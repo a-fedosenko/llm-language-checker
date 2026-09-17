@@ -87,6 +87,22 @@ def build() -> dict:
     member_of, macro_members = read_macrolanguages()
     langtags = json.loads((CACHE / "langtags.json").read_text(encoding="utf-8"))
 
+    # langtags omits iso639_3 on ~300 entries, and they are precisely the regional
+    # variants (de-AT, af-NA, ar-AE). Left unfilled they fall back to the primary
+    # subtag and land in a different equivalence class from their own base
+    # language, which defeats class collapse exactly where it matters. Backfill
+    # from the base tag before building.
+    base_iso: dict[str, str] = {}
+    base_script: dict[str, str] = {}
+    for e in langtags:
+        tag = e.get("tag", "")
+        if tag.startswith("_") or "-" in tag:
+            continue
+        if e.get("iso639_3"):
+            base_iso.setdefault(tag, e["iso639_3"])
+        if e.get("script"):
+            base_script.setdefault(tag, e["script"])
+
     languages: dict[str, dict] = {}
     skipped_special = 0
 
@@ -94,13 +110,14 @@ def build() -> dict:
         tag = e.get("tag", "")
         if tag.startswith("_"):            # _conformance, _globalvar metadata rows
             continue
-        iso3 = e.get("iso639_3")
+        primary = tag.split("-")[0]
+        iso3 = e.get("iso639_3") or base_iso.get(primary)
         meta = iso.get(iso3, {}) if iso3 else {}
         if meta.get("scope") == "S":       # special codes (mul, und, zxx ...)
             skipped_special += 1
             continue
 
-        script = e.get("script")
+        script = e.get("script") or base_script.get(primary)
         region = e.get("region")
         scope = {"I": "individual", "M": "macrolanguage"}.get(meta.get("scope", "I"), "individual")
 
@@ -120,7 +137,7 @@ def build() -> dict:
             "members": sorted(macro_members.get(iso3, [])) if scope == "macrolanguage" else [],
             # Equivalence class for base-language capability: one probe per class,
             # not per tag. Region never distinguishes a class; script does.
-            "cls": f"{iso3 or tag.split('-')[0]}|{script or ''}",
+            "cls": f"{iso3 or primary}|{script or ''}",
             "aliases": sorted(e.get("tags", [])),
         }
 

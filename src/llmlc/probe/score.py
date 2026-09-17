@@ -79,6 +79,12 @@ class Score:
     n_items: int
     n_gated: int = 0
     contradictions: int = 0
+    #: Share of attempts where the model was willing to try at all. Distinct from
+    #: capability: a model that writes perfect Uyghur twice and refuses once is
+    #: capable but unreliable, and calling that "recognises it, cannot use it"
+    #: would be false. Refusals are excluded from s_lang and reported here.
+    reliability: float = 1.0
+    refusals: int = 0
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -91,6 +97,8 @@ class Score:
             "workflow": self.workflow,
             "s_lang": round(self.s_lang, 3),
             "s_content": round(self.s_content, 3),
+            "reliability": round(self.reliability, 3),
+            "refusals": self.refusals,
             "ci": list(self.ci),
             "borderline": self.borderline,
             "evidence": self.evidence.value,
@@ -107,30 +115,41 @@ def _straddles_boundary(tier: Tier, s_lang: float, lo: float, hi: float) -> bool
 
 
 def score(*, lang_pass: list[bool], content: list[float], evidence: Evidence,
-          contradictions: int = 0, notes: list[str] | None = None) -> Score:
+          contradictions: int = 0, refusals: int = 0,
+          notes: list[str] | None = None) -> Score:
     """Combine per-item outcomes into a tier with an interval.
 
-    `lang_pass` covers every attempted item, including those the gate rejected;
-    `content` covers only items that reached the judge.
+    `lang_pass` covers items where the model produced text, including those the
+    gate then rejected. `refusals` are counted separately: declining to answer is
+    a willingness signal, not a capability one, and merging the two would let a
+    model that writes a language perfectly be labelled unable to use it.
     """
     notes = list(notes or [])
     n = len(lang_pass)
+    attempts = n + refusals
+    reliability = (n / attempts) if attempts else 0.0
     s_lang = (sum(lang_pass) / n) if n else 0.0
+    if refusals and n:
+        notes.append(f"Refused {refusals} of {attempts} attempts; "
+                     f"capability scored on the {n} it attempted.")
     s_content = (sum(content) / len(content)) if content else 0.0
 
     if evidence is Evidence.DETERMINISTIC_NEGATIVE:
         return Score(Tier.NONE, s_lang, 0.0, (0.0, 0.0), False, evidence,
-                     n_items=n, n_gated=n - sum(lang_pass), notes=notes)
+                     n_items=attempts, n_gated=attempts - sum(lang_pass),
+                     reliability=reliability, refusals=refusals, notes=notes)
 
     if evidence is Evidence.UNVERIFIED:
         notes.append("Back-translator could not be qualified for this language; "
                      "quality is not assessable.")
         return Score(Tier.NONE, s_lang, 0.0, (0.0, 0.0), False, evidence,
-                     n_items=n, n_gated=n - sum(lang_pass), notes=notes)
+                     n_items=attempts, n_gated=attempts - sum(lang_pass),
+                     reliability=reliability, refusals=refusals, notes=notes)
 
     tier = tier_for(s_lang, s_content)
     lo, hi = bootstrap_ci(content) if content else (0.0, 0.0)
     return Score(tier, s_lang, s_content, (lo, hi),
                  _straddles_boundary(tier, s_lang, lo, hi), evidence,
-                 n_items=n, n_gated=n - sum(lang_pass),
-                 contradictions=contradictions, notes=notes)
+                 n_items=attempts, n_gated=n - sum(lang_pass),
+                 contradictions=contradictions, reliability=reliability,
+                 refusals=refusals, notes=notes)
