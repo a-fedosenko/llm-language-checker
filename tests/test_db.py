@@ -117,3 +117,16 @@ def test_naive_timestamps_from_sqlite_do_not_break_the_merge_rule():
         _, action = upsert_result(s, row(tier="Usable",
                                          tested_at=datetime.now(timezone.utc)))  # aware
     assert action in {"updated", "kept"}
+
+
+def test_non_sqlite_url_is_rejected_with_a_reason():
+    """One backend, deliberately: supporting two cost us a timezone bug."""
+    from llmlc.config import settings
+    from llmlc.db.session import url
+    old = settings.database_url
+    try:
+        settings.database_url = "postgresql+psycopg://x/y"
+        with pytest.raises(ValueError, match="single-tenant"):
+            url()
+    finally:
+        settings.database_url = old

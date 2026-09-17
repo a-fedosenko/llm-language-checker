@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     judge_model: str = "openai-gpt-4o-mini"
     bt_remote_model: str | None = None
 
-    database_url: str = "postgresql+psycopg://llmlc:llmlc@localhost:5432/llmlc"
+    database_url: str = "sqlite+pysqlite:///data/llmlc.db"
 
     def redacted(self) -> dict:
         d = self.model_dump()

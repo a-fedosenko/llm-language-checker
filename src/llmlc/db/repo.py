@@ -16,9 +16,8 @@ from llmlc.db.models import Generation, Job, JobItem, Qualification, Result
 def _aware(dt: datetime | None) -> datetime | None:
     """Normalise to aware UTC.
 
-    SQLite discards tzinfo on round-trip while Postgres preserves it, so stored
-    timestamps must be normalised before they are compared or the merge rule
-    raises on one backend and not the other.
+    SQLite discards tzinfo on round-trip, so a stored timestamp comes back naive
+    while a freshly built one is aware. Comparing them raises without this.
     """
     if dt is None:
         return None

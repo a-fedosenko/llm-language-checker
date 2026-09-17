@@ -33,7 +33,7 @@ docker compose up
 
 No network fetch is needed at setup — the language catalogue ships in the repo.
 
-Without Docker — results go to a local SQLite file, so no services are needed:
+Results go to a local SQLite file — there is no database service to run:
 
 ```bash
 pip install -e ".[dev]"

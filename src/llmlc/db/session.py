@@ -1,8 +1,17 @@
 """Engine and session handling.
 
-Defaults to SQLite so the tool runs with no services at all -- `llmlc scan`
-should work on a laptop with nothing installed. Postgres is used when
-DATABASE_URL points at it, which is what docker compose does.
+**SQLite, deliberately.** This is a single-tenant local tool with one writer and
+a few thousand rows; a database server would be the same cargo cult the
+deployment pivot removed when it deleted Kafka, Redis and Nginx. It also means
+`llmlc scan` works with nothing installed and no services running, which is what
+the self-hosted promise requires.
+
+Supporting two backends had a measurable cost -- SQLite discards tzinfo on
+round-trip while Postgres preserves it, which broke the merge rule on one and
+not the other. One backend, one set of behaviours.
+
+If this is ever hosted for concurrent writers, the job table is the seam and the
+URL is a one-line change.
 """
 from __future__ import annotations
 
@@ -23,7 +32,12 @@ _Session: sessionmaker | None = None
 
 
 def url() -> str:
-    return settings.database_url or DEFAULT_SQLITE
+    u = settings.database_url or DEFAULT_SQLITE
+    if not u.startswith("sqlite"):
+        raise ValueError(
+            f"Only SQLite is supported; got {u.split(':')[0]!r}. "
+            "This is a single-tenant local tool -- see docs/03.")
+    return u
 
 
 def engine():
@@ -33,8 +47,7 @@ def engine():
         if u.startswith("sqlite"):
             pathlib.Path("data").mkdir(parents=True, exist_ok=True)
         _engine = create_engine(u, future=True,
-                                connect_args={"check_same_thread": False}
-                                if u.startswith("sqlite") else {})
+                                connect_args={"check_same_thread": False})
         _Session = sessionmaker(bind=_engine, expire_on_commit=False, future=True)
     return _engine
 

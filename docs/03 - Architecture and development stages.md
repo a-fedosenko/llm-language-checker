@@ -532,9 +532,19 @@ Full write-up in [protocol 009](../experiments/protocols/009-ladder-and-designat
 
 **Built:** `db/` (SQLAlchemy models, session, repository, DB-backed qualification cache, result mapping), Alembic with a baseline migration, `llmlc status`, `llmlc export`, and `/jobs` + `/stale` endpoints. The UI now reads the database. 132 tests.
 
-### SQLite by default, Postgres when asked
+### SQLite, and only SQLite (decided 2026-09-17)
 
-`DATABASE_URL` defaults to a local SQLite file, so `llmlc scan` works on a laptop with **no services running at all** — which is what the self-hosted promise requires. `docker compose` points it at Postgres. Alembic owns migrations; `create_all()` covers a fresh SQLite file and the test suite so neither needs a migration step.
+The plan said Postgres. It was changed, and then changed again after Andrei asked why.
+
+The first change was driven by a practical conflict: `llmlc scan` runs standalone from the CLI, and requiring Postgres would have meant nothing worked without `docker compose up` first — tests included. So SQLite became the default with Postgres still available.
+
+That produced the worst of the three options: **two backends to support**, and the cost appeared immediately. The `tzinfo` bug below exists *only* because SQLite and Postgres disagree about timestamps, and it is the first of a class — JSON handling, constraint behaviour, migration dialects.
+
+**Resolved: SQLite only. Postgres removed from compose, `psycopg` dropped, non-SQLite URLs rejected with a reason.** This is the same reasoning that deleted Kafka, RabbitMQ, Redis and Nginx in the pivot, applied consistently: a single-tenant local tool with one writer and a few thousand rows does not need a database server, and keeping one "in case" is exactly the cargo cult the pivot removed. Andrei's words: *"I do not need Postgres only for coolness."*
+
+Compose is now a **single container**. If this is ever hosted for concurrent writers, the job table is the seam and the URL is a one-line change.
+
+Alembic still owns migrations; `create_all()` covers a fresh SQLite file and the test suite so neither needs a migration step.
 
 ### The merge rule lives in one place
 
@@ -542,7 +552,7 @@ Full write-up in [protocol 009](../experiments/protocols/009-ladder-and-designat
 
 **A result is unique on `(engine, tag, method_version, backtranslator)`.** The same language measured with a different back-translator is a *different result*, not an update, because results from different instruments are not comparable ([protocol 005](../experiments/protocols/005-backtranslator-fabrication.md)).
 
-**Portability bug found by the tests:** SQLite discards `tzinfo` on round-trip while Postgres preserves it, so the timestamp comparison raised on one backend and not the other. Timestamps are now normalised to aware UTC before comparison, with a regression test.
+**A bug found by the tests, and the reason the dual-backend question got settled:** SQLite discards `tzinfo` on round-trip while Postgres preserves it, so the timestamp comparison raised on one backend and not the other. Timestamps are normalised to aware UTC before comparison, with a regression test. Normalisation is still needed on SQLite alone — a stored timestamp returns naive while a freshly built one is aware.
 
 ### Export adapters
 
