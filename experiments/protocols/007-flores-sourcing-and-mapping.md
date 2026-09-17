@@ -52,6 +52,6 @@ Both halves were partly wrong.
 
 ## Impact
 
-- `scripts/build_controls.py` ingests the tarball on first use into `data/`, gitignored — so the repository stays clear of CC BY-SA text while the corpus does its work. Attribution in the README and on published results.
+- `scripts/build_controls.py` ingests the tarball on first use into `data/`, gitignored (**corrected 2026-09-17**: the generated `flores.json` was in fact committed in S2 and only untracked later, when Andrei asked what the repository tracks) — so the repository stays clear of CC BY-SA text while the corpus does its work. Attribution in the README and on published results.
 - Control coverage went from 3 to **201 languages** (200 reference + 1 facts).
 - The macrolanguage fallback became a named function, reused by the scheme mapping.

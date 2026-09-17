@@ -89,6 +89,23 @@ Two artifacts. A minimal, mergeable file matching the consuming system's schema:
 
 and a separate full-evidence report carrying scores, intervals, designators tried, back-translator, judge, provenance, and timestamps. Merging is a per-key, per-engine upsert — a partial run can never wipe existing data.
 
+## What lives where
+
+The repository carries **code, authored data, and evidence**. Everything a run produces is regenerable and stays out of git.
+
+| Path | Tracked | What it is |
+|---|---|---|
+| `schemes/default.json` | ✅ | The public language catalogue, so clone-to-run needs no network |
+| `data/specs/specs.json` | ✅ | Content specifications — what the model is asked to describe |
+| `data/controls/controls.json` | ✅ | Hand-written back-translator controls for languages FLORES lacks |
+| `experiments/` | ✅ | Protocols and the raw responses behind them, so claims are checkable |
+| `data/controls/flores.json` | ✗ | FLORES-derived controls — **CC BY-SA 4.0**, regenerate with `scripts/build_controls.py` |
+| `data/llmlc.db` | ✗ | Your results. `llmlc scan` writes here |
+| `data/results/`, `data/corpus/` | ✗ | Export artifacts and the raw generation corpus |
+| `data/cache/`, `data/models/` | ✗ | Downloaded source tables and the GlotLID model |
+
+A first run downloads FLORES-200 (~25 MB) and, for language identification, the GlotLID model (1.6 GB).
+
 ## Documentation
 
 | | |

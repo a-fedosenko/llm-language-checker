@@ -16,6 +16,15 @@ __pycache__/
 # Downloaded source tables (regenerate with scripts/build_default_scheme.py --refresh)
 data/cache/
 
+# Local run output: the database, the artifacts, the raw corpus. All regenerable.
+data/llmlc.db
+data/llmlc.db-*
+data/controls/.qualification_cache.json
+
+# FLORES-derived control text is CC BY-SA 4.0. Keeping it out of the tree leaves
+# this repository MIT-clean; `python scripts/build_controls.py` regenerates it.
+data/controls/flores.json
+
 # Build artifacts
 *.egg-info/
 
