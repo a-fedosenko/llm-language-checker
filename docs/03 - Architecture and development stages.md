@@ -286,6 +286,12 @@ Content that earns its place on a portfolio page, beyond the basics:
 
 # Implementation log
 
+Every test run against a live model or a new dependency is written up in
+`experiments/protocols/` — hypothesis, what was tested, what was used, results
+including the inconvenient ones, conclusions with their limits, and how the
+project changed. The log below summarises; the protocols are the record.
+
+
 ## S0 — skeleton, scheme adapter, public catalogue (done 2026-09-15, commit `f22b5e1`)
 
 **Built:** `src/llmlc/` with `scheme` (canonical model, loader, adapter protocol), `hardware` (profile detection), `config`, and a read-only FastAPI surface (`/health`, `/hardware`, `/scheme`, `/languages`, `/languages/{tag}`). `docker compose up` brings up Postgres and the API. 28 tests, none requiring network or GPU.

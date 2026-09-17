@@ -94,6 +94,7 @@ and a separate full-evidence report carrying scores, intervals, designators trie
 | `docs/01 - Initial discussion - stage 1.md` | Prior art, datasets, full methodology, output contract |
 | `docs/02 - Experiment - invented language control.md` | Experiment: why self-reported language support cannot be trusted |
 | `docs/03 - Architecture and development stages.md` | Architecture, data model, cost model, staging, implementation log |
+| `experiments/protocols/` | One protocol per experiment: hypothesis, method, results, and what it changed |
 
 ## Attribution
 
