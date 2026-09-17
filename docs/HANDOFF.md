@@ -13,7 +13,7 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/03 - Architecture and development stages.md` — architecture, data model, staging, and the implementation log for S0–S4
 - `experiments/protocols/README.md` — ten experiment protocols; 005 and 010 matter most
 
-**State:** S0–S4 complete, 133 tests passing, last commit `e3b5e75`. Working tree clean.
+**State:** S0–S4 complete, 134 tests passing, last commit `53e2573`. Working tree clean.
 
 **Run it:**
 ```bash
@@ -29,7 +29,7 @@ pytest -q
 
 1. **Every experiment gets a protocol** in `experiments/protocols/`, following `TEMPLATE.md`, with the hypothesis written down *before* the run. Invalidated results are kept with `Status: invalidated`, not deleted. Raw responses are committed.
 2. **Reasoning must be off** for every measurement call. Vendor defaults differ and that confound already invalidated one conclusion (protocol 002). `reasoning_effort: "none"`, with per-model fallback — gpt-4o rejects the parameter outright.
-3. **SQLite only.** No Postgres. A single-tenant local tool does not need a database server; supporting both cost us a real bug.
+3. **SQLite only.** No Postgres — compose is a single container. A single-tenant local tool does not need a database server, and supporting both cost us two real bugs. WAL is enabled so the CLI can write on the host while the UI reads from the container through the same bind-mounted file.
 4. **Results are only comparable within the same back-translator, judge and method version.** That is why they are part of the uniqueness constraint.
 5. **`no-control` is never a pass.** Where the back-translator cannot be qualified for a language, the result is `unverified` with the reason named.
 6. Before claiming a finding, **read the raw evidence**. Two scans produced results that looked like findings and were bugs; a third looked like bugs and was a finding.
@@ -47,6 +47,7 @@ Ask before building it.
 - `resolves_to` is persisted but not yet surfaced as the macrolanguage-defaults comparison the landing page wants (what each model defaults to for `ar`, `zh`, `en`, `kk`, versus what the standard says).
 - Corpus rows still go to JSONL; the `generation` table exists and is unused until S7 needs offline re-grading.
 - Back-translator panel order affects qualification cost — a failing candidate costs 4 chrF++ calls before the next is tried.
+- `/results` loads every row and serialises it. Fine at a few thousand (59 ms), but it will need pagination before a full catalogue across several models. An API limit, not a storage one — relevant to S5.
 - Should low `reliability` cap the tier? `ug` currently reads "Strong — light review" at reliability 0.33, which is true about quality and possibly misleading about availability.
 
 **Remaining stages:** S5 full UI · S6 dialects and marker files · S7 calibration study (fact-recall vs chrF++ on ~200 FLORES languages — the strongest artifact in the project) · S8 README and methodology page · S9 public landing page, which is Andrei's portfolio piece and should publish browsable results, not just describe the method.
