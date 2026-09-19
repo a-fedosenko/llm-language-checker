@@ -81,9 +81,16 @@ def test_no_control_is_invented_where_the_pivot_has_none():
 
 def test_loading_controls_for_a_fallback_pivot_supplies_english():
     """Skipped where the FLORES controls are not present locally -- they are
-    licence-encumbered and not committed."""
-    if "de" not in load_controls("en"):
-        pytest.skip("FLORES controls not built locally")
+    licence-encumbered and not committed.
+
+    The guard asks for a *reference* control specifically. The committed seed
+    controls include `de`, but as `facts` rather than aligned text, and a facts
+    control has no reference side to read backwards -- so merely checking that
+    `de` is present passed in a fresh clone and then failed on the inversion.
+    """
+    entry = load_controls("en").get(pivot_mod.DEFAULT_FALLBACK)
+    if not entry or entry.get("kind") != "reference":
+        pytest.skip("FLORES reference controls not built locally")
     assert "en" not in load_controls("en"), "English needs no control when it is the pivot"
     assert load_controls("de")["en"]["items"], "a German pivot gives English a control"
 
