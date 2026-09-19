@@ -42,7 +42,7 @@ def test_unknown_language_404():
 def test_results_endpoint_returns_a_summary():
     body = client.get("/results").json()
     assert "summary" in body and "items" in body
-    assert set(body["summary"]) == {"total", "tiers", "evidence", "engines"}
+    assert set(body["summary"]) == {"total", "tiers", "evidence", "engines", "variants"}
 
 
 def test_results_filtering_by_tier():

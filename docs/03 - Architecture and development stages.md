@@ -246,7 +246,7 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 | **S3** ✅ | The ladder: designator sweep, class collapse, pruning, adaptive rungs, batch mode, **thin read-only UI** | **Done 2026-09-17** — 18 tags in 165 calls (9.2/tag); results browsable at `/` |
 | **S4** ✅ | Persistence, job API, export adapters, staleness view | **Done 2026-09-17** — results in SQLite/Postgres, `llmlc status`, `llmlc export --merge-into` verified non-destructive |
 | **S5** ✅ | Full UI | **Done 2026-09-17** — pick engine and languages, plan for free, trigger a scan, watch per-class progress, cancel, browse paged results, download artifacts |
-| **S6** | Dialects: marker files, script-split scoring, `variant_evidence` | `en-AU` proven from markers; `ru-BY` `not-distinguishable`; `kk-Latn` scored by script |
+| **S6** ✅ | Dialects: marker files, script-split scoring, `variant_evidence` | **Done 2026-09-18** — `en-AU` and `en-GB` proven from markers; `ru-BY` `not-distinguishable`; `sr-Latn` proven by script; `kk-Latn` exposed as a base-language failure |
 | **S7** | **Calibration study** — fact-recall vs chrF++ against FLORES+ | Published error bars for the proxy metric |
 | **S8** | README, methodology page, limitations | A reader can reproduce a result and knows what it does not mean |
 | **S9** | **Public landing page** | The project is explicable to someone who has never run it |
@@ -660,3 +660,81 @@ A scan started from the browser trigger: 3 tags → 2 classes → 18 calls, `de-
 2. Back-translator panel order still affects qualification cost: a failing candidate costs 4 chrF++ calls before the next is tried.
 3. The UI reads the database when it has any rows and the evidence files only when it does not, so a user with old file-only results stops seeing them after their first scan. Correct precedence, surprising presentation.
 4. Whether refusal predicts quality is worth re-testing at S7, where a ~200-language run will produce enough refusals to answer it properly.
+
+## S6 — dialects, markers and variant evidence (done 2026-09-18)
+
+**Built:** `probe/markers.py` (marker schema, comparative scoring, load-time validators), `probe/variant.py` (the three mechanisms and the four evidence states), the shipped `markers/` corpus, `llmlc markers`, variant columns and a migration, `/variants`, and a Variants tab. 219 tests.
+
+The measurement itself is written up in [protocol 012](../experiments/protocols/012-variant-markers.md), including the three defects and two pipeline bugs that running it exposed. What follows is what changed in the project.
+
+### Inheriting a tier is not inheriting a claim
+
+Before S6 every variant tag carried `variant_evidence: "untested"` — honest, and inert: nothing could ever change it because nothing measured a variant. Now a tag that inherits a tier gets a verdict of its own by whichever mechanism its family admits:
+
+| mechanism | applies to | cost |
+|---|---|---|
+| **script** | marked script variants (`sr-Latn`, `kk-Latn`) | free — the gate already checked the script |
+| **markers** | country-only variants (`en-AU`) | its own probe, its own designator |
+| **declared** | `not-distinguishable`, an authored decision | free |
+| **none** | everything else → `untested` | free |
+
+**`not-distinguishable` is a finished decision and `untested` is an unfilled gap.** Keeping them apart is what makes the remaining work countable, and `llmlc markers` now prints that count: **534 variant tags, 2 with marker sets, 1 declared, 531 untested.**
+
+### What "marked script variant" had to mean
+
+The first implementation asked "does this language appear under more than one script?" That is true of German — the catalogue carries Fraktur, Braille, Duployan and Runic — so it would have claimed a variant result for plain `de`. The rule that works is **is this tag's script the one the base tag carries?** `kk` is Cyrillic and `kk-Latn` is not, so only the second is a variant claim.
+
+That distinction then found a real bug. Candidate A named the script *unless it was Latin*, which is right for most languages and exactly wrong for the ones where Latin is the marked script: `kk-Latn` was being asked for as plain "Kazakh". Designators now qualify by script whenever the tag is a marked script variant.
+
+### The instrument is more fragile than the idea
+
+Marker scoring is deterministic string matching, which makes it cheap and testable and gives it a specific failure mode: **a wrong marker produces a plausible number with nothing to indicate it is wrong.** Three real instances, two caught while authoring and one only by running it:
+
+- `chips` means opposite things in `en-GB` and `en-US`, so it scored a hit and a miss at once.
+- A context reading *"in autumn, walking to the underground station"* named three of its own markers, and the control arm scored by echoing the prompt.
+- `neighbour` did not match "neighbours" while `neighbor` did match "neighbor's" — an asymmetric miss that *moved* the score rather than lowering it.
+
+The first two are now rejected at load time and the third is a matching rule with tests. That is the pattern worth keeping: where a defect is invisible in the output, the guard belongs in the loader, not in review.
+
+The inflection fix was validated by **re-scoring saved responses offline, with no new model calls** — the first time the corpus has paid for itself the way docs/01 said it would.
+
+### Scoring rules that came from doc 01 and survived contact
+
+**Comparative, not absolute.** `boot` is a hit, `trunk` is a miss. Counting variant markers alone would reward verbosity.
+
+**Void the item when neither appears.** The context failed, not the model. 25% of items were void, all from a single grammar-targeted context, and scoring them zero would have reported gpt-4o as failing British English on prompts that never asked it to choose.
+
+**A variant probe that is entirely void is `untested`, never `proven-failed`.** We learned nothing about the model, and saying otherwise blames it for our prompts.
+
+### The one rule with teeth
+
+A variant that is **tested and fails** is withheld from the mergeable support artifact even when its base language is Strong. The file means "we will send this locale to this engine", and for `en-AU` that promises Australian English. `untested` still inherits — a placeholder we count is not a claim we have contradicted.
+
+### What the first real run showed
+
+`en-AU` and `en-GB`: **1.00 under the variant designator, 0.00 and 0.11 under plain "English"**, on identical contexts. `sr-Latn`: proven by script, 3 of 3 items. `ru-BY`: not-distinguishable, as decided.
+
+`kk-Latn` was the useful failure. Asked properly, gpt-4o returned **Latin script that GlotLID read as Crimean Tatar and Turkmen** — the script was right and the language was wrong, which is a base-language failure. The script mechanism reports `untested` and says so, rather than blaming the variant.
+
+Worth noticing: `sr-Latn` is `proven` on the variant axis while its tier is `unverified`, because the back-translator could not be qualified for it. The axes are independent and it is useful to watch them disagree.
+
+### Migrations need a stamp on older databases
+
+`s_variant` and `variant_detail` are the first schema change since the baseline. A database created by `create_all()` has no `alembic_version` row, so `alembic upgrade head` tries to re-run the baseline and fails on "table job already exists". Once, first:
+
+```bash
+alembic stamp fb431915efe4 && alembic upgrade head
+```
+
+### Deliberately out of scope
+
+**Authoring marker lists at scale.** 531 tags remain untested and doc 01's plan stands: a model drafts, a human reviews. Both shipped lists are `reviewed: false` and say so in the file, in `llmlc markers`, and in the UI. An unreviewed list must not pass for a reviewed one by virtue of being in the repository.
+
+**The grammar axis.** It has markers and no context that reaches them — 0 hits in 28 generations. Either the contexts get rewritten to force *in hospital* / *different to*, or the axis should be dropped as dead weight. Leaving it in place unremarked would be the wrong answer.
+
+### Open for S7
+
+1. Corpus rows still go to JSONL, not the `generation` table — and S6 has now made the case for it, since offline re-grading is exactly what the inflection fix needed.
+2. The grammar axis never fires; its contexts need rewriting or the axis needs removing.
+3. Marker coverage is 2 of 534. The method is proven on the easiest possible case — English, which is also the pivot — and untested where it would be load-bearing (`ar-EG` vs `ar-MA`).
+4. `kk-Latn` deserves a second look with a different model: a recent official alphabet with little training text is a plausible genuine gap, not necessarily a gpt-4o quirk.

@@ -231,6 +231,37 @@ def cmd_export(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_markers(a: argparse.Namespace) -> int:
+    """Variant coverage: what is decided, and what is still a gap."""
+    from llmlc.probe.markers import coverage, load_markers
+
+    scheme = load_scheme(a.scheme or settings.scheme)
+    sets = load_markers()
+    c = coverage(scheme)
+
+    print(f"{BOLD}variant coverage{RESET}  scheme {scheme.meta.name!r}")
+    print(f"  {c['variant_tags']} variant tag(s) in multi-tag classes")
+    print(f"    {BOLD}{c['markers']}{RESET} with marker sets")
+    print(f"    {BOLD}{c['not_distinguishable']}{RESET} declared not-distinguishable")
+    print(f"    {BOLD}{c['untested']}{RESET} untested  {GREY}(a tracked gap, not a claim){RESET}")
+
+    if not a.verbose:
+        print(f"\n{GREY}marker sets on disk{RESET}")
+    for tag, ms in sorted(sets.items()):
+        review = "" if ms.reviewed else f"  {GREY}unreviewed{RESET}"
+        if ms.status == "not-distinguishable":
+            print(f"  {tag:10} not-distinguishable  {GREY}{(ms.note or '')[:52]}{RESET}{review}")
+            continue
+        axes = ", ".join(f"{ax.axis} {len(ax.variant)}v/{len(ax.sibling)}s" for ax in ms.markers)
+        print(f"  {tag:10} markers  vs {ms.sibling or '?':8} "
+              f"{len(ms.elicitation)} context(s)  {GREY}{axes}{RESET}{review}")
+        if a.verbose:
+            for ax in ms.markers:
+                print(f"      {ax.axis:12} {', '.join(ax.variant[:8])}")
+                print(f"      {'':12} {GREY}vs {', '.join(ax.sibling[:8])}{RESET}")
+    return 0
+
+
 def _resolve_tags(scheme, a) -> list[str]:
     if a.tag:
         return [t.strip() for t in a.tag.split(",") if t.strip()]
@@ -308,6 +339,11 @@ def main(argv: list[str] | None = None) -> int:
     ex.add_argument("--merge-into", default=None, help="existing master file to merge into")
     ex.add_argument("--out", default="data/results/support.json")
     ex.set_defaults(func=cmd_export)
+
+    mk = sub.add_parser("markers", help="variant marker coverage and the remaining gap")
+    mk.add_argument("--scheme", default=None)
+    mk.add_argument("-v", "--verbose", action="store_true", help="print the marker lists")
+    mk.set_defaults(func=cmd_markers)
 
     l = sub.add_parser("languages", help="search the loaded scheme")
     l.add_argument("query", nargs="?", default=None)

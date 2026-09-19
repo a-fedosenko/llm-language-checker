@@ -121,6 +121,9 @@ def results(
     evidence: str | None = Query(None),
     availability: str | None = Query(None,
                                      pattern="^(reliable|intermittent|unreliable|refused)$"),
+    variant: str | None = Query(
+        None, pattern="^(proven|proven-failed|not-distinguishable|untested)$",
+        description="variant evidence state"),
     q: str | None = Query(None, description="substring match on tag or language name"),
     limit: int = Query(200, ge=1, le=5000),
     offset: int = Query(0, ge=0),
@@ -132,7 +135,7 @@ def results(
     """
     return results_store.page(results_store.Query(
         engine=engine, tier=tier, evidence=evidence, availability=availability,
-        q=q, limit=limit, offset=offset))
+        variant=variant, q=q, limit=limit, offset=offset))
 
 
 @app.get("/results/{engine}/{tag}")
@@ -151,6 +154,17 @@ def resolution(engine: str | None = Query(None),
     """What each model actually produces when asked for a language, against what
     the catalogue says that language resolves to."""
     return results_store.resolution(engine, only_macro=macro_only)
+
+
+@app.get("/variants")
+def variant_coverage(engine: str | None = Query(None)) -> dict:
+    """Dialect evidence per tag, and the size of the remaining gap.
+
+    `untested` is deliberately countable: it means no marker set has been
+    authored for that variant yet, so inheriting the base language's tier is a
+    placeholder rather than a claim.
+    """
+    return results_store.variants(engine)
 
 
 @app.get("/engines")

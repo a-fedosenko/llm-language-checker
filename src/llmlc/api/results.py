@@ -23,7 +23,8 @@ RESULTS_DIR = pathlib.Path("data/results")
 
 #: Summary facets: result column -> key in the summary object. One group-by each,
 #: rather than one pass over every row in Python.
-FACETS = {"tier": "tiers", "evidence": "evidence", "engine": "engines"}
+FACETS = {"tier": "tiers", "evidence": "evidence", "engine": "engines",
+          "variant_evidence": "variants"}
 
 
 @dataclass
@@ -32,6 +33,7 @@ class Query:
     tier: str | None = None
     evidence: str | None = None
     availability: str | None = None
+    variant: str | None = None
     q: str | None = None
     limit: int = 200
     offset: int = 0
@@ -118,6 +120,8 @@ def _filters(query: Query):
     if query.availability:
         clause = _availability_clause(Result.reliability, query.availability)
         clauses.append(clause if clause is not None else Result.id < 0)
+    if query.variant:
+        clauses.append(Result.variant_evidence == query.variant)
     if query.q:
         tags = _matching_tags(query.q)
         clauses.append(Result.tag.in_(tags) if tags else Result.id < 0)
@@ -172,6 +176,7 @@ def _serialise(r) -> dict:
         "designator": {"winner": r.designator, **(r.designator_detail or {})},
         "provenance": r.provenance, "variant_evidence": r.variant_evidence,
         "inherited_from": r.inherited_from, "resolves_to": r.resolves_to,
+        "s_variant": r.s_variant, "variant_detail": r.variant_detail,
         "backtranslator": r.backtranslator,
         "backtranslator_qualification": r.backtranslator_qualification,
         "judge": r.judge, "pivot": r.pivot, "hardware_profile": r.hardware_profile,
@@ -240,6 +245,8 @@ def _filter_rows(rows: list[dict], query: Query) -> list[dict]:
         rows = [r for r in rows if r.get("evidence") == query.evidence]
     if query.availability:
         rows = [r for r in rows if r.get("availability") == query.availability]
+    if query.variant:
+        rows = [r for r in rows if r.get("variant_evidence") == query.variant]
     if query.q:
         ql = query.q.lower()
         rows = [r for r in rows
@@ -251,7 +258,8 @@ def _filter_rows(rows: list[dict], query: Query) -> list[dict]:
 def summarise(rows: list[dict]) -> dict:
     """Facet counts for the file path, matching what SQL produces for the database."""
     out: dict[str, dict[str, int]] = {v: {} for v in FACETS.values()}
-    keys = {"tiers": "tier", "evidence": "evidence", "engines": "engine"}
+    keys = {"tiers": "tier", "evidence": "evidence", "engines": "engine",
+            "variants": "variant_evidence"}
     for r in rows:
         for facet, field in keys.items():
             value = r.get(field) or "?"
@@ -377,3 +385,36 @@ def resolution(engine: str | None = None, *, only_macro: bool = False,
                                 for v in i["engines"].values())),
         "items": items,
     }
+
+
+# -- variant coverage --------------------------------------------------------
+
+def variants(engine: str | None = None, *, root: pathlib.Path | None = None) -> dict:
+    """What has been established about each variant tag, and what is still a gap.
+
+    Combines the catalogue's unfilled work (tags with no marker set authored)
+    with what measurement has actually shown. The two are different questions:
+    a tag can have markers and still be untested on a given model, and a tag with
+    no markers can never be anything but untested.
+    """
+    from llmlc.probe.markers import coverage as marker_coverage
+
+    rows = [r for r in page(Query(engine=engine, limit=1_000_000), root)["items"]
+            if r.get("variant_evidence") and r.get("variant_evidence") != "untested"]
+    by_tag: dict[str, dict] = {}
+    for r in rows:
+        entry = by_tag.setdefault(r["tag"], {
+            "tag": r["tag"], "language": r.get("language") or {},
+            "inherited_from": r.get("inherited_from"), "engines": {}})
+        entry["engines"][r["engine"]] = {
+            "evidence": r["variant_evidence"],
+            "s_variant": r.get("s_variant"),
+            "tier": r.get("tier"),
+            "detail": r.get("variant_detail") or {},
+        }
+    try:
+        cov = marker_coverage(_scheme())
+    except Exception:  # noqa: BLE001 -- coverage is context, not the answer
+        cov = {}
+    return {"coverage": cov, "total": len(by_tag),
+            "items": sorted(by_tag.values(), key=lambda e: e["tag"])}

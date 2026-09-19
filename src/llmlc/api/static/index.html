@@ -111,6 +111,7 @@
   <nav role="tablist">
     <button role="tab" data-tab="results" aria-selected="true">Results</button>
     <button role="tab" data-tab="resolution" aria-selected="false">Resolution</button>
+    <button role="tab" data-tab="variants" aria-selected="false">Variants</button>
     <button role="tab" data-tab="scan" aria-selected="false">Scan</button>
     <button role="tab" data-tab="jobs" aria-selected="false">Jobs</button>
   </nav>
@@ -131,6 +132,13 @@
         <option value="unreliable">unreliable</option>
         <option value="refused">refused</option>
       </select>
+      <select id="variant">
+        <option value="">Any variant evidence</option>
+        <option value="proven">proven</option>
+        <option value="proven-failed">proven-failed</option>
+        <option value="not-distinguishable">not-distinguishable</option>
+        <option value="untested">untested</option>
+      </select>
       <a id="csv" class="flag" href="/export.csv" download>Download CSV</a>
     </div>
 
@@ -138,7 +146,8 @@
       <table>
         <thead><tr>
           <th>Tag</th><th>Language</th><th>Tier</th><th class="num">Content</th>
-          <th class="num">90% CI</th><th>Availability</th><th>Evidence</th><th>Designator</th>
+          <th class="num">90% CI</th><th>Availability</th><th>Evidence</th>
+          <th>Variant</th><th>Designator</th>
         </tr></thead>
         <tbody id="rows"></tbody>
       </table>
@@ -187,6 +196,33 @@
         appears once a scan has run.</div>
     </div>
     <footer id="r-foot"></footer>
+  </section>
+
+  <!-- ── variants ───────────────────────────────────────────────────────── -->
+  <section id="tab-variants" hidden>
+    <div class="note">
+      <strong>Inheriting a tier is not the same as inheriting a claim.</strong> A tag like
+      <code>de-AT</code> takes its tier from <code>de</code>, which says nothing about whether the
+      model marks <em>that variant</em>. Where a family divides by script, the probe's own script
+      check answers it for free; where it divides by country, a closed
+      <strong>marker set</strong> is compared against the sibling variant's. Everything else is
+      <code>untested</code> — a placeholder we count, not a claim we make. This measures
+      <strong>variant marking</strong>, which is a proxy for dialectal competence, not the thing itself.
+    </div>
+    <div class="stats" id="v-stats"></div>
+    <div class="filters">
+      <select id="v-engine"><option value="">All models</option></select>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Tag</th><th>Language</th><th>Evidence</th>
+          <th class="num">Marker rate</th><th>How</th></tr></thead>
+        <tbody id="v-rows"></tbody>
+      </table>
+      <div class="empty" id="v-empty" hidden>Nothing measured yet. Variant evidence is produced by a
+        scan: script-split tags get it free, country variants need a marker set in
+        <code>markers/</code>.</div>
+    </div>
   </section>
 
   <!-- ── scan ───────────────────────────────────────────────────────────── -->
@@ -281,6 +317,7 @@ for (const b of document.querySelectorAll('nav button')) {
       $('#tab-' + o.dataset.tab).hidden = o !== b;
     }
     if (b.dataset.tab === 'resolution') loadResolution();
+    if (b.dataset.tab === 'variants') loadVariants();
     if (b.dataset.tab === 'jobs') loadJobs();
   });
 }
@@ -289,7 +326,8 @@ for (const b of document.querySelectorAll('nav button')) {
 function filters() {
   const p = new URLSearchParams();
   for (const [k, sel] of [['q','#q'],['engine','#engine'],['tier','#tier'],
-                          ['evidence','#evidence'],['availability','#availability']]) {
+                          ['evidence','#evidence'],['availability','#availability'],
+                          ['variant','#variant']]) {
     const v = $(sel).value.trim();
     if (v) p.set(k, v);
   }
@@ -347,6 +385,18 @@ function availBadge(r) {
   return `<span class="flag ${AVAIL_CLASS[r.availability] || ''}">${esc(r.availability)}${pct}</span>`;
 }
 
+const VARIANT_CLASS = {
+  'proven': 'ok', 'proven-failed': 'bad', 'not-distinguishable': '', 'untested': '',
+};
+
+function variantBadge(r) {
+  const v = r.variant_evidence;
+  if (!v) return '<span class="ev">—</span>';
+  if (v === 'untested') return '<span class="ev">untested</span>';
+  const rate = r.s_variant == null ? '' : ` ${num(r.s_variant)}`;
+  return `<span class="flag ${VARIANT_CLASS[v] || ''}">${esc(v)}${rate}</span>`;
+}
+
 function renderRows(rows) {
   $('#rows').innerHTML = rows.map(r => {
     const ci = r.ci ? `${num(r.ci[0])}–${num(r.ci[1])}` : '—';
@@ -359,6 +409,7 @@ function renderRows(rows) {
       <td class="num ev">${ci}</td>
       <td>${availBadge(r)}</td>
       <td class="ev">${esc(r.evidence)}</td>
+      <td>${variantBadge(r)}</td>
       <td class="ev">${esc(r.designator?.winner ?? '')}</td>
     </tr>`;
   }).join('');
@@ -376,13 +427,13 @@ async function toggleDetail(tr) {
   state.open = key;
   const row = document.createElement('tr');
   row.className = 'detail';
-  row.innerHTML = `<td colspan="8" class="ev">loading…</td>`;
+  row.innerHTML = `<td colspan="9" class="ev">loading…</td>`;
   tr.after(row);
   try {
     const r = await j(`/results/${encodeURIComponent(tr.dataset.engine)}/${encodeURIComponent(tr.dataset.tag)}`);
-    row.innerHTML = `<td colspan="8">${detailHtml(r)}</td>`;
+    row.innerHTML = `<td colspan="9">${detailHtml(r)}</td>`;
   } catch (e) {
-    row.innerHTML = `<td colspan="8" class="ev">${esc(e.message)}</td>`;
+    row.innerHTML = `<td colspan="9" class="ev">${esc(e.message)}</td>`;
   }
 }
 
@@ -409,6 +460,9 @@ function detailHtml(r) {
         · judge ${esc(r.judge)} · pivot ${esc(r.pivot)} · method ${esc(r.method_version)}</dd>
       <dt>designators tried</dt><dd>${tried || '—'}</dd>
       <dt>resolved to</dt><dd>${resolves}</dd>
+      ${r.variant_evidence ? `<dt>variant</dt><dd>${variantBadge(r)}
+        <span class="ev">${esc(r.variant_detail?.mechanism || '')}
+        ${esc(r.variant_detail?.note || '')}</span></dd>` : ''}
       <dt>measured</dt><dd>${esc(r.tested_at || '')}${r.job_id ? ` · job ${r.job_id}` : ''}</dd>
     </dl>
     ${(r.notes || []).length ? `<ul class="notes">${r.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
@@ -420,7 +474,7 @@ function detailHtml(r) {
 $('#prev').addEventListener('click', () => { state.offset = Math.max(0, state.offset - PAGE); loadResults(false); });
 $('#next').addEventListener('click', () => { state.offset += PAGE; loadResults(false); });
 let typing = null;
-for (const s of ['#q', '#engine', '#tier', '#evidence', '#availability'])
+for (const s of ['#q', '#engine', '#tier', '#evidence', '#availability', '#variant'])
   $(s).addEventListener('input', () => {
     clearTimeout(typing);
     typing = setTimeout(() => loadResults(true), 180);  // one request per pause, not per keystroke
@@ -478,6 +532,47 @@ async function loadResolution() {
     `${items.length} tag(s) shown · ${d.divergent} of ${d.total} diverge from the catalogue`;
 }
 for (const s of ['#r-engine', '#r-macro', '#r-diverge']) $(s).addEventListener('input', loadResolution);
+
+// ── variants ──────────────────────────────────────────────────────────────
+const MECHANISM = {
+  markers: 'marker set vs sibling', script: 'script check on its own probe',
+  declared: 'declared indistinguishable', none: '—',
+};
+
+async function loadVariants() {
+  const p = new URLSearchParams();
+  if ($('#v-engine').value) p.set('engine', $('#v-engine').value);
+  const d = await j('/variants?' + p.toString());
+  const c = d.coverage || {};
+  $('#v-stats').innerHTML =
+    `<div class="stat"><b>${c.variant_tags ?? '—'}</b><span>variant tags</span></div>` +
+    `<div class="stat"><b>${c.markers ?? 0}</b><span>marker sets</span></div>` +
+    `<div class="stat"><b>${c.not_distinguishable ?? 0}</b><span>not distinguishable</span></div>` +
+    `<div class="stat"><b>${c.untested ?? 0}</b><span>no markers yet</span></div>` +
+    `<div class="stat"><b>${d.total}</b><span>measured</span></div>`;
+  fillOnce('#v-engine', [...new Set(d.items.flatMap(i => Object.keys(i.engines)))].sort());
+  $('#v-rows').innerHTML = d.items.map(i => {
+    const cells = Object.entries(i.engines).map(([eng, v]) => {
+      const cls = VARIANT_CLASS[v.evidence] || '';
+      return `<div><span class="flag ${cls}">${esc(v.evidence)}</span>
+        <span class="ev">${esc(eng)} · tier ${esc(v.tier)}
+        ${v.detail?.note ? '· ' + esc(v.detail.note) : ''}</span></div>`;
+    }).join('');
+    const rates = Object.values(i.engines)
+      .map(v => v.s_variant).filter(x => x != null).map(x => num(x));
+    const how = [...new Set(Object.values(i.engines).map(v => MECHANISM[v.detail?.mechanism]
+      || v.detail?.mechanism || '—'))].join(', ');
+    return `<tr>
+      <td class="tag">${esc(i.tag)}${i.inherited_from
+        ? `<div class="ev">tier via ${esc(i.inherited_from)}</div>` : ''}</td>
+      <td>${esc(i.language?.name ?? '')}</td>
+      <td class="kv">${cells}</td>
+      <td class="num ev">${rates.join(', ') || '—'}</td>
+      <td class="ev">${esc(how)}</td></tr>`;
+  }).join('');
+  $('#v-empty').hidden = d.items.length > 0;
+}
+$('#v-engine').addEventListener('input', loadVariants);
 
 // ── scan ──────────────────────────────────────────────────────────────────
 async function loadEngines() {

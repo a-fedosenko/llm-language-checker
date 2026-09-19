@@ -1,0 +1,58 @@
+{
+  "_about": {
+    "note": "Marker sets for English regional variants. Siblings are expressed against the American forms, because the shipped catalogue resolves bare `en` to en-US (CLDR likelySubtags) and that is what an unqualified request gets.",
+    "source": "Drafted from the schema in docs/01 from well-established, non-contested British/Australian vs American differences. NOT human-reviewed by a native speaker; every entry carries `reviewed: false` until it is.",
+    "scoring": "Comparative. A variant marker is a hit, the sibling's marker in the same slot is a miss, and an item where neither appears is void -- the elicitation context failed, not the model.",
+    "on-inflections": "Single-word markers match their regular English inflections (neighbour/neighbours, organise/organising), so only base forms are listed. Listing an inflected form as well would let one word score twice.", "on-suffixes": "Orthography markers are spelled out as whole words rather than written as suffixes. `-our` would match hour/four/your, `-or` would match doctor/motor, and `-ise` would match wise/rise/promise -- all identical in both variants, all silent false hits. The suffix form is supported by the loader and is safe only where no unrelated word shares the ending, such as -isation/-ization."
+  },
+
+  "en-AU": {
+    "status": "markers",
+    "sibling": "en-US",
+    "designator": "Australian English",
+    "source": "docs/01 example, extended",
+    "reviewed": false,
+    "markers": [
+      { "axis": "lexis",
+        "variant": ["boot", "petrol", "ute", "footpath", "lift", "rubbish", "mobile", "car park", "queue", "biscuit", "jumper", "nappy", "torch", "esky", "arvo", "servo", "chemist", "takeaway"],
+        "sibling": ["trunk", "gas", "gasoline", "pickup", "sidewalk", "elevator", "trash", "garbage", "cell phone", "parking lot", "line", "cookie", "sweater", "diaper", "flashlight", "cooler", "drugstore", "takeout"] },
+      { "axis": "orthography",
+        "variant": ["colour", "favour", "neighbour", "behaviour", "labour", "harbour", "realise", "organise", "recognise", "apologise", "-isation", "tyre", "kerb", "metre", "litre", "centre", "theatre", "aluminium", "grey", "aeroplane", "catalogue", "travelled", "travelling"],
+        "sibling": ["color", "favor", "neighbor", "behavior", "labor", "harbor", "realize", "organize", "recognize", "apologize", "-ization", "tire", "curb", "meter", "liter", "center", "theater", "aluminum", "gray", "airplane", "catalog", "traveled", "traveling"] },
+      { "axis": "grammar",
+        "variant": ["in hospital", "at university", "different to", "have got"],
+        "sibling": ["in the hospital", "in college", "different than", "gotten"] }
+    ],
+    "elicitation": [
+      "Describe loading luggage into the back of a car and stopping to fill the fuel tank before a long drive.",
+      "Describe someone being taken to hospital after a fall outside a shop, and how their treatment differed from what the family expected.",
+      "Describe a person leaving a supermarket, carrying their shopping to where the car is parked, and calling home on their phone about what to cook.",
+      "Describe someone choosing what shade to paint a room, then arranging a street party with the people who live next door."
+    ]
+  },
+
+  "en-GB": {
+    "status": "markers",
+    "sibling": "en-US",
+    "designator": "British English",
+    "source": "drafted for S6",
+    "reviewed": false,
+    "markers": [
+      { "axis": "lexis",
+        "variant": ["boot", "bonnet", "petrol", "lorry", "lift", "flat", "rubbish", "mobile", "car park", "queue", "biscuit", "crisps", "jumper", "nappy", "torch", "holiday", "autumn", "postcode", "underground", "motorway", "chemist"],
+        "sibling": ["trunk", "hood", "gas", "gasoline", "truck", "elevator", "apartment", "trash", "garbage", "cell phone", "parking lot", "line", "cookie", "sweater", "diaper", "flashlight", "vacation", "zip code", "subway", "freeway", "drugstore"] },
+      { "axis": "orthography",
+        "variant": ["colour", "favour", "neighbour", "behaviour", "labour", "harbour", "realise", "organise", "recognise", "apologise", "-isation", "tyre", "kerb", "metre", "litre", "centre", "theatre", "aluminium", "grey", "aeroplane", "catalogue", "travelled", "travelling", "practise", "licence", "defence"],
+        "sibling": ["color", "favor", "neighbor", "behavior", "labor", "harbor", "realize", "organize", "recognize", "apologize", "-ization", "tire", "curb", "meter", "liter", "center", "theater", "aluminum", "gray", "airplane", "catalog", "traveled", "traveling", "practice", "license", "defense"] },
+      { "axis": "grammar",
+        "variant": ["in hospital", "at university", "different to", "have got", "at the weekend"],
+        "sibling": ["in the hospital", "in college", "different than", "gotten", "on the weekend"] }
+    ],
+    "elicitation": [
+      "Describe loading luggage into the back of a car and stopping to fill the fuel tank before a long drive.",
+      "Describe someone being taken to hospital after a fall outside a shop, and how their treatment differed from what the family expected.",
+      "Describe a person leaving a large residential building on a cold October morning, going to work by train beneath the city, and buying a snack on the way.",
+      "Describe someone choosing what shade to paint a room, then arranging a street party with the people who live next door."
+    ]
+  }
+}

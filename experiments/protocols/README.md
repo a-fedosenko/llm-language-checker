@@ -25,6 +25,7 @@ changed as a result.
 | [009](009-ladder-and-designator-sweep.md) | 2026-09-17 | Do the ladder, class collapse and designator sweep pay off? | 9.2 calls/tag; the endonym beats the English name on some long-tail languages |
 | [010](010-country-qualified-designators.md) | 2026-09-17 | Should the designator name the country? | No — it does not help, and it produced the one wrong-language output. Underpowered |
 | [011](011-reliability-and-tier.md) | 2026-09-17 | Should low reliability cap the tier? | No. n=3 cannot support a cap, and it would restate unwillingness as inability. Availability became a second axis |
+| [012](012-variant-markers.md) | 2026-09-18 | Can a closed marker set measure dialect marking? | Yes — 1.00 under "Australian English" vs 0.00 under "English". Found three defects in the instrument and two in the pipeline |
 
 ## Writing one
 

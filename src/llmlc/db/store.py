@@ -37,7 +37,7 @@ def to_row(result, *, job_id: int | None = None, hardware_profile: str | None = 
             "beat_incumbent": getattr(result, "beat_incumbent", None),
         },
         "provenance": "measured",
-        "variant_evidence": None if (lang and lang.is_macro) else "untested",
+        **_variant_columns(result, lang),
         "inherited_from": getattr(result, "inherited_from", None),
         "resolves_to": result.resolves_to or None,
         "backtranslator": result.backtranslator,
@@ -60,6 +60,23 @@ def to_row(result, *, job_id: int | None = None, hardware_profile: str | None = 
         "notes": s.notes,
         "tested_at": datetime.now(timezone.utc),
     }
+
+
+def _variant_columns(result, lang) -> dict:
+    """The three variant columns, from the probe if one ran.
+
+    Before S6 this was the literal string "untested" for every non-macrolanguage
+    tag. That was honest but inert: it could never become anything else, because
+    nothing was ever measured. Now `untested` means no mechanism applied to this
+    tag *yet*, and it is countable against the tags where one did.
+    """
+    variant = getattr(result, "variant", None)
+    if variant is None:
+        return {"variant_evidence": None if (lang and lang.is_macro) else "untested",
+                "s_variant": None, "variant_detail": None}
+    return {"variant_evidence": variant.evidence.value,
+            "s_variant": variant.s_variant,
+            "variant_detail": variant.as_dict()}
 
 
 def save(session: Session, result, **kw) -> tuple[Result, str]:

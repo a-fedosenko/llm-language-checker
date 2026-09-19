@@ -1,0 +1,15 @@
+{
+  "_about": {
+    "note": "Variants deliberately marked as not differing in everyday written register. Inheriting the base language's tier for these is CORRECT, not a placeholder -- which is the whole reason this state is separate from `untested`. Only claims we are prepared to defend belong here; everything else stays untested and countable.",
+    "source": "ru-BY is the worked example in docs/01. Nothing has been added beyond what that document decided.",
+    "warning": "Do not bulk-fill this file to make coverage numbers look better. An unfilled gap that is visible is worth more than a filled one that is wrong."
+  },
+
+  "ru-BY": {
+    "status": "not-distinguishable",
+    "sibling": "ru",
+    "reviewed": false,
+    "source": "docs/01, 'Dialects, macrolanguages and markers'",
+    "note": "Russian as written in Belarus does not differ from Russian as written in Russia in everyday register. There is no marker set to author, so inheriting `ru` is the right answer rather than a fallback. This is a claim about the written standard, not about Belarusian (`be`), which is a different language entirely."
+  }
+}

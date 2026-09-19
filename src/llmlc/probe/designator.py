@@ -47,8 +47,18 @@ class Designator:
 
 
 def candidates(lang: Language, *, incumbent: str | None = None,
-               region_name: str | None = None) -> list[Designator]:
-    """Candidate designators, best-guess first."""
+               region_name: str | None = None,
+               qualify_script: bool | None = None) -> list[Designator]:
+    """Candidate designators, best-guess first.
+
+    `qualify_script` forces the script into the name. Without it the rule was
+    "name the script unless it is Latin", which is right for most languages and
+    exactly wrong for the ones that matter here: Kazakh's *marked* script is
+    Latin, so `kk-Latn` was asked for as plain "Kazakh" and answered, correctly,
+    in Cyrillic. We then recorded that as the model failing to produce Latin
+    Kazakh, when it was the right answer to the question we actually asked
+    (docs/02: a negative must mean "none under our best designator").
+    """
     out: list[Designator] = []
     name = lang.name or lang.tag
 
@@ -56,7 +66,9 @@ def candidates(lang: Language, *, incumbent: str | None = None,
     qualifiers = []
     if region_name:
         qualifiers.append(region_name)
-    if lang.script and lang.script not in ("Latn",):
+    name_script = qualify_script or (qualify_script is None
+                                     and lang.script and lang.script not in ("Latn",))
+    if name_script and lang.script:
         qualifiers.append(f"{SCRIPT_NAMES.get(lang.script, lang.script)} script")
     a = f"{name} ({', '.join(qualifiers)})" if qualifiers else name
     out.append(Designator("A", a))

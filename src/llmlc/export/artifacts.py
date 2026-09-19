@@ -23,10 +23,33 @@ MERGEABLE_FROM = {Tier.BASIC, Tier.USABLE, Tier.STRONG}
 
 
 def support_entry(result: CheckResult) -> dict:
-    """The mergeable shape: {tag: {engine: designator}}. Absent engine = unsupported."""
-    if result.score.tier in MERGEABLE_FROM:
+    """The mergeable shape: {tag: {engine: designator}}. Absent engine = unsupported.
+
+    A variant that was **tested and did not mark itself** is withheld even when
+    its base language is Strong. The file says "we will send this locale to this
+    engine", and for `en-AU` that promise means Australian English, not English.
+    Inheriting a support claim through a failed variant test is the one thing
+    docs/01 explicitly forbids: *must not silently inherit "supported" from the
+    macrolanguage.*
+
+    `untested` still inherits. That is a placeholder we know about and count, not
+    a claim we have contradicted.
+    """
+    variant = getattr(result, "variant", None)
+    failed_variant = variant is not None and variant.evidence.value == "proven-failed"
+    if result.score.tier in MERGEABLE_FROM and not failed_variant:
         return {result.tag: {result.engine: result.designator}}
     return {result.tag: {}}
+
+
+def _variant_fields(result) -> dict:
+    variant = getattr(result, "variant", None)
+    if variant is None:
+        return {"variant_evidence": None if result.language.is_macro else "untested",
+                "s_variant": None, "variant_detail": None}
+    return {"variant_evidence": variant.evidence.value,
+            "s_variant": variant.s_variant,
+            "variant_detail": variant.as_dict()}
 
 
 def evidence_record(result: CheckResult) -> dict:
@@ -44,7 +67,7 @@ def evidence_record(result: CheckResult) -> dict:
             "beat_incumbent": getattr(result, "beat_incumbent", None),
         },
         "provenance": "measured",
-        "variant_evidence": None if result.language.is_macro else "untested",
+        **_variant_fields(result),
         "inherited_from": getattr(result, "inherited_from", None),
         "rungs_run": getattr(result, "rungs_run", None),
         "calls": getattr(result, "calls", None),

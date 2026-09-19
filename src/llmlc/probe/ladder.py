@@ -75,6 +75,10 @@ class LadderResult:
     resolves_to: dict[str, int] = field(default_factory=dict)
     calls: dict[str, int] = field(default_factory=dict)
     inherited_from: str | None = None
+    #: How this tag's *variant* claim was established, if at all. Filled by the
+    #: scan rather than the ladder: the ladder measures a class, and a variant is
+    #: a property of a tag within one (S6).
+    variant: object | None = None
 
     @property
     def beat_incumbent(self) -> bool | None:
@@ -93,6 +97,10 @@ class LadderResult:
         if win is None:
             return None
         return win.rate > inc.rate
+
+
+def _refused(items: list[ItemOutcome]) -> int:
+    return sum(1 for i in items if i.gate.verdict is GateVerdict.REFUSED)
 
 
 def accepted_codes(lang: Language) -> set[str]:
@@ -133,7 +141,9 @@ def run_ladder(
 
     accept = accepted_codes(lang)
     relatives = relative_codes(scheme, lang)
-    candidates = dsg.candidates(lang, incumbent=incumbent)
+    from llmlc.probe.variant import is_script_variant
+    candidates = dsg.candidates(lang, incumbent=incumbent,
+                                qualify_script=is_script_variant(scheme, lang) or None)
     calls = {"generation": 0, "backtranslation": 0, "judge": 0}
     resolves: dict[str, int] = {}
 
@@ -175,10 +185,15 @@ def run_ladder(
         return LadderResult(
             tag=tag, engine=engine, language=lang, designator=best.value,
             designator_kinds=chosen.kinds, trials=trials,
-            score=score(lang_pass=[], content=[],
-                        evidence=Evidence.DETERMINISTIC_NEGATIVE,
-                        refusals=sum(1 for i in best_items
-                                     if i.gate.verdict is GateVerdict.REFUSED)),
+            score=score(
+                # Items the model *attempted* and got wrong still count as
+                # attempts. Passing an empty list here made a model that answered
+                # every item in the wrong script indistinguishable from one that
+                # refused every item -- reliability 0.0 for a model that was
+                # entirely willing.
+                lang_pass=[False] * (len(best_items) - _refused(best_items)),
+                content=[], evidence=Evidence.DETERMINISTIC_NEGATIVE,
+                refusals=_refused(best_items)),
             items=best_items, backtranslator="(not needed)", judge_model=judge_model,
             pivot=pivot,
             qualification=Qualification(QualStatus.NO_CONTROL, 0.0, "(not needed)", tag,

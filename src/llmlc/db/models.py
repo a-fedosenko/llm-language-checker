@@ -106,7 +106,12 @@ class Result(Base):
     designator: Mapped[str] = mapped_column(String(256))
     designator_detail: Mapped[dict] = mapped_column(JSON, default=dict)
     provenance: Mapped[str] = mapped_column(String(32), default="measured")
-    variant_evidence: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    variant_evidence: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    #: Marker rate for a variant probe: share of decided marker choices that went
+    #: the variant's way. Null where the variant was never tested, which is not
+    #: the same as zero.
+    s_variant: Mapped[float | None] = mapped_column(Float, nullable=True)
+    variant_detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     inherited_from: Mapped[str | None] = mapped_column(String(64), nullable=True)
     resolves_to: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 

@@ -41,6 +41,7 @@ Results go to a local SQLite file — there is no database service to run:
 pip install -e ".[dev]"
 llmlc scan --engine <model> --tag de,fr,cv    # measure
 llmlc status                                   # what is measured, what is stale
+llmlc markers                                  # variant coverage, and the remaining gap
 llmlc export --merge-into your-master.json     # mergeable artifact
 uvicorn llmlc.api.main:app                     # UI on :8000
 pytest
@@ -59,6 +60,21 @@ A scan spends your API budget, so the endpoint that starts one is gated by `SCAN
 Only the socket's peer address counts; `X-Forwarded-For` is ignored, because a header any client can set is not an access control. Behind a reverse proxy, use `off`.
 
 A browser-started scan must state a call budget, and `SCAN_TRIGGER_MAX_CALLS` (default 2000) caps it. **Plan first** — the plan shows how many classes will actually be probed and costs nothing.
+
+## Dialects and variants
+
+A tag like `de-AT` inherits `de`'s tier, which says nothing about whether the model marks *that variant*. So each variant tag gets a verdict of its own:
+
+| mechanism | applies to | how |
+|---|---|---|
+| **script** | marked script variants (`sr-Latn`, `kk-Latn`) | the probe's own script check — free |
+| **markers** | country-only variants (`en-AU`) | a closed shibboleth set, compared against the sibling variant's |
+| **declared** | variants that genuinely do not differ in everyday register (`ru-BY`) | an authored decision, with its reason |
+| none | everything else | `untested` — a tracked gap, not a claim |
+
+Marker sets live in `markers/*.json` and are a **growable asset**: ship none and every dialect inherits; add a file and those tags upgrade from inherited to proven. Scoring is comparative (`boot` hits, `trunk` misses) and an item where neither appears is **void**, because that means the prompt failed rather than the model. The markers are never named in the prompt — that would measure instruction-following — and the loader rejects a file that names them in its own elicitation contexts.
+
+This measures **variant marking**, which is a proxy for dialectal competence and not the thing itself. The shipped lists are drafted and **not human-reviewed**; they say so in the file and everywhere they are displayed.
 
 ## Bring your own locale list
 
