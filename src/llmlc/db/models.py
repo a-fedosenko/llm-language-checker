@@ -17,6 +17,15 @@ from sqlalchemy import (JSON, DateTime, Float, ForeignKey, Index, Integer, Strin
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
+#: Recorded as the back-translator when a result never needed one. A
+#: deterministic negative -- refusal, wrong script, degeneration -- is settled by
+#: the local gate, so no instrument read the language and none can be named.
+#:
+#: It is a value in a column that decides row identity, which makes it special:
+#: see `Result` and `repo.upsert_result`.
+NO_INSTRUMENT = "(not needed)"
+
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -77,6 +86,17 @@ class Result(Base):
     Unique on (engine, tag, method_version, backtranslator): the same language
     measured with a different instrument is a different result, not an update,
     because results from different back-translators are not comparable.
+
+    **A deterministic negative is the exception**, because it is the one result
+    that does not depend on an instrument: the local gate settled it and nothing
+    read the language. It therefore stores `NO_INSTRUMENT` and is comparable to
+    *every* instrument's result rather than none of them, so it must occupy the
+    same row rather than a parallel one. `repo.upsert_result` enforces that; the
+    database constraint alone cannot express it.
+
+    Without that rule, re-measuring one language produced two rows whenever a
+    run's verdict moved between "settled by the gate" and "scored" -- which is
+    exactly what happened to `kk-Latn`.
     """
 
     __tablename__ = "result"

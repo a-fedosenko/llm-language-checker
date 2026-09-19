@@ -762,3 +762,11 @@ English stays unsuffixed, so every row and cached qualification written before t
 `en` now measures **Strong / fact-recall / content 1.00**. The three degenerate rows from before the fix were deleted; they were measurements the tool now refuses to make.
 
 **The one disagreement in protocol 013 is worth remembering** because it is not about judging at all. Asked whether "He walked home" was present, the English back-translation said "goes home" (judged missing) and the German said "geht nach Hause" (judged present, since *gehen* implies on foot). The Russian original meant walking. The pivot choice can lose a detail in translation — for any pivot, not just this one — and that is a limit of round-tripping, not of the judge.
+
+### A sentinel in an identity column (fixed 2026-09-19)
+
+`kk-Latn` appeared twice in the results table. The uniqueness constraint is `(engine, tag, method_version, backtranslator)`, and a deterministic negative stores `"(not needed)"` as its back-translator, because the local gate settled it and nothing read the language. So when one run came back settled-by-the-gate and the next came back scored, the two rows did not collide — and the merge rule, which exists precisely to stop a re-run producing a second answer, never fired.
+
+The rule the constraint cannot express: **a deterministic negative is the one result that does not depend on an instrument**, so it is comparable to every back-translator's result rather than none of them, and must occupy the same row. `repo.upsert_result` now treats a row as the same measurement when the back-translators match *or* either side is `NO_INSTRUMENT`, and folds any duplicates left by the old rule into the row it writes.
+
+Protocol 005's guarantee is untouched: two *real* instruments still produce two results, because they are still not comparable.

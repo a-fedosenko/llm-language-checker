@@ -13,7 +13,7 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/03 - Architecture and development stages.md` — architecture, data model, staging, and the implementation log for S0–S6
 - `experiments/protocols/README.md` — thirteen experiment protocols; 005, 011 and 012 matter most
 
-**State:** S0–S6 complete, 233 tests passing.
+**State:** S0–S6 complete, 238 tests passing.
 
 **Run it:**
 ```bash

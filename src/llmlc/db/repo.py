@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from llmlc.db.models import Generation, Job, JobItem, Qualification, Result
+from llmlc.db.models import (NO_INSTRUMENT, Generation, Job, JobItem,
+                             Qualification, Result)
 
 
 def _aware(dt: datetime | None) -> datetime | None:
@@ -36,21 +37,44 @@ def _version_key(v: str | None) -> tuple:
     return tuple(out)
 
 
+def _same_result(s: Session, row: dict) -> list[Result]:
+    """Existing rows that are the same measurement as `row`.
+
+    Normally that means an exact match on the identity columns. The exception is
+    a **deterministic negative**, which stores `NO_INSTRUMENT` because no
+    back-translator was used: it does not depend on an instrument, so it is
+    comparable to every instrument's result rather than none of them, and must
+    collapse onto the same row.
+
+    Without this, a language whose verdict moved between "settled by the gate"
+    and "scored" gained a second row on every re-run, and the merge rule never
+    fired because the rows never collided. `kk-Latn` accumulated two.
+    """
+    rows = list(s.scalars(select(Result).where(
+        Result.engine == row["engine"], Result.tag == row["tag"],
+        Result.method_version == row["method_version"])))
+    return [r for r in rows
+            if r.backtranslator == row["backtranslator"]
+            or NO_INSTRUMENT in (r.backtranslator, row["backtranslator"])]
+
+
 def upsert_result(s: Session, row: dict) -> tuple[Result, str]:
     """Insert or update one result. Returns (row, "inserted"|"updated"|"kept").
 
     `kept` means an existing row was newer by method version or timestamp and was
     left alone -- a stale re-run must never overwrite a fresher measurement.
     """
-    existing = s.scalar(select(Result).where(
-        Result.engine == row["engine"], Result.tag == row["tag"],
-        Result.method_version == row["method_version"],
-        Result.backtranslator == row["backtranslator"]))
-
-    if existing is None:
+    matches = _same_result(s, row)
+    if not matches:
         obj = Result(**row)
         s.add(obj)
         return obj, "inserted"
+
+    # Newest first, so a re-run is compared against the freshest thing on record.
+    matches.sort(key=lambda r: (_version_key(r.method_version),
+                                _aware(r.tested_at) or datetime.min.replace(tzinfo=timezone.utc)),
+                 reverse=True)
+    existing, superseded = matches[0], matches[1:]
 
     new_at = _aware(row.get("tested_at")) or datetime.now(timezone.utc)
     old_at = _aware(existing.tested_at)
@@ -60,6 +84,10 @@ def upsert_result(s: Session, row: dict) -> tuple[Result, str]:
 
     for k, v in row.items():
         setattr(existing, k, v)
+    # Duplicates left by the old rule are folded into the row we just wrote,
+    # rather than surviving as a second answer to the same question.
+    for dup in superseded:
+        s.delete(dup)
     return existing, "updated"
 
 

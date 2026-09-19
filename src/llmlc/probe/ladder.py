@@ -21,6 +21,7 @@ from llmlc.bt import (Qualification, QualificationCache, QualStatus,
                       RemoteBackTranslator, route)
 from llmlc.probe import pivot as pivot_mod
 from llmlc.client import OpenAICompatClient
+from llmlc.db.models import NO_INSTRUMENT
 from llmlc.probe import designator as dsg
 from llmlc.probe.corpus import Corpus
 from llmlc.probe.gate import GateVerdict
@@ -195,9 +196,9 @@ def run_ladder(
                 lang_pass=[False] * (len(best_items) - _refused(best_items)),
                 content=[], evidence=Evidence.DETERMINISTIC_NEGATIVE,
                 refusals=_refused(best_items)),
-            items=best_items, backtranslator="(not needed)", judge_model=judge_model,
+            items=best_items, backtranslator=NO_INSTRUMENT, judge_model=judge_model,
             pivot=pivot,
-            qualification=Qualification(QualStatus.NO_CONTROL, 0.0, "(not needed)", tag,
+            qualification=Qualification(QualStatus.NO_CONTROL, 0.0, NO_INSTRUMENT, tag,
                                         "", "Deterministic negative: no back-translation "
                                             "was required to reach this verdict."),
             rungs_run=1, resolves_to=resolves, calls=calls)
