@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 from llmlc.bt import (Qualification, QualificationCache, QualStatus,
                       RemoteBackTranslator, route)
+from llmlc.probe import pivot as pivot_mod
 from llmlc.client import OpenAICompatClient
 from llmlc.probe import designator as dsg
 from llmlc.probe.corpus import Corpus
@@ -202,7 +203,12 @@ def run_ladder(
             rungs_run=1, resolves_to=resolves, calls=calls)
 
     # -- qualify the instrument before any score depends on it ---------------
-    bt, qual = route(backtranslators, client, judge_model, tag, cache=cache)
+    # A language that is itself the pivot is measured through a different one:
+    # back-translating English into English grades nothing (see probe/pivot.py).
+    backtranslators, pivot, controls = pivot_mod.panel_for(
+        scheme, lang, pivot, backtranslators)
+    bt, qual = route(backtranslators, client, judge_model, tag,
+                     controls=controls, cache=cache)
 
     def finish(items: list[ItemOutcome], rungs: int) -> LadderResult:
         contents = [i.content for i in items if i.content is not None]

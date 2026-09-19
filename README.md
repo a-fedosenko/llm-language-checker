@@ -14,6 +14,7 @@ This is **not** a linguistic authority and **not** a benchmark leaderboard. It i
 - Sample sizes are small. Results carry confidence intervals, and a result whose interval straddles a tier boundary is reported as `borderline`, never rounded.
 - For languages with no aligned reference text, quality cannot be assessed at all. Those are reported `unverified` — which is an honest answer, not a failure.
 - Results are only comparable within the same back-translator, judge, and method version. All three are recorded on every result.
+- The **pivot language** — the language everything is back-translated into for judging — cannot be graded against itself, so it is measured through a fallback pivot and its results carry that pivot in the instrument id.
 
 Anything it reports is evidence, not proof.
 

@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from llmlc.bt import Qualification, QualificationCache, RemoteBackTranslator, route
 from llmlc.client import OpenAICompatClient
 from llmlc.probe import designator as dsg
+from llmlc.probe import pivot as pivot_mod
 from llmlc.probe.corpus import Corpus, Record
 from llmlc.probe.gate import GateResult, GateVerdict, check as gate_check
 from llmlc.probe.judge import Judgement, judge as run_judge
@@ -106,7 +107,12 @@ def check_language(
     # Qualify the instrument before trusting it, and choose it per language: a
     # back-translator that cannot read the language turns a correct model into a
     # failing score, silently, because it fabricates rather than refusing.
-    backtranslator, qual = route(backtranslators, client, judge_model, tag, cache=cache)
+    # Same pivot rule as the ladder: a language that is itself the pivot is
+    # measured through a different one (see probe/pivot.py).
+    backtranslators, pivot, controls = pivot_mod.panel_for(
+        scheme, lang, pivot, backtranslators)
+    backtranslator, qual = route(backtranslators, client, judge_model, tag,
+                                 controls=controls, cache=cache)
     items: list[ItemOutcome] = []
     resolves: dict[str, int] = {}
 

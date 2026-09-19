@@ -11,9 +11,9 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/01 - Initial discussion - stage 1.md` — prior art, methodology, output contract, dialect/macrolanguage logic
 - `docs/02 - Experiment - invented language control.md` — why self-reported language support cannot be trusted
 - `docs/03 - Architecture and development stages.md` — architecture, data model, staging, and the implementation log for S0–S6
-- `experiments/protocols/README.md` — twelve experiment protocols; 005, 011 and 012 matter most
+- `experiments/protocols/README.md` — thirteen experiment protocols; 005, 011 and 012 matter most
 
-**State:** S0–S6 complete, 219 tests passing.
+**State:** S0–S6 complete, 233 tests passing.
 
 **Run it:**
 ```bash
@@ -41,7 +41,8 @@ Schema changes are Alembic's now. A database made by `create_all()` has no versi
 7. **Tier is capability; availability is willingness** (protocol 011). Refusals are excluded from `s_lang` and reported separately. Do not let one become the other — the workflow sentence carries the caveat, the tier does not move.
 8. **`runner.py` is the only definition of "run a scan".** The CLI and the HTTP trigger differ in how they report progress and who may call them, nothing else. Add scan behaviour there, not in `cli.py`.
 9. **Inheriting a tier is not inheriting a claim** (S6). A variant tag gets its own `variant_evidence` by script, markers, an authored `not-distinguishable`, or `untested`. The last two are different on purpose: one is a finished decision, the other is countable remaining work.
-10. **Where a defect would be invisible in the output, the guard goes in the loader.** Marker scoring is string matching, so a wrong marker yields a plausible number with nothing to flag it. Three such defects are now rejected at load time rather than trusted to review (protocol 012).
+10. **The pivot language is measured through a different pivot** (protocol 013). Back-translating English into English grades nothing, so `en` falls through to `de`. The pivot is part of the back-translator's id (`remote:model@de`), which is what keeps qualifications cached per pivot and stops two incomparable measurements of one language from overwriting each other.
+11. **Where a defect would be invisible in the output, the guard goes in the loader.** Marker scoring is string matching, so a wrong marker yields a plausible number with nothing to flag it. Three such defects are now rejected at load time rather than trusted to review (protocol 012).
 
 **On the scan trigger.** `POST /scans` is bound to loopback (`SCAN_TRIGGER=off|loopback|any`, default `loopback`), because reaching it already implies access to the machine holding the `.env`. Only the socket peer address counts — a forged `X-Forwarded-For` is tested to fail. Docker needs `any`, where the control is the port binding, and compose publishes on `127.0.0.1`. A browser-started scan must name a `max_calls`; the CLI need not. One scan at a time; a second gets `409`. Cancellation is checked between classes, and orphaned `running` jobs are reaped at API startup.
 

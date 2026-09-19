@@ -69,8 +69,12 @@ class Qualification:
                 "detail": self.detail}
 
 
-def load_controls() -> dict[str, dict]:
-    """Merged control set. FLORES supplies breadth; hand seeds fill its gaps."""
+def load_controls(pivot: str = "en") -> dict[str, dict]:
+    """Merged control set. FLORES supplies breadth; hand seeds fill its gaps.
+
+    `pivot` only matters for the pivot language itself -- see `pivot_control`.
+    Every other control is already expressed against English.
+    """
     out: dict[str, dict] = {}
     if FLORES_CONTROLS.exists():
         data = json.loads(FLORES_CONTROLS.read_text(encoding="utf-8"))
@@ -80,7 +84,33 @@ def load_controls() -> dict[str, dict]:
         data = json.loads(SEED_CONTROLS.read_text(encoding="utf-8"))
         for tag, items in data.get("controls", {}).items():
             out.setdefault(tag, {"kind": "facts", "items": items})
+    if pivot != "en":
+        derived = pivot_control(out, pivot)
+        if derived:
+            out["en"] = derived
     return out
+
+
+def pivot_control(controls: dict[str, dict], pivot: str) -> dict | None:
+    """A control for English, built by reading an aligned pair backwards.
+
+    Every FLORES control is (target text -> English reference), so the entry for
+    German already contains exactly what is needed to grade a back-translation
+    *into* German: swap the sides and it becomes (English text -> German
+    reference). The corpus is aligned, so this is the same data, not new data --
+    which is why measuring the pivot language needs no extra download and no
+    hand-written text.
+
+    Returns None when the chosen pivot has no reference control of its own, since
+    inventing one would mean grading a back-translator against text nobody
+    checked.
+    """
+    entry = controls.get(pivot)
+    if not entry or entry.get("kind") != "reference":
+        return None
+    items = [{"text": i["reference"], "reference": i["text"]}
+             for i in entry.get("items", []) if i.get("text") and i.get("reference")]
+    return {"kind": "reference", "items": items, "derived_from": pivot} if items else None
 
 
 class QualificationCache:

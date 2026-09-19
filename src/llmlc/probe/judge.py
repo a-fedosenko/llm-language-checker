@@ -1,4 +1,4 @@
-"""The judge: blind fact recall, entirely in the pivot language.
+"""The judge: blind fact recall, in the pivot language.
 
 The point of grading by fact recall rather than string similarity is that the
 judge never needs to know the target language -- it reads a back-translation and
@@ -12,6 +12,11 @@ Rules, all load-bearing:
   not self       never the model under test (self-preference bias)
   pinned         the judge model is recorded on every result
   controlled     injected positive/negative controls detect a broken judge in-run
+
+The facts stay in English while the text arrives in whatever the pivot is, which
+is the same task one step harder. It only comes up for the pivot language itself
+-- measured through a fallback pivot, since translating English into English
+grades nothing -- and is validated in protocol 013 rather than assumed.
 """
 from __future__ import annotations
 
@@ -42,7 +47,8 @@ For each fact, answer exactly one of:
   "missing"       the text does not mention it
   "contradicted"  the text states something incompatible with it
 
-Wording will differ from the fact — judge meaning, not phrasing.
+Wording will differ from the fact, and the text may be written in a different \
+language from the facts. Judge meaning, not phrasing or language.
 Reply with JSON only: {{"verdicts": ["present", "missing", ...]}} with one entry \
 per fact, in order. No other text."""
 

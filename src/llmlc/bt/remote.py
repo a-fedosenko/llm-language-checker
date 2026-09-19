@@ -24,8 +24,11 @@ Reply with the translation only — no commentary, no notes, no original text.
 TEXT:
 {text}"""
 
-PIVOT_NAMES = {"en": "English", "ru": "Russian", "es": "Spanish",
-               "fr": "French", "ar": "Arabic", "hi": "Hindi"}
+#: Named rather than passed as a tag: "Translate into de" is a worse prompt than
+#: "Translate into German", and the fallback pivots must all be present here.
+PIVOT_NAMES = {"en": "English", "ru": "Russian", "es": "Spanish", "de": "German",
+               "fr": "French", "ar": "Arabic", "hi": "Hindi", "pt": "Portuguese",
+               "it": "Italian", "zh": "Chinese", "ja": "Japanese"}
 
 
 @dataclass
@@ -47,7 +50,20 @@ class RemoteBackTranslator:
 
     @property
     def id(self) -> str:
-        return f"remote:{self.model}"
+        """Identity of the *instrument*, which includes what it translates into.
+
+        The same model translating into German is not the same instrument as it
+        translating into English, so the pivot rides in the id whenever it is not
+        the default. That one detail does three jobs: qualification is cached per
+        pivot rather than shared across them, two results for the same language
+        measured through different pivots occupy separate rows under the existing
+        uniqueness constraint instead of overwriting each other, and the pivot is
+        visible wherever the back-translator is shown.
+
+        English stays unsuffixed so every row measured before this existed keeps
+        its identity, and no cache is invalidated.
+        """
+        return f"remote:{self.model}" if self.pivot == "en" else f"remote:{self.model}@{self.pivot}"
 
     def translate(self, text: str) -> BackTranslation:
         prompt = PROMPT.format(pivot_name=PIVOT_NAMES.get(self.pivot, self.pivot), text=text.strip())

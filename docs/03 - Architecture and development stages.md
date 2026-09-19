@@ -738,3 +738,27 @@ alembic stamp fb431915efe4 && alembic upgrade head
 2. The grammar axis never fires; its contexts need rewriting or the axis needs removing.
 3. Marker coverage is 2 of 534. The method is proven on the easiest possible case — English, which is also the pivot — and untested where it would be load-bearing (`ar-EG` vs `ar-MA`).
 4. `kk-Latn` deserves a second look with a different model: a recent official alphabet with little training text is a plausible genuine gap, not necessarily a gpt-4o quirk.
+
+## Measuring the pivot language (fixed 2026-09-19)
+
+`en` reported `None` / `unverified`: true, and useless, on the best-supported language in the catalogue. The cause is structural rather than a bug in any one place — quality is graded by back-translating into the pivot, so for the pivot itself the round trip is English → English and grades nothing. Qualification then found no control for `en`, because FLORES's English side is the *reference* for every other language and never a target, and `no-control` is never a pass.
+
+The fix measures the pivot language through a different pivot ([protocol 013](../experiments/protocols/013-cross-lingual-judging.md)). Three things had to move together:
+
+1. **The pivot is resolved per language, not per scan** (`probe/pivot.py`). A language that is itself the pivot falls through to the first candidate that is not also the target — `de`, then `fr`, then `es` — so choosing an unusual pivot moves the blind spot along instead of leaving one where it was. Compared by ISO 639-3, so `en-AU` and `en-GB` are caught with `en`.
+2. **The control is the aligned pair read backwards.** Every FLORES control is (target text → English reference); measuring English needs (English text → German reference), which is the *same data*. So the pivot language needs no new corpus, no download and no hand-written text — just `pivot_control()` reading an existing entry the other way round.
+3. **The judge became cross-lingual**, reading a German back-translation against English facts. That is a method change, so it was validated rather than assumed: 8 of 9 items identical, mean difference 0.022, and not one hallucinated `contradicted` verdict.
+
+### The pivot belongs to the instrument
+
+A model translating into German is not the same instrument as the same model translating into English, so the pivot rides in the back-translator id: `remote:deepseek-deepseek-v4-pro@de`. One line, three problems solved:
+
+- qualification is cached per pivot rather than shared across them;
+- results for one language measured through two pivots land in **separate rows** under the existing `(engine, tag, method_version, backtranslator)` constraint rather than overwriting each other — which matters, because they are not comparable;
+- the pivot is visible wherever the instrument is shown.
+
+English stays unsuffixed, so every row and cached qualification written before this keeps its identity and no migration is needed.
+
+`en` now measures **Strong / fact-recall / content 1.00**. The three degenerate rows from before the fix were deleted; they were measurements the tool now refuses to make.
+
+**The one disagreement in protocol 013 is worth remembering** because it is not about judging at all. Asked whether "He walked home" was present, the English back-translation said "goes home" (judged missing) and the German said "geht nach Hause" (judged present, since *gehen* implies on foot). The Russian original meant walking. The pivot choice can lose a detail in translation — for any pivot, not just this one — and that is a limit of round-tripping, not of the judge.
