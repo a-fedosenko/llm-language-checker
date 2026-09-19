@@ -44,6 +44,7 @@ class ScanResult:
     classes_probed: int = 0
     tags_inherited: int = 0
     stopped_early: bool = False
+    stop_reason: str | None = None
     seconds: float = 0.0
 
     @property
@@ -111,6 +112,7 @@ def scan(
     cache: QualificationCache | None = None,
     budget: ScanBudget | None = None,
     on_result=None,
+    should_stop=None,
 ) -> ScanResult:
     groups, unknown = plan(scheme, tags)
     out = ScanResult(unknown=unknown)
@@ -118,8 +120,14 @@ def scan(
     started = time.monotonic()
 
     for cls, members in groups.items():
+        # Checked between classes rather than between calls: a half-probed class
+        # would be a partial measurement, and a partial measurement is worse than
+        # a missing one.
         if budget.exhausted:
-            out.stopped_early = True
+            out.stopped_early, out.stop_reason = True, "budget"
+            break
+        if should_stop and should_stop():
+            out.stopped_early, out.stop_reason = True, "cancelled"
             break
         representative = members[0]
         result = run_ladder(

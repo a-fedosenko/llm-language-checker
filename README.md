@@ -4,7 +4,7 @@
 
 Vendor language lists are marketing. "Supports 100+ languages" has no definition behind it, and for the long tail nobody publishes anything at all. This project measures it instead: you point it at a model, it generates text, checks the text, and reports a graded verdict with its evidence and its uncertainty.
 
-> **Status: early development.** The methodology is documented and partially validated by experiment (see `docs/`). The skeleton, language catalogue and read-only API work; the measurement pipeline is being built.
+> **Status: early development.** The methodology is documented and partially validated by experiment (see `docs/`). The measurement pipeline, persistence and UI work end to end; dialect-level testing and the calibration study are still to come.
 
 ## What it is not
 
@@ -28,8 +28,10 @@ cp .env.example .env      # add your OpenAI-compatible endpoint + key
 docker compose up
 ```
 
+- UI: <http://localhost:8000> — browse results, plan and start a scan, watch it run
 - API and interactive docs: <http://localhost:8000/docs>
-- UI: arrives with the pipeline
+
+The published port is bound to `127.0.0.1`. There is no authentication, because there is no second user; widening `API_BIND` puts an unguarded tool on your network.
 
 No network fetch is needed at setup — the language catalogue ships in the repo.
 
@@ -43,6 +45,20 @@ llmlc export --merge-into your-master.json     # mergeable artifact
 uvicorn llmlc.api.main:app                     # UI on :8000
 pytest
 ```
+
+### Starting a scan from the browser
+
+A scan spends your API budget, so the endpoint that starts one is gated by `SCAN_TRIGGER`:
+
+| | |
+|---|---|
+| `off` | no trigger; scans stay a `llmlc scan` action |
+| `loopback` | **default** — only callers on `127.0.0.1` / `::1`. Reaching it already means access to the machine holding your key |
+| `any` | any client that can reach the port. Required in Docker, where the caller is always the bridge gateway — keep `API_BIND` on loopback if you set it |
+
+Only the socket's peer address counts; `X-Forwarded-For` is ignored, because a header any client can set is not an access control. Behind a reverse proxy, use `off`.
+
+A browser-started scan must state a call budget, and `SCAN_TRIGGER_MAX_CALLS` (default 2000) caps it. **Plan first** — the plan shows how many classes will actually be probed and costs nothing.
 
 ## Bring your own locale list
 

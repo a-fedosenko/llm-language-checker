@@ -7,51 +7,92 @@
     --bg: #fbfbfa; --fg: #1a1a18; --muted: #6b6b63; --line: #e3e3dd;
     --card: #fff; --accent: #2c5f4a;
     --strong: #2c5f4a; --usable: #4a7c59; --basic: #b8860b; --token: #a0522d; --none: #8b3a3a;
+    --warn: #b8860b; --bad: #8b3a3a; --ok: #4a7c59;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme=light]) {
       --bg: #16161a; --fg: #e8e8e3; --muted: #9a9a92; --line: #2e2e34;
       --card: #1e1e23; --accent: #7fb69a;
       --strong: #7fb69a; --usable: #8fbf7f; --basic: #d4a94a; --token: #d08a5a; --none: #d47b7b;
+      --warn: #d4a94a; --bad: #d47b7b; --ok: #8fbf7f;
     }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg);
          font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif; }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 20px 64px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 20px 64px; }
   h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+  h2 { font-size: 16px; margin: 26px 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 22px; font-size: 14px; }
   .note { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent);
-          padding: 12px 16px; border-radius: 6px; font-size: 13.5px; color: var(--muted); margin-bottom: 26px; }
-  .stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
+          padding: 12px 16px; border-radius: 6px; font-size: 13.5px; color: var(--muted); margin-bottom: 22px; }
+  .note.warn { border-left-color: var(--warn); }
+  .note.bad  { border-left-color: var(--bad); }
+  nav { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 22px; }
+  nav button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted);
+               font: inherit; font-size: 14px; padding: 9px 14px; cursor: pointer; }
+  nav button[aria-selected=true] { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
+  .stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
   .stat { background: var(--card); border: 1px solid var(--line); border-radius: 6px;
           padding: 10px 14px; min-width: 96px; }
   .stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
   .stat span { font-size: 12px; color: var(--muted); }
-  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
-  input, select { background: var(--card); color: var(--fg); border: 1px solid var(--line);
-                  border-radius: 6px; padding: 7px 10px; font: inherit; font-size: 14px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
+  input, select, textarea, button.btn {
+    background: var(--card); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 10px; font: inherit; font-size: 14px; }
+  textarea { width: 100%; min-height: 84px; resize: vertical;
+             font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  button.btn { cursor: pointer; }
+  button.btn:hover:not(:disabled) { border-color: var(--accent); }
+  button.btn:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.danger { color: var(--bad); }
   .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
   th { text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase;
-       letter-spacing: .04em; color: var(--muted); padding: 11px 12px; border-bottom: 1px solid var(--line); }
+       letter-spacing: .04em; color: var(--muted); padding: 11px 12px; border-bottom: 1px solid var(--line);
+       white-space: nowrap; }
   td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
   tr:last-child td { border-bottom: 0; }
+  tr.r { cursor: pointer; }
   tr.r:hover { background: color-mix(in oklab, var(--accent) 7%, transparent); }
+  tr.detail td { background: color-mix(in oklab, var(--accent) 4%, transparent); }
   .tag { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
-  .tier { font-weight: 600; }
+  .tier { font-weight: 600; white-space: nowrap; }
   .Strong { color: var(--strong); } .Usable { color: var(--usable); }
   .Basic { color: var(--basic); } .Token { color: var(--token); } .None { color: var(--none); }
-  .num { font-variant-numeric: tabular-nums; text-align: right; }
+  .num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
   .ev { font-size: 12px; color: var(--muted); }
   .flag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 3px;
-          border: 1px solid var(--line); color: var(--muted); margin-left: 6px; }
+          border: 1px solid var(--line); color: var(--muted); margin-left: 6px; white-space: nowrap; }
+  .flag.warn { color: var(--warn); border-color: color-mix(in oklab, var(--warn) 45%, var(--line)); }
+  .flag.bad  { color: var(--bad);  border-color: color-mix(in oklab, var(--bad) 45%, var(--line)); }
+  .flag.ok   { color: var(--ok);   border-color: color-mix(in oklab, var(--ok) 45%, var(--line)); }
   .bar { height: 5px; border-radius: 3px; background: var(--line); width: 74px; display: inline-block;
          vertical-align: middle; position: relative; overflow: hidden; }
   .bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
+  .bar.wide { width: 100%; height: 7px; display: block; }
   .empty { padding: 40px; text-align: center; color: var(--muted); }
-  footer { margin-top: 30px; font-size: 12.5px; color: var(--muted); }
+  footer { margin-top: 26px; font-size: 12.5px; color: var(--muted); }
   code { font-family: ui-monospace, monospace; font-size: 12.5px; }
+  .pager { display: flex; gap: 10px; align-items: center; margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  label.f { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .field { margin-bottom: 14px; }
+  .field input, .field select { width: 100%; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .kv { font-size: 13px; }
+  .kv b { font-weight: 600; }
+  .kv div { margin-bottom: 3px; }
+  dl.detail-grid { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px;
+                   margin: 0 0 10px; font-size: 13px; }
+  dl.detail-grid dt { color: var(--muted); }
+  dl.detail-grid dd { margin: 0; }
+  pre.raw { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
+            overflow-x: auto; font-size: 12px; margin: 0; }
+  ul.notes { margin: 6px 0 10px; padding-left: 18px; font-size: 13px; color: var(--muted); }
+  a { color: var(--accent); }
 </style>
 
 <div class="wrap">
@@ -62,49 +103,228 @@
     <strong>These are heuristic results, not proof.</strong> Small samples, so every tier carries a
     confidence interval and a <code>borderline</code> flag when the interval spans a boundary.
     <code>unverified</code> means our back-translator could not read the language — a limit of the
-    instrument, not a verdict on the model. Results are comparable only within the same
-    back-translator, judge and method version.
+    instrument, not a verdict on the model. <strong>Tier is capability; availability is willingness</strong>
+    — a model can write a language well and still refuse most requests for it. Results are comparable
+    only within the same back-translator, judge and method version.
   </div>
 
-  <div class="stats" id="stats"></div>
+  <nav role="tablist">
+    <button role="tab" data-tab="results" aria-selected="true">Results</button>
+    <button role="tab" data-tab="resolution" aria-selected="false">Resolution</button>
+    <button role="tab" data-tab="scan" aria-selected="false">Scan</button>
+    <button role="tab" data-tab="jobs" aria-selected="false">Jobs</button>
+  </nav>
 
-  <div class="filters">
-    <input id="q" placeholder="Search tag or language…" size="22">
-    <select id="engine"><option value="">All models</option></select>
-    <select id="tier"><option value="">All tiers</option></select>
-    <select id="evidence"><option value="">All evidence</option></select>
-  </div>
+  <!-- ── results ────────────────────────────────────────────────────────── -->
+  <section id="tab-results">
+    <div class="stats" id="stats"></div>
 
-  <div class="scroll">
-    <table>
-      <thead><tr>
-        <th>Tag</th><th>Language</th><th>Tier</th><th class="num">Content</th>
-        <th class="num">90% CI</th><th class="num">Reliab.</th><th>Evidence</th><th>Designator</th>
-      </tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
-    <div class="empty" id="empty" hidden>No results yet. Run <code>llmlc scan --engine &lt;model&gt; --tag de,fr</code>.</div>
-  </div>
+    <div class="filters">
+      <input id="q" placeholder="Search tag or language…" size="22">
+      <select id="engine"><option value="">All models</option></select>
+      <select id="tier"><option value="">All tiers</option></select>
+      <select id="evidence"><option value="">All evidence</option></select>
+      <select id="availability">
+        <option value="">Any availability</option>
+        <option value="reliable">reliable</option>
+        <option value="intermittent">intermittent</option>
+        <option value="unreliable">unreliable</option>
+        <option value="refused">refused</option>
+      </select>
+      <a id="csv" class="flag" href="/export.csv" download>Download CSV</a>
+    </div>
 
-  <footer id="foot"></footer>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th>Tag</th><th>Language</th><th>Tier</th><th class="num">Content</th>
+          <th class="num">90% CI</th><th>Availability</th><th>Evidence</th><th>Designator</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="empty" id="empty" hidden>No results yet. Run a scan, or
+        <code>llmlc scan --engine &lt;model&gt; --tag de,fr</code>.</div>
+    </div>
+
+    <div class="pager">
+      <button class="btn" id="prev">← Previous</button>
+      <span id="range"></span>
+      <button class="btn" id="next">Next →</button>
+    </div>
+
+    <h2>Artifacts</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>File</th><th>Kind</th><th class="num">Size</th><th></th></tr></thead>
+      <tbody id="artifacts"></tbody>
+    </table></div>
+
+    <footer id="foot"></footer>
+  </section>
+
+  <!-- ── resolution ─────────────────────────────────────────────────────── -->
+  <section id="tab-resolution" hidden>
+    <div class="note">
+      <strong>What a tag actually gets you.</strong> A macrolanguage is an addressing convention, not a
+      language: asking for <code>ar</code> or <code>zh</code> means asking for whichever member the
+      model chooses. This is what each model chose, identified by the local LID on its own output,
+      against what the catalogue says the tag resolves to. Counts are per probe item.
+    </div>
+    <div class="filters">
+      <select id="r-engine"><option value="">All models</option></select>
+      <label class="row" style="font-size:13px;color:var(--muted)">
+        <input type="checkbox" id="r-macro" style="width:auto"> macrolanguages only
+      </label>
+      <label class="row" style="font-size:13px;color:var(--muted)">
+        <input type="checkbox" id="r-diverge" style="width:auto"> divergent only
+      </label>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Tag</th><th>Language</th><th>Catalogue says</th><th>Model produced</th></tr></thead>
+        <tbody id="r-rows"></tbody>
+      </table>
+      <div class="empty" id="r-empty" hidden>No resolution data. It is recorded per probe, so it
+        appears once a scan has run.</div>
+    </div>
+    <footer id="r-foot"></footer>
+  </section>
+
+  <!-- ── scan ───────────────────────────────────────────────────────────── -->
+  <section id="tab-scan" hidden>
+    <div class="note" id="trigger-note"></div>
+
+    <div class="grid">
+      <div class="field">
+        <label class="f" for="s-engine">Model under test</label>
+        <input id="s-engine" list="model-list" placeholder="openai-gpt-4o">
+        <datalist id="model-list"></datalist>
+      </div>
+      <div class="field">
+        <label class="f" for="s-max">Call budget (required)</label>
+        <input id="s-max" type="number" min="1" value="200">
+      </div>
+      <div class="field">
+        <label class="f" for="s-judge">Judge</label>
+        <input id="s-judge" list="model-list" placeholder="(default)">
+      </div>
+      <div class="field">
+        <label class="f" for="s-pivot">Pivot</label>
+        <input id="s-pivot" value="en">
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="f" for="s-bt">Back-translator panel — ordered; the first that qualifies for a
+        language is used, and the model under test is excluded automatically</label>
+      <input id="s-bt" style="width:100%">
+    </div>
+
+    <div class="field">
+      <label class="f" for="s-tags">Languages — BCP-47 tags, comma or space separated</label>
+      <textarea id="s-tags" placeholder="de, fr, cv, ug, kk-Latn"></textarea>
+      <div class="row" style="margin-top:8px">
+        <input id="s-search" placeholder="Find a language to add…" size="26">
+        <select id="s-found" style="min-width:260px"><option value="">—</option></select>
+        <button class="btn" id="s-add">Add</button>
+        <label class="row" style="font-size:13px;color:var(--muted)">
+          <input type="checkbox" id="s-sweep" style="width:auto"> sweep every designator candidate
+        </label>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="btn" id="s-plan">Plan (free)</button>
+      <button class="btn primary" id="s-start" disabled>Start scan</button>
+      <span class="ev" id="s-status"></span>
+    </div>
+
+    <div id="s-plan-out"></div>
+  </section>
+
+  <!-- ── jobs ───────────────────────────────────────────────────────────── -->
+  <section id="tab-jobs" hidden>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th>Job</th><th>Model</th><th>Status</th><th>Progress</th>
+          <th class="num">Calls</th><th>Started</th><th></th>
+        </tr></thead>
+        <tbody id="j-rows"></tbody>
+      </table>
+      <div class="empty" id="j-empty" hidden>No scans yet.</div>
+    </div>
+    <div id="j-detail"></div>
+  </section>
 </div>
 
 <script>
 const $ = s => document.querySelector(s);
-let ALL = [];
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num = (v, d = 2) => (v === null || v === undefined) ? '—' : Number(v).toFixed(d);
+const j = async (url, opts) => {
+  const r = await fetch(url, opts);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || `${r.status} ${r.statusText}`);
+  return body;
+};
 
-async function load() {
-  const r = await fetch('/results');
-  const d = await r.json();
-  ALL = d.items || [];
-  fill('#engine', [...new Set(ALL.map(x => x.engine))].sort());
-  fill('#tier', ['Strong','Usable','Basic','Token','None'].filter(t => ALL.some(x => x.tier === t)));
-  fill('#evidence', [...new Set(ALL.map(x => x.evidence))].sort());
-  render();
+const PAGE = 100;
+const TIERS = ['Strong', 'Usable', 'Basic', 'Token', 'None'];
+const AVAIL_CLASS = { reliable: 'ok', intermittent: 'warn', unreliable: 'bad', refused: 'bad' };
+let state = { offset: 0, total: 0, open: null, trigger: null, poll: null };
+
+// ── tabs ──────────────────────────────────────────────────────────────────
+for (const b of document.querySelectorAll('nav button')) {
+  b.addEventListener('click', () => {
+    for (const o of document.querySelectorAll('nav button')) {
+      o.setAttribute('aria-selected', String(o === b));
+      $('#tab-' + o.dataset.tab).hidden = o !== b;
+    }
+    if (b.dataset.tab === 'resolution') loadResolution();
+    if (b.dataset.tab === 'jobs') loadJobs();
+  });
 }
 
-function fill(sel, values) {
+// ── results ───────────────────────────────────────────────────────────────
+function filters() {
+  const p = new URLSearchParams();
+  for (const [k, sel] of [['q','#q'],['engine','#engine'],['tier','#tier'],
+                          ['evidence','#evidence'],['availability','#availability']]) {
+    const v = $(sel).value.trim();
+    if (v) p.set(k, v);
+  }
+  return p;
+}
+
+async function loadResults(resetOffset = true) {
+  if (resetOffset) state.offset = 0;
+  const p = filters();
+  $('#csv').href = '/export.csv?' + p.toString();
+  p.set('limit', PAGE); p.set('offset', state.offset);
+  const d = await j('/results?' + p.toString());
+  state.total = d.total;
+  renderStats(d.summary);
+  fillOnce('#engine', Object.keys(d.summary.engines || {}).sort());
+  fillOnce('#tier', TIERS.filter(t => (d.summary.tiers || {})[t]));
+  fillOnce('#evidence', Object.keys(d.summary.evidence || {}).sort());
+  renderRows(d.items);
+  const from = d.total ? state.offset + 1 : 0;
+  $('#range').textContent = `${from}–${Math.min(state.offset + PAGE, d.total)} of ${d.total}`;
+  $('#prev').disabled = state.offset === 0;
+  $('#next').disabled = state.offset + PAGE >= d.total;
+  const m = d.items[0];
+  $('#foot').textContent = m
+    ? `back-translator ${m.backtranslator} · judge ${m.judge} · method ${m.method_version} ·`
+      + ` pivot ${m.pivot} · read from the ${d.source === 'db' ? 'database' : 'evidence files'}`
+    : '';
+}
+
+function fillOnce(sel, values) {
   const el = $(sel);
+  // Not marked filled until there is something to fill with, so a dropdown built
+  // before the first scan still populates once results exist.
+  if (el.dataset.filled || !values.length) return;
+  el.dataset.filled = '1';
   for (const v of values) {
     const o = document.createElement('option');
     o.value = o.textContent = v;
@@ -112,46 +332,337 @@ function fill(sel, values) {
   }
 }
 
-function render() {
-  const q = $('#q').value.toLowerCase();
-  const [eng, tier, ev] = ['#engine','#tier','#evidence'].map(s => $(s).value);
-  const rows = ALL.filter(r =>
-    (!eng || r.engine === eng) && (!tier || r.tier === tier) && (!ev || r.evidence === ev) &&
-    (!q || r.tag.toLowerCase().includes(q) || (r.language?.name || '').toLowerCase().includes(q)));
-
-  const counts = {};
-  for (const r of rows) counts[r.tier] = (counts[r.tier] || 0) + 1;
+function renderStats(s) {
+  const t = s.tiers || {};
   $('#stats').innerHTML =
-    `<div class="stat"><b>${rows.length}</b><span>languages</span></div>` +
-    ['Strong','Usable','Basic','Token','None'].filter(t => counts[t])
-      .map(t => `<div class="stat"><b class="${t}">${counts[t]}</b><span>${t}</span></div>`).join('') +
-    `<div class="stat"><b>${rows.filter(r => r.evidence === 'unverified').length}</b><span>unverified</span></div>`;
-
-  $('#rows').innerHTML = rows.map(r => {
-    const ci = r.ci ? `${r.ci[0].toFixed(2)}–${r.ci[1].toFixed(2)}` : '—';
-    const rel = (r.reliability != null && r.reliability < 1)
-      ? `<span class="bar"><i style="width:${Math.round(r.reliability*100)}%"></i></span> ${r.reliability.toFixed(2)}`
-      : '—';
-    return `<tr class="r">
-      <td class="tag">${r.tag}</td>
-      <td>${r.language?.name ?? ''}</td>
-      <td class="tier ${r.tier}">${r.tier}${r.borderline ? '<span class="flag">borderline</span>' : ''}
-          ${r.inherited_from ? `<span class="flag">via ${r.inherited_from}</span>` : ''}</td>
-      <td class="num">${r.s_content?.toFixed(2) ?? '—'}</td>
-      <td class="num ev">${ci}</td>
-      <td class="num ev">${rel}</td>
-      <td class="ev">${r.evidence}</td>
-      <td class="ev">${r.designator?.winner ?? ''}</td>
-    </tr>`;
-  }).join('');
-
-  $('#empty').hidden = rows.length > 0;
-  const m = rows[0];
-  $('#foot').textContent = m
-    ? `back-translator ${m.backtranslator} · judge ${m.judge} · method ${m.method_version} · pivot ${m.pivot}`
-    : '';
+    `<div class="stat"><b>${s.total}</b><span>languages</span></div>` +
+    TIERS.filter(x => t[x]).map(x =>
+      `<div class="stat"><b class="${x}">${t[x]}</b><span>${x}</span></div>`).join('') +
+    `<div class="stat"><b>${(s.evidence || {}).unverified || 0}</b><span>unverified</span></div>`;
 }
 
-for (const s of ['#q','#engine','#tier','#evidence']) $(s).addEventListener('input', render);
-load();
+function availBadge(r) {
+  if (!r.availability || r.availability === 'reliable') return '<span class="ev">reliable</span>';
+  const pct = r.reliability == null ? '' : ` ${num(r.reliability)}`;
+  return `<span class="flag ${AVAIL_CLASS[r.availability] || ''}">${esc(r.availability)}${pct}</span>`;
+}
+
+function renderRows(rows) {
+  $('#rows').innerHTML = rows.map(r => {
+    const ci = r.ci ? `${num(r.ci[0])}–${num(r.ci[1])}` : '—';
+    return `<tr class="r" data-engine="${esc(r.engine)}" data-tag="${esc(r.tag)}">
+      <td class="tag">${esc(r.tag)}</td>
+      <td>${esc(r.language?.name ?? '')}</td>
+      <td class="tier ${esc(r.tier)}">${esc(r.tier)}${r.borderline ? '<span class="flag">borderline</span>' : ''}
+          ${r.inherited_from ? `<span class="flag">via ${esc(r.inherited_from)}</span>` : ''}</td>
+      <td class="num">${num(r.s_content)}</td>
+      <td class="num ev">${ci}</td>
+      <td>${availBadge(r)}</td>
+      <td class="ev">${esc(r.evidence)}</td>
+      <td class="ev">${esc(r.designator?.winner ?? '')}</td>
+    </tr>`;
+  }).join('');
+  $('#empty').hidden = rows.length > 0;
+  for (const tr of document.querySelectorAll('#rows tr.r')) {
+    tr.addEventListener('click', () => toggleDetail(tr));
+  }
+}
+
+async function toggleDetail(tr) {
+  const key = tr.dataset.engine + '/' + tr.dataset.tag;
+  const open = tr.nextElementSibling?.classList.contains('detail');
+  for (const d of document.querySelectorAll('tr.detail')) d.remove();
+  if (open) { state.open = null; return; }
+  state.open = key;
+  const row = document.createElement('tr');
+  row.className = 'detail';
+  row.innerHTML = `<td colspan="8" class="ev">loading…</td>`;
+  tr.after(row);
+  try {
+    const r = await j(`/results/${encodeURIComponent(tr.dataset.engine)}/${encodeURIComponent(tr.dataset.tag)}`);
+    row.innerHTML = `<td colspan="8">${detailHtml(r)}</td>`;
+  } catch (e) {
+    row.innerHTML = `<td colspan="8" class="ev">${esc(e.message)}</td>`;
+  }
+}
+
+function detailHtml(r) {
+  const q = r.backtranslator_qualification || {};
+  const items = (r.items || []).map(i =>
+    `<tr><td class="tag">${esc(i.spec)}</td><td class="ev">${esc(i.gate)}</td>
+       <td class="num">${i.content == null ? '—' : num(i.content)}</td>
+       <td class="ev">${esc(i.lid || '')}${i.lid_confidence != null ? ` (${num(i.lid_confidence)})` : ''}</td>
+       <td class="ev">${esc(i.gate_detail || i.error || '')}</td></tr>`).join('');
+  const resolves = r.resolves_to && Object.keys(r.resolves_to).length
+    ? Object.entries(r.resolves_to).map(([k, v]) => `${esc(k)} ×${v}`).join(', ') : '—';
+  const tried = (r.designator?.tried || []).map(t =>
+    `${esc(t.value)} <span class="ev">[${esc(t.kind)}] ${num(t.gate_rate)}</span>`).join(' · ');
+  return `
+    <dl class="detail-grid">
+      <dt>workflow</dt><dd>${esc(r.workflow || '')}</dd>
+      <dt>scores</dt><dd>s_lang ${num(r.s_lang)} · s_content ${num(r.s_content)} ·
+        reliability ${r.reliability == null ? '—' : num(r.reliability)}
+        (${r.refusals || 0} refusal(s))</dd>
+      <dt>instrument</dt><dd>back-translator ${esc(r.backtranslator)}
+        ${q.status ? `<span class="flag">${esc(q.status)}${q.kind ? ' ' + esc(q.kind) : ''}${
+          q.score != null ? ' ' + num(q.score, 0) : ''}</span>` : ''}
+        · judge ${esc(r.judge)} · pivot ${esc(r.pivot)} · method ${esc(r.method_version)}</dd>
+      <dt>designators tried</dt><dd>${tried || '—'}</dd>
+      <dt>resolved to</dt><dd>${resolves}</dd>
+      <dt>measured</dt><dd>${esc(r.tested_at || '')}${r.job_id ? ` · job ${r.job_id}` : ''}</dd>
+    </dl>
+    ${(r.notes || []).length ? `<ul class="notes">${r.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
+    ${items ? `<div class="scroll"><table>
+      <thead><tr><th>Item</th><th>Gate</th><th class="num">Content</th><th>LID</th><th>Detail</th></tr></thead>
+      <tbody>${items}</tbody></table></div>` : ''}`;
+}
+
+$('#prev').addEventListener('click', () => { state.offset = Math.max(0, state.offset - PAGE); loadResults(false); });
+$('#next').addEventListener('click', () => { state.offset += PAGE; loadResults(false); });
+let typing = null;
+for (const s of ['#q', '#engine', '#tier', '#evidence', '#availability'])
+  $(s).addEventListener('input', () => {
+    clearTimeout(typing);
+    typing = setTimeout(() => loadResults(true), 180);  // one request per pause, not per keystroke
+  });
+
+async function loadArtifacts() {
+  const d = await j('/artifacts');
+  $('#artifacts').innerHTML = d.items.length ? d.items.map(a =>
+    `<tr><td class="tag">${esc(a.name)}</td><td class="ev">${esc(a.kind)}</td>
+       <td class="num ev">${(a.bytes / 1024).toFixed(1)} kB</td>
+       <td><a href="/artifacts/${encodeURIComponent(a.name)}" download>download</a></td></tr>`).join('')
+    : `<tr><td colspan="4" class="ev">Nothing written yet — a scan writes both artifacts to
+       <code>${esc(d.dir || 'data/results')}</code>.</td></tr>`;
+}
+
+// ── resolution ────────────────────────────────────────────────────────────
+const VERDICT = {
+  'as-expected': ['ok', 'as expected'],
+  'member': ['warn', 'resolved to a member'],
+  'other-script': ['warn', 'different script'],
+  'other-language': ['bad', 'different language'],
+  'other': ['bad', 'unexpected'],
+  'unknown': ['', 'no LID'],
+};
+
+async function loadResolution() {
+  const p = new URLSearchParams();
+  if ($('#r-engine').value) p.set('engine', $('#r-engine').value);
+  if ($('#r-macro').checked) p.set('macro_only', 'true');
+  const d = await j('/resolution?' + p.toString());
+  fillOnce('#r-engine', d.engines);
+  let items = d.items;
+  if ($('#r-diverge').checked)
+    items = items.filter(i => Object.values(i.engines).some(e =>
+      e.verdict !== 'as-expected' && e.verdict !== 'unknown'));
+  $('#r-rows').innerHTML = items.map(i => {
+    const cells = Object.entries(i.engines).map(([eng, v]) => {
+      const [cls, label] = VERDICT[v.verdict] || ['', v.verdict];
+      const counts = Object.entries(v.counts || {}).map(([k, n]) => `${esc(k)} ×${n}`).join(', ');
+      return `<div><b class="tag">${esc(v.dominant || '—')}</b>
+        <span class="flag ${cls}">${esc(label)}</span>
+        <span class="ev">${esc(eng)}${v.inherited_from ? ` · via ${esc(v.inherited_from)}` : ''}
+        — ${counts}</span></div>`;
+    }).join('');
+    return `<tr>
+      <td class="tag">${esc(i.tag)}${i.scope === 'macrolanguage'
+        ? '<span class="flag">macro</span>' : ''}</td>
+      <td>${esc(i.language?.name ?? '')}${i.members.length
+        ? `<div class="ev">members: ${i.members.map(esc).join(', ')}</div>` : ''}</td>
+      <td class="tag">${esc(i.expected || '—')}</td>
+      <td class="kv">${cells}</td></tr>`;
+  }).join('');
+  $('#r-empty').hidden = items.length > 0;
+  $('#r-foot').textContent =
+    `${items.length} tag(s) shown · ${d.divergent} of ${d.total} diverge from the catalogue`;
+}
+for (const s of ['#r-engine', '#r-macro', '#r-diverge']) $(s).addEventListener('input', loadResolution);
+
+// ── scan ──────────────────────────────────────────────────────────────────
+async function loadEngines() {
+  const d = await j('/engines');
+  $('#model-list').innerHTML = [...new Set([...d.available, ...d.measured])]
+    .map(m => `<option value="${esc(m)}">`).join('');
+  $('#s-bt').value = d.backtranslator_panel.join(',');
+  $('#s-judge').placeholder = d.judge;
+}
+
+function renderTrigger(t) {
+  state.trigger = t;
+  const el = $('#trigger-note');
+  const ceiling = `Budget ceiling for a browser-started scan: <b>${t.max_calls}</b> calls.`;
+  if (!t.configured) {
+    el.className = 'note bad';
+    el.innerHTML = `<strong>No endpoint configured.</strong> Copy <code>.env.example</code> to
+      <code>.env</code> and fill in the aggregator URL and key. Nothing can run until then.`;
+    $('#s-start').dataset.blocked = '1';
+  } else if (t.mode === 'off') {
+    el.className = 'note bad';
+    el.innerHTML = `<strong>Triggering is disabled</strong> (<code>SCAN_TRIGGER=off</code>). Plan here,
+      then run <code>llmlc scan</code>. Set <code>SCAN_TRIGGER=loopback</code> to enable it.`;
+    $('#s-start').dataset.blocked = '1';
+  } else {
+    el.className = 'note warn';
+    el.innerHTML = `<strong>A scan spends your API budget.</strong> Which is why this endpoint is bound
+      to <code>${esc(t.mode)}</code>: there is no authentication here, and there should not need to be —
+      reaching it already means access to the machine holding your key. ${ceiling}
+      Plan first; the plan costs nothing.`;
+    delete $('#s-start').dataset.blocked;
+  }
+  refreshStartButton();
+}
+
+function tagsField() {
+  return $('#s-tags').value.split(/[\s,]+/).map(x => x.trim()).filter(Boolean);
+}
+
+function refreshStartButton() {
+  const ok = $('#s-engine').value.trim() && tagsField().length && Number($('#s-max').value) > 0
+    && !$('#s-start').dataset.blocked && !state.runningJob;
+  $('#s-start').disabled = !ok;
+}
+for (const s of ['#s-engine', '#s-tags', '#s-max']) $(s).addEventListener('input', refreshStartButton);
+
+$('#s-plan').addEventListener('click', async () => {
+  const tags = tagsField();
+  if (!tags.length) return;
+  $('#s-plan-out').innerHTML = '<p class="ev">planning…</p>';
+  try {
+    const d = await j('/scans/plan?' + new URLSearchParams(
+      { engine: $('#s-engine').value || '-', tags: tags.join(',') }));
+    $('#s-plan-out').innerHTML = `
+      <h2>Plan</h2>
+      <div class="stats">
+        <div class="stat"><b>${d.tags}</b><span>tags</span></div>
+        <div class="stat"><b>${d.classes}</b><span>classes probed</span></div>
+        <div class="stat"><b>${d.inherited}</b><span>inherit free</span></div>
+        <div class="stat"><b>~${d.estimate_calls}</b><span>calls, upper bound</span></div>
+      </div>
+      ${d.unknown.length ? `<div class="note bad"><strong>Not in the scheme, will be skipped:</strong>
+        <code>${d.unknown.map(esc).join(', ')}</code></div>` : ''}
+      <div class="scroll"><table>
+        <thead><tr><th>Class</th><th>Probed</th><th>Inherits without further calls</th></tr></thead>
+        <tbody>${d.groups.map(g => `<tr><td class="tag">${esc(g.cls)}</td>
+          <td class="tag">${esc(g.probe)}</td>
+          <td class="ev">${g.inherit.map(esc).join(', ') || '—'}</td></tr>`).join('')}</tbody>
+      </table></div>`;
+  } catch (e) {
+    $('#s-plan-out').innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
+  }
+});
+
+$('#s-search').addEventListener('input', async () => {
+  const q = $('#s-search').value.trim();
+  if (q.length < 2) { $('#s-found').innerHTML = '<option value="">—</option>'; return; }
+  const d = await j('/languages?' + new URLSearchParams({ q, limit: 40 }));
+  $('#s-found').innerHTML = d.items.map(x =>
+    `<option value="${esc(x.tag)}">${esc(x.tag)} — ${esc(x.name || '')}${
+      x.scope === 'macrolanguage' ? ' (macro)' : ''}</option>`).join('')
+    || '<option value="">no match</option>';
+});
+
+$('#s-add').addEventListener('click', () => {
+  const tag = $('#s-found').value;
+  if (!tag) return;
+  const have = tagsField();
+  if (!have.includes(tag)) $('#s-tags').value = [...have, tag].join(', ');
+  refreshStartButton();
+});
+
+$('#s-start').addEventListener('click', async () => {
+  const body = {
+    engine: $('#s-engine').value.trim(),
+    tags: tagsField(),
+    max_calls: Number($('#s-max').value),
+    backtranslator: $('#s-bt').value.trim(),
+    judge: $('#s-judge').value.trim() || null,
+    pivot: $('#s-pivot').value.trim() || 'en',
+    sweep_all: $('#s-sweep').checked,
+  };
+  $('#s-start').disabled = true;
+  $('#s-status').textContent = 'starting…';
+  try {
+    const d = await j('/scans', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify(body) });
+    $('#s-status').textContent = `job ${d.job_id} running`;
+    document.querySelector('nav button[data-tab=jobs]').click();
+  } catch (e) {
+    $('#s-status').textContent = '';
+    $('#s-plan-out').innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
+    refreshStartButton();
+  }
+});
+
+// ── jobs ──────────────────────────────────────────────────────────────────
+const STATUS_CLASS = { running: 'warn', done: 'ok', stopped: 'warn', failed: 'bad', pending: '' };
+
+async function loadJobs() {
+  const d = await j('/jobs?limit=25');
+  renderTrigger(d.trigger);
+  state.runningJob = d.running;
+  refreshStartButton();
+  $('#j-rows').innerHTML = d.items.map(job => {
+    const pct = job.classes ? Math.round(100 * job.classes_done / job.classes) : 0;
+    const when = job.created_at ? new Date(job.created_at).toLocaleString() : '';
+    return `<tr>
+      <td class="tag">${job.id}</td>
+      <td class="ev">${esc(job.engine)}</td>
+      <td><span class="flag ${STATUS_CLASS[job.status] || ''}">${esc(job.status)}</span>
+          ${job.cancelling ? '<span class="flag warn">cancelling</span>' : ''}</td>
+      <td style="min-width:160px"><span class="bar wide"><i style="width:${pct}%"></i></span>
+          <span class="ev">${job.classes_done}/${job.classes} classes · ${job.requested} tags</span></td>
+      <td class="num ev">${job.calls_used}${job.max_calls ? ` / ${job.max_calls}` : ''}</td>
+      <td class="ev">${esc(when)}</td>
+      <td>${job.status === 'running'
+        ? `<button class="btn danger" data-cancel="${job.id}">Cancel</button>`
+        : `<button class="btn" data-open="${job.id}">Details</button>`}</td>
+    </tr>${job.error ? `<tr class="detail"><td colspan="7" class="ev">${esc(job.error)}</td></tr>` : ''}`;
+  }).join('');
+  $('#j-empty').hidden = d.items.length > 0;
+
+  for (const b of document.querySelectorAll('[data-cancel]'))
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try { await j(`/jobs/${b.dataset.cancel}/cancel`, { method: 'POST' }); }
+      catch (e) { $('#j-detail').innerHTML = `<div class="note bad">${esc(e.message)}</div>`; }
+      loadJobs();
+    });
+  for (const b of document.querySelectorAll('[data-open]'))
+    b.addEventListener('click', () => showJob(b.dataset.open));
+
+  // Poll only while something is in flight, and only on this tab.
+  clearTimeout(state.poll);
+  const active = d.items.some(x => x.status === 'running');
+  if (active && !$('#tab-jobs').hidden) {
+    state.poll = setTimeout(() => { loadJobs(); loadResults(false); }, 2500);
+  }
+}
+
+async function showJob(id) {
+  const job = await j('/jobs/' + id);
+  $('#j-detail').innerHTML = `
+    <h2>Job ${job.id}</h2>
+    <dl class="detail-grid">
+      <dt>model</dt><dd>${esc(job.engine)}</dd>
+      <dt>panel</dt><dd>${(job.backtranslator_panel || []).map(esc).join(', ') || '—'}</dd>
+      <dt>judge</dt><dd>${esc(job.judge)} · pivot ${esc(job.pivot)}</dd>
+      <dt>budget</dt><dd>${job.calls_used} used${job.max_calls ? ` of ${job.max_calls}` : ''}</dd>
+      <dt>requested</dt><dd class="tag">${(job.requested_tags || []).map(esc).join(', ')}</dd>
+      ${job.unknown.length ? `<dt>skipped</dt><dd class="tag">${job.unknown.map(esc).join(', ')}</dd>` : ''}
+    </dl>
+    <div class="scroll"><table>
+      <thead><tr><th>Class</th><th>Probed</th><th>Members</th><th>Status</th></tr></thead>
+      <tbody>${(job.items || []).map(i => `<tr>
+        <td class="tag">${esc(i.cls)}</td><td class="tag">${esc(i.representative)}</td>
+        <td class="ev">${i.members.map(esc).join(', ')}</td>
+        <td><span class="flag ${STATUS_CLASS[i.status] || ''}">${esc(i.status)}</span>
+            ${i.error ? `<span class="ev">${esc(i.error)}</span>` : ''}</td></tr>`).join('')}
+      </tbody></table></div>`;
+}
+
+loadResults();
+loadArtifacts();
+loadEngines();
+loadJobs();
 </script>

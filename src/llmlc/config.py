@@ -19,6 +19,25 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+pysqlite:///data/llmlc.db"
 
+    #: Who may start a scan over HTTP. A scan spends the user's own API budget,
+    #: so the endpoint that starts one is gated rather than merely present.
+    #:
+    #: - ``off``       -- no trigger at all; scans stay a CLI action
+    #: - ``loopback``  -- only requests whose peer address is 127.0.0.1 / ::1
+    #: - ``any``       -- any client that can reach the port
+    #:
+    #: ``loopback`` is the default and is the right setting when uvicorn runs on
+    #: the host. In Docker the peer address is the bridge gateway, never
+    #: loopback, so a containerised UI needs ``any`` *and* a published port bound
+    #: to 127.0.0.1 -- there the port binding is the control, and compose does
+    #: that by default. The address is the socket peer; no forwarding header is
+    #: trusted, because any client can send one.
+    scan_trigger: str = "loopback"
+
+    #: Hard ceiling on a scan started from the browser, whatever it asks for.
+    #: The CLI has no ceiling: someone typing a command is already deliberate.
+    scan_trigger_max_calls: int = 2000
+
     def redacted(self) -> dict:
         d = self.model_dump()
         for k in list(d):

@@ -9,6 +9,11 @@ services:
     environment:
       SCHEME: ${SCHEME:-default}
       HARDWARE_PROFILE: ${HARDWARE_PROFILE:-auto}
+      # Starting a scan from the browser spends your API budget. Inside a
+      # container the caller's address is the bridge gateway and never loopback,
+      # so the port binding below is what limits who can reach it -- which is why
+      # opening the trigger here is a deliberate, separate act.
+      SCAN_TRIGGER: ${SCAN_TRIGGER:-loopback}
     env_file:
       - path: .env
         required: false
@@ -18,4 +23,6 @@ services:
       - ./schemes:/app/schemes:ro
       - ./data:/app/data
     ports:
-      - "${API_PORT:-8000}:8000"
+      # Bound to the loopback interface, not 0.0.0.0: this is a local tool with
+      # no authentication, and the default should not put it on the network.
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8000}:8000"

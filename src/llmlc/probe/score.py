@@ -19,6 +19,21 @@ class Tier(str, Enum):
     STRONG = "Strong"
 
 
+class Availability(str, Enum):
+    """How often the model was willing to answer at all.
+
+    A separate axis from the tier on purpose. The tier says what the model can
+    write; this says how often it will. Collapsing them would either call a
+    capable-but-squeamish model incapable, or let "Strong -- light review" stand
+    for a model that refuses one request in three.
+    """
+
+    RELIABLE = "reliable"
+    INTERMITTENT = "intermittent"
+    UNRELIABLE = "unreliable"
+    REFUSED = "refused"
+
+
 class Evidence(str, Enum):
     GOLD_REFERENCE = "gold-reference"
     FACT_RECALL = "fact-recall"
@@ -36,6 +51,21 @@ THRESHOLDS: list[tuple[Tier, float, float]] = [
     (Tier.TOKEN, 0.50, 0.00),
 ]
 
+#: Minimum reliability for each availability band, evaluated best first.
+AVAILABILITY: list[tuple[Availability, float]] = [
+    (Availability.RELIABLE, 0.90),
+    (Availability.INTERMITTENT, 0.60),
+    (Availability.UNRELIABLE, 0.0),
+]
+
+#: What each band adds to the workflow sentence. Empty for the expected case.
+AVAILABILITY_CAVEAT = {
+    Availability.RELIABLE: "",
+    Availability.INTERMITTENT: "expect retries",
+    Availability.UNRELIABLE: "needs a fallback engine",
+    Availability.REFUSED: "refused every attempt",
+}
+
 #: Workflow meaning for a TMS, carried alongside the tier so the number is actionable.
 WORKFLOW = {
     Tier.NONE: "do not offer",
@@ -44,6 +74,17 @@ WORKFLOW = {
     Tier.USABLE: "post-editing workflow",
     Tier.STRONG: "light review",
 }
+
+
+def availability_for(reliability: float, *, attempts: int = 0) -> Availability:
+    """Band a reliability figure. `attempts` distinguishes "refused everything"
+    from "nothing was attempted", which are not the same claim."""
+    if attempts and reliability <= 0.0:
+        return Availability.REFUSED
+    for band, minimum in AVAILABILITY:
+        if reliability >= minimum:
+            return band
+    return Availability.UNRELIABLE
 
 
 def tier_for(s_lang: float, s_content: float) -> Tier:
@@ -88,8 +129,24 @@ class Score:
     notes: list[str] = field(default_factory=list)
 
     @property
+    def availability(self) -> Availability:
+        return availability_for(self.reliability, attempts=self.n_items)
+
+    @property
     def workflow(self) -> str:
-        return WORKFLOW[self.tier]
+        """The tier's workflow, qualified by availability.
+
+        The tier alone was misleading in one direction we actually hit: `ug`
+        reported "Strong -- light review" at reliability 0.33, true about the
+        quality of what came back and quiet about how rarely it came back at
+        all. The caveat rides on the sentence a planner reads; the tier itself
+        stays a statement about capability.
+        """
+        base = WORKFLOW[self.tier]
+        caveat = AVAILABILITY_CAVEAT[self.availability]
+        if not caveat or self.tier is Tier.NONE:
+            return base
+        return f"{base} -- {caveat} ({self.refusals} refusal(s) of {self.n_items})"
 
     def as_dict(self) -> dict:
         return {
@@ -98,6 +155,7 @@ class Score:
             "s_lang": round(self.s_lang, 3),
             "s_content": round(self.s_content, 3),
             "reliability": round(self.reliability, 3),
+            "availability": self.availability.value,
             "refusals": self.refusals,
             "ci": list(self.ci),
             "borderline": self.borderline,

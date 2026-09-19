@@ -97,3 +97,46 @@ def test_total_refusal_is_a_deterministic_negative_with_zero_reliability():
     assert s.tier is Tier.NONE
     assert s.reliability == 0.0
     assert s.n_items == 3
+
+
+# -- availability: willingness as its own axis --------------------------------
+
+def test_availability_bands():
+    from llmlc.probe.score import Availability, availability_for
+    assert availability_for(1.0) is Availability.RELIABLE
+    assert availability_for(0.90) is Availability.RELIABLE
+    assert availability_for(0.89) is Availability.INTERMITTENT
+    assert availability_for(0.60) is Availability.INTERMITTENT
+    assert availability_for(0.59) is Availability.UNRELIABLE
+    assert availability_for(0.0, attempts=3) is Availability.REFUSED
+    assert availability_for(0.0) is Availability.UNRELIABLE, "nothing attempted is not a refusal"
+
+
+def test_the_ug_case_says_something_about_availability():
+    """gpt-4o wrote perfect Uyghur once and refused twice. 'Strong -- light review'
+    was true about the text and silent about how rarely it arrived."""
+    from llmlc.probe.score import Availability
+    s = score(lang_pass=[True], content=[1.0], evidence=Evidence.FACT_RECALL, refusals=2)
+    assert s.tier is Tier.STRONG, "capability is not restated as inability"
+    assert s.availability is Availability.UNRELIABLE
+    assert "fallback" in s.workflow and "2 refusal(s) of 3" in s.workflow
+
+
+def test_a_reliable_result_gets_no_caveat():
+    s = score(lang_pass=[True] * 3, content=[0.9] * 3, evidence=Evidence.FACT_RECALL)
+    assert s.workflow == "light review"
+
+
+def test_tier_none_carries_no_availability_caveat():
+    """'do not offer -- expect retries' would be noise: there is nothing to offer."""
+    s = score(lang_pass=[False, False], content=[], evidence=Evidence.DETERMINISTIC_NEGATIVE,
+              refusals=1)
+    assert s.tier is Tier.NONE
+    assert s.workflow == "do not offer"
+
+
+def test_availability_is_serialised_alongside_reliability():
+    s = score(lang_pass=[True], content=[1.0], evidence=Evidence.FACT_RECALL, refusals=2)
+    d = s.as_dict()
+    assert d["availability"] == "unreliable"
+    assert d["reliability"] == 0.333

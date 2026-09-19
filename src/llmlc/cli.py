@@ -5,23 +5,19 @@ import argparse
 import json
 import pathlib
 import sys
-from datetime import datetime, timezone
 
+from llmlc import runner
 from llmlc.bt import QualificationCache, RemoteBackTranslator
 from llmlc.client import OpenAICompatClient
 from llmlc.config import settings
-from llmlc.export import write as write_artifacts
-from llmlc.probe.corpus import Corpus
-from llmlc.probe.pipeline import check_language
-from llmlc.probe.scan import ScanBudget, plan, scan
-from llmlc import hardware
 from llmlc.db import create_all, session
-from llmlc.db.qualcache import DbQualificationCache
-from llmlc.db.models import Job
-from llmlc.db.repo import add_job_items, create_job, results_for, stale
-from llmlc.db.store import save as save_result
+from llmlc.db.repo import results_for, stale
+from llmlc.export import write as write_artifacts
 from llmlc.export.adapters import CanonicalAdapter, MappedAdapter, build_support, merge_support
 from llmlc.export.artifacts import METHOD_VERSION
+from llmlc.probe.corpus import Corpus
+from llmlc.probe.pipeline import check_language
+from llmlc.probe.scan import plan
 from llmlc.probe.specs import load_specs
 from llmlc.scheme import load_scheme
 
@@ -119,17 +115,14 @@ def _report(result, a) -> None:
 
 
 def cmd_scan(a: argparse.Namespace) -> int:
-    if not settings.aggregator_base_url or not settings.aggregator_admin_api_key:
-        print("No endpoint configured. Copy .env.example to .env and fill it in.", file=sys.stderr)
-        return 2
-
+    req = runner.ScanRequest(
+        engine=a.engine, tags=[], scheme=a.scheme, backtranslator=a.backtranslator,
+        judge=a.judge, pivot=a.pivot, max_calls=a.max_calls, sweep_all=a.sweep_all,
+        out=a.out)
     scheme = load_scheme(a.scheme or settings.scheme)
-    tags = _resolve_tags(scheme, a)
-    if not tags:
-        print("No languages selected.", file=sys.stderr)
-        return 2
+    req.tags = _resolve_tags(scheme, a)
 
-    groups, unknown = plan(scheme, tags)
+    groups, unknown = plan(scheme, req.tags)
     known = sum(len(m) for m in groups.values())
     print(f"{BOLD}{known}{RESET} tag(s) -> {BOLD}{len(groups)}{RESET} class(es) "
           f"({known - len(groups)} inherit without further calls)")
@@ -143,61 +136,34 @@ def cmd_scan(a: argparse.Namespace) -> int:
         print(f"\n{GREY}rough upper bound if nothing prunes: ~{est} calls{RESET}")
         return 0
 
-    panel = [m.strip() for m in a.backtranslator.split(",") if m.strip() and m.strip() != a.engine]
-    client = OpenAICompatClient(settings.aggregator_base_url, settings.aggregator_admin_api_key)
-    bts = [RemoteBackTranslator(client, m, a.pivot) for m in panel]
-    create_all()
-    cache = DbQualificationCache()
-    budget = ScanBudget(max_calls=a.max_calls)
-    profile = hardware.detect(settings.hardware_profile).profile
-
-    with session() as s:
-        job = create_job(s, engine=a.engine, scheme=scheme.meta.name, pivot=a.pivot,
-                         judge=a.judge or settings.judge_model,
-                         backtranslator_panel=panel, method_version=METHOD_VERSION,
-                         hardware_profile=profile, status="running",
-                         requested_tags=tags, unknown_tags=unknown,
-                         max_calls=a.max_calls)
-        add_job_items(s, job, groups)
-        job_id = job.id
+    try:
+        job_id = runner.create(req)
+    except runner.ScanRefused as e:
+        print(str(e), file=sys.stderr)
+        return 2
     print(f"{GREY}job {job_id}{RESET}")
 
     def progress(r):
-        with session() as s:
-            save_result(s, r, job_id=job_id, hardware_profile=profile)
         mark = f"{GREY}inherited{RESET}" if r.inherited_from else f"r{r.rungs_run}"
         print(f"  {r.tag:14}{r.score.tier.value:9}{r.score.evidence.value:24}{mark}")
 
-    with Corpus() as corpus:
-        result = scan(scheme=scheme, tags=tags, engine=a.engine, client=client,
-                      backtranslators=bts, judge_model=a.judge or settings.judge_model,
-                      specs=load_specs(), corpus=corpus, pivot=a.pivot,
-                      sweep_all=a.sweep_all, cache=cache, budget=budget,
-                      on_result=progress)
-        corpus_path = corpus.path
+    outcome = runner.execute(req, job_id, on_result=progress)
+    result = outcome.result
 
     calls = result.calls
     total = sum(calls.values())
     if result.unknown:
         print(f"{GREY}skipped (not in scheme): {', '.join(result.unknown)}{RESET}")
     print(f"\n{BOLD}scan{RESET} {len(result.results)} tag(s) in {result.seconds:.0f}s"
-          f"{'  (stopped: budget)' if result.stopped_early else ''}")
+          f"{f'  (stopped: {result.stop_reason})' if result.stopped_early else ''}")
     print(f"  classes probed {result.classes_probed}   inherited {result.tags_inherited}")
     print(f"  calls: {total}  ({calls['generation']} gen, {calls['backtranslation']} bt, "
           f"{calls['judge']} judge)   {total / max(1, len(result.results)):.1f} per tag")
     _summarise(result.results)
 
-    with session() as s:
-        job = s.get(Job, job_id)
-        if job:
-            job.status = "stopped" if result.stopped_early else "done"
-            job.calls_used = total
-            job.finished_at = datetime.now(timezone.utc)
-
-    for r in result.results:
-        sup, ev = write_artifacts(r, pathlib.Path(a.out))
+    sup, ev = outcome.artifacts or ("-", "-")
     print(f"\n{GREY}support {RESET}{sup}\n{GREY}evidence{RESET} {ev}"
-          f"\n{GREY}corpus  {RESET}{corpus_path}   {GREY}job{RESET} {job_id}")
+          f"\n{GREY}corpus  {RESET}{outcome.corpus_path}   {GREY}job{RESET} {job_id}")
     return 0
 
 

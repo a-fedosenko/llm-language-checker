@@ -245,7 +245,7 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 | **S2** ✅ | **Trustworthy coverage:** FLORES+ controls, qualification cache, per-language back-translator routing, `gold-reference` evidence | **Done 2026-09-16** — a 20-language spread returned 20/20 real evidence, 0 `unverified` |
 | **S3** ✅ | The ladder: designator sweep, class collapse, pruning, adaptive rungs, batch mode, **thin read-only UI** | **Done 2026-09-17** — 18 tags in 165 calls (9.2/tag); results browsable at `/` |
 | **S4** ✅ | Persistence, job API, export adapters, staleness view | **Done 2026-09-17** — results in SQLite/Postgres, `llmlc status`, `llmlc export --merge-into` verified non-destructive |
-| **S5** | Full UI | Pick engine and languages, trigger jobs, watch progress, download artifacts |
+| **S5** ✅ | Full UI | **Done 2026-09-17** — pick engine and languages, plan for free, trigger a scan, watch per-class progress, cancel, browse paged results, download artifacts |
 | **S6** | Dialects: marker files, script-split scoring, `variant_evidence` | `en-AU` proven from markers; `ru-BY` `not-distinguishable`; `kk-Latn` scored by script |
 | **S7** | **Calibration study** — fact-recall vs chrF++ against FLORES+ | Published error bars for the proxy metric |
 | **S8** | README, methodology page, limitations | A reader can reproduce a result and knows what it does not mean |
@@ -592,3 +592,71 @@ Verified against a real master file: merging preserved an untouched key (`ru`) a
 1. The UI is still read-only; triggering a scan from the browser reopens the question above.
 2. `resolves_to` is persisted but still not surfaced as the macrolanguage-defaults comparison.
 3. Corpus rows still go to JSONL, not the `generation` table — the table exists and is unused until S7 needs offline re-grading.
+
+## S5 — the full UI (done 2026-09-17)
+
+**Built:** `runner.py` (one definition of "run a scan", shared by the CLI and the API), a scan trigger bound to loopback, job progress and cancellation, paged and faceted `/results`, the macrolanguage resolution view, artifact and CSV download, and a four-tab UI. 182 tests.
+
+### The trigger, and the property it trades away
+
+S4 left this out on the reasoning that *an HTTP endpoint which spends the user's API budget is a liability without authentication, and authentication is exactly what the self-hosted design removed the need for.* That reasoning was right and it does not survive S5, whose whole point is starting a scan from a browser. So the trade is made explicitly rather than quietly:
+
+**`POST /scans` is bound to the loopback interface.** Reaching it already implies access to the machine holding the `.env` — someone who can call it can read the key directly, so the endpoint grants nothing they did not have. Authentication would protect a boundary that does not exist here.
+
+Four things make that honest rather than convenient:
+
+1. **The peer address, never a header.** `X-Forwarded-For` is a header any client can set, and is therefore not an access control. There is a test that asserts a forged one does not grant access.
+2. **`SCAN_TRIGGER` has three settings** — `off`, `loopback` (default), `any` — because behind a reverse proxy every request *looks* like loopback, and the honest answer there is `off`.
+3. **Docker needs `any`, and that is not a loophole.** Inside a container the caller is always the bridge gateway, so the app-level check can never pass. There the control is the port binding, and compose now publishes on `127.0.0.1` rather than `0.0.0.0` — which it should have done from the beginning, trigger or no trigger.
+4. **The browser must name a budget.** `max_calls` is required on `POST /scans` and optional on the CLI: someone typing a command has already decided to spend; someone clicking a button should have to state the ceiling. `SCAN_TRIGGER_MAX_CALLS` (default 2000) caps whatever it asks for.
+
+`GET /scans/plan` is the dry run over HTTP — class collapse, inherited tags and a call estimate, costing nothing — so the UI can show what a scan will cost before it starts one.
+
+### One scan at a time, and what happens when it dies
+
+Scans run in a thread of the API process. SQLite takes one writer, and two concurrent scans would in any case interleave their spending against a budget neither of them set, so a second request gets `409` naming the job already running.
+
+Cancellation is cooperative and checked **between classes**, not between calls: a half-probed class is a partial measurement, and the calls already spent on it are gone either way. A cancelled job's unreached classes stay `pending`, which is exactly the resume set `pending_items()` already returned.
+
+Two failure modes that would otherwise be invisible are now handled:
+
+- **A scan that raises** finalises its job as `failed` with the error on the row. A job left `running` after its process is gone is indistinguishable from one still working.
+- **A job orphaned by a restart** is reaped at API startup for the same reason. Without it, one crash would leave `running_job_id()` refusing every future scan forever.
+
+### Pagination, which was the real limit
+
+S4 named it: `/results` loaded every row and serialised it — 59 ms at a few thousand, and the first thing to break on a full catalogue. Filtering and paging now happen in SQL, and **the summary counts the whole filtered set while the page returns one page**, because a facet count that changed as you scrolled would be worse than none.
+
+Two things did not fit that cleanly and are worth recording:
+
+- **Language names are not in the `result` table** and should not be: the name belongs to the scheme, and a copy could disagree with it. Searching by name resolves against the in-memory catalogue first and hands SQL a tag `IN` list.
+- **Availability is derived, not stored** — but the bands are pure thresholds on `reliability`, so they compile to a `WHERE` clause and the filter, the total and the facets all count the same rows.
+
+### `resolves_to`, surfaced at last
+
+Persisted since S3 and never shown. `/resolution` compares what the model actually produced, per the local LID on its own output, against what the catalogue says the tag resolves to, and classifies the difference: `as-expected`, `member` (a macrolanguage resolving to one of its members), `other-script`, `other-language`.
+
+The first run already produced the thing that makes it worth having: **`sw` → `swh_Latn`.** Asked for Swahili, gpt-4o writes Coastal Swahili, not the macrolanguage — resolution, not substitution, and precisely the fact a TMS needs and nobody publishes.
+
+### Reliability does not cap the tier
+
+The `ug` question from S4 is settled in [protocol 011](../experiments/protocols/011-reliability-and-tier.md). Short version: the data cannot support a cap (five rows with refusals, three of them scoreable, split across both extremes), and a cap would restate unwillingness as inability — reintroducing at the reporting layer exactly the conflation S3 removed from `s_lang`.
+
+What was actually wrong was the **workflow sentence**, not the tier. `ug` now reads *"light review — needs a fallback engine (2 refusal(s) of 3)"* and still says `Strong`, because it is: the one item gpt-4o attempted, it answered well. Availability is a second axis — `reliable` / `intermittent` / `unreliable` / `refused` — and the page says so in the standing caveat: **tier is capability, availability is willingness.**
+
+The workflow string is recomputed from a row's stored parts rather than read back from it. The wording has now changed once; a stored sentence would have left every earlier row still saying the old thing.
+
+### Verified end to end
+
+A scan started from the browser trigger: 3 tags → 2 classes → 18 calls, `de-AT` inherited from `de` without further calls, both job items marked done, results readable from the database immediately. The guards were tested by refusal rather than by inspection — over-ceiling, unknown-tag, self-back-translation, concurrent-scan and non-loopback requests each create no job at all.
+
+### Deliberately still out of scope
+
+**Resuming a stopped job from the UI.** `pending_items()` has always been the resume set and a stopped job keeps it intact, but re-running is currently a fresh scan over the same tags — which is correct, just not free. A resume button is an S6 convenience, not an S5 gap.
+
+### Open for S6
+
+1. Corpus rows still go to JSONL, not the `generation` table — unused until S7 needs offline re-grading.
+2. Back-translator panel order still affects qualification cost: a failing candidate costs 4 chrF++ calls before the next is tried.
+3. The UI reads the database when it has any rows and the evidence files only when it does not, so a user with old file-only results stops seeing them after their first scan. Correct precedence, surprising presentation.
+4. Whether refusal predicts quality is worth re-testing at S7, where a ~200-language run will produce enough refusals to answer it properly.
