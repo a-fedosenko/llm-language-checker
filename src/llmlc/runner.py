@@ -180,7 +180,9 @@ def execute(req: ScanRequest, job_id: int, *, on_result=None) -> ScanOutcome:
             on_result(r)
 
     try:
-        with Corpus() as corpus:
+        # Mirrored into the `generation` table so a later re-grade is a query
+        # rather than a scan over run files (S7).
+        with Corpus(to_db=True, job_id=job_id) as corpus:
             result = scan(scheme=scheme, tags=req.tags, engine=req.engine, client=client,
                           backtranslators=bts, judge_model=req.judge or settings.judge_model,
                           specs=load_specs(), corpus=corpus, pivot=req.pivot,

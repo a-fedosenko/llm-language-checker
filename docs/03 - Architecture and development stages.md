@@ -770,3 +770,27 @@ English stays unsuffixed, so every row and cached qualification written before t
 The rule the constraint cannot express: **a deterministic negative is the one result that does not depend on an instrument**, so it is comparable to every back-translator's result rather than none of them, and must occupy the same row. `repo.upsert_result` now treats a row as the same measurement when the back-translators match *or* either side is `NO_INSTRUMENT`, and folds any duplicates left by the old rule into the row it writes.
 
 Protocol 005's guarantee is untouched: two *real* instruments still produce two results, because they are still not comparable.
+
+## S7 groundwork — the calibration path (2026-09-23)
+
+The pilot is built and proven end to end; the study itself has not been run. [Protocol 014](../experiments/protocols/014-fact-recall-vs-chrf.md) carries the hypothesis, recorded before any measurement.
+
+**S2's promise did not hold, and it is worth saying why.** S2 recorded that `gold-reference` evidence would arrive as a by-product: where FLORES has a human reference, score chrF++ against it alongside fact recall and the calibration writes itself. It could not. **chrF++ needs a reference translation of the specific text being scored, and our probe generates free compositions from a content spec** — there is nothing to compare them against, and scoring one against an unrelated FLORES sentence would return near zero for a perfectly good answer. `Evidence.GOLD_REFERENCE` sat declared and unassigned from S2 until now for that reason.
+
+So the calibration runs a **translation** task, where both metrics are computable: the model translates a FLORES source sentence, and the same output is scored by chrF++ against the human reference and by fact recall against a checklist extracted from the source. The limitation is stated rather than engineered away — we calibrate on translation and apply the proxy to free generation, and that transfer is an assumption.
+
+**Built:** `probe/calibrate.py` (the paired probe, Spearman, banded offsets), `scripts/build_calibration_specs.py` (fact extraction from FLORES source sentences, gitignored as derived text), `llmlc calibrate`, and the corpus now mirrors into the `generation` table. 256 tests.
+
+### Two levels, because they answer different questions
+
+Item level asks whether the proxy tracks quality sentence by sentence. **Language level asks whether it ranks languages the way chrF++ does — which is what the tool actually claims**, since tiers are per language, not per item. Both are reported.
+
+### What the smoke run already showed
+
+Four items across `af` and `ru`: chrF++ spanned 45.6 to 73.2 while fact recall was **1.00 on every one**. The item-level correlation is therefore undefined rather than weak — a constant metric has no ordering, and `spearman()` returns `None` rather than inventing a number.
+
+That is not a defect. A four-fact checklist takes five values, and a competent translation recovers all four facts whether it scores 45 or 73. **The proxy separates adequate from inadequate, not good from better.** For a tool that reports five tiers that may be sufficient, but it means the pilot must be weighted toward languages the model handles *badly*, or it measures nothing — and it raises the odds that the language-level arm carries the study.
+
+### The `generation` table, finally used
+
+Corpus records now mirror into it (`Corpus(to_db=True)`), which is what makes a re-grade a query rather than a scan across run files. The file stays authoritative and is written first; a mirror failure increments a counter and is otherwise swallowed, because the record is already safe on disk and losing a scan to a database hiccup would cost far more than the mirror is worth.

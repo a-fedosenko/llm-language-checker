@@ -1,6 +1,8 @@
 """Qualification, routing and caching -- what separates a model failure from an instrument failure."""
 import json
 
+import pytest
+
 from llmlc.bt import QualStatus, QualificationCache, load_controls, qualify, route
 from tests.conftest import FakeBackTranslator, FakeClient
 
@@ -117,6 +119,9 @@ def test_cache_is_keyed_per_back_translator(tmp_path):
 
 def test_shipped_controls_cover_flores_breadth_and_the_hand_seeded_gap():
     c = load_controls()
+    if not any(e.get("kind") == "reference" for e in c.values()):
+        pytest.skip("FLORES controls not built locally; they are licence-encumbered "
+                    "and not committed. Build with scripts/build_controls.py")
     assert len(c) > 150, "FLORES ingestion should provide broad coverage"
     assert c["cv"]["kind"] == "facts", "Chuvash is absent from FLORES and must fall back"
     assert c["kk"]["kind"] == "reference"

@@ -13,7 +13,7 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/03 - Architecture and development stages.md` — architecture, data model, staging, and the implementation log for S0–S6
 - `experiments/protocols/README.md` — thirteen experiment protocols; 005, 011, 012 and 013 matter most
 
-**State:** S0–S6 complete, 238 tests passing, last commit `999b42f`. Working tree clean.
+**State:** S0–S6 complete and the S7 calibration path built but not yet run; 256 tests passing.
 
 **Run it:**
 ```bash
@@ -22,6 +22,7 @@ set -a && . .env && set +a         # aggregator endpoint + key, gitignored
 llmlc scan --engine openai-gpt-4o --tag de,cv --dry-run
 llmlc status                       # what is measured, what is stale
 llmlc markers                      # variant coverage and the remaining gap
+llmlc calibrate --engine <model> --dry-run   # the S7 study; needs specs built first
 uvicorn llmlc.api.main:app --port 8099    # UI; 8000/8010/8025/8077/8081/8082/8088 are taken
 pytest -q
 ```
