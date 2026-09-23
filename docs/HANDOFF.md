@@ -50,35 +50,23 @@ Schema changes are Alembic's. A database made by `create_all()` has no version r
 
 ---
 
-## Next step: S7 — the calibration study
+## Next step: run the S7 calibration pilot
 
-Fact recall versus chrF++ against FLORES+ across ~200 languages, with published error bars. Doc 03 calls it the strongest artifact in the project, and it is: every other stage measures languages, this one measures *the method*. Until it exists, "fact recall is a good proxy for translation quality" is an assertion. It is also the piece a reader of the landing page (S9) will judge the project by.
+**The path is built and proven; the study has not been run.** [Protocol 014](../experiments/protocols/014-fact-recall-vs-chrf.md) holds the hypothesis, written before any measurement, and a design note from a four-item smoke run. The only thing standing between here and a result is deciding how much to spend.
 
-**Start by checking what S2 promised, because it did not deliver it.** Doc 03 §S2 recorded that `gold-reference` evidence would arrive as a by-product: where FLORES has a human reference, score chrF++ against it *as well as* fact recall, and the calibration comparison writes itself. That was never built. `Evidence.GOLD_REFERENCE` is declared in `probe/score.py` and **assigned nowhere** — confirm with `grep -rn GOLD_REFERENCE src/`. So S7 begins by building the mechanism S2 assumed existed, not by analysing data already collected.
+```bash
+python scripts/build_calibration_specs.py --tags <20 tags> --items 4   # ~1 call per item
+llmlc calibrate --engine openai-gpt-4o --tag <same tags> --dry-run     # free, prints the estimate
+llmlc calibrate --engine openai-gpt-4o --tag <same tags> --items 4     # 3 calls per item
+```
 
-**What exists and can be reused:**
+Use protocol 008's twenty-language spread for the tag list, so the results sit alongside an existing run.
 
-- `probe/chrf.py` — a working chrF++ implementation, already trusted for back-translator qualification at `MIN_CHRF = 30` (protocol 006).
-- `data/controls/flores.json` — 200 tags of aligned FLORES text, `{text, reference}` per item. **Local only**, gitignored as licence-encumbered (CC BY-SA 4.0). Rebuild with `python scripts/build_controls.py`.
-- The corpus: every model call lands in `data/corpus/run_*.jsonl` with prompt, designator and usage. Protocol 012 re-graded saved responses offline with no new API calls, so the pattern is proven and cheap.
-- `probe/pipeline.py` and `probe/ladder.py` — the generation and judging path a second scorer hangs off.
+**Read the design note in protocol 014 before choosing the sample.** The smoke run found chrF++ spanning 45.6 to 73.2 while fact recall was 1.00 on every item — the item-level correlation came back *undefined*, not weak, because a constant metric has no ordering. Fact recall over a four-fact checklist separates adequate from inadequate, not good from better. **A pilot drawn from well-supported languages will measure nothing.** Weight it toward languages the model handles badly, and expect the language-level arm to carry the study.
 
-**The design question to settle before writing code.** chrF++ needs a reference translation *of a specific source sentence*. Our generations are free compositions from a content spec, so there is nothing to compare them against. Two ways out, and they are not equivalent:
+**How it works, and the limitation to keep stating.** The model translates a FLORES source sentence; the same output is scored by chrF++ against the human reference and by fact recall against a checklist extracted from the source. It has to be a translation task because chrF++ needs a reference for the specific text being scored, and free compositions have none — which is why `Evidence.GOLD_REFERENCE`, declared in S2 on the assumption this would fall out of the ordinary probe, went unassigned until now. So the study calibrates on translation and the proxy is applied to free generation, and that transfer is an assumption, not a finding.
 
-- **Translate FLORES sentences** in the calibration run. Simple, directly comparable — but it measures translation, while the tool otherwise measures free generation, which weakens how far the conclusion transfers.
-- **Turn FLORES sentences into content specs**, extracting a fact checklist from each. More faithful to what the tool actually does, and more work.
-
-This choice determines what the study can claim. Decide it first, write it into a protocol with the hypothesis, then build.
-
-**Also in scope, and overdue:**
-
-- **The `generation` table is still unused.** S7 is the reason it exists — re-grading old generations under a new scorer is precisely its purpose, and corpus rows currently go only to JSONL. This is the moment to wire it up.
-- **Which scans become canonical**, and how often they are refreshed as models change (doc 03 §S9 flags this too).
-- **Budget.** ~200 languages is a real spend. `--max-calls` fails closed and `llmlc scan --dry-run` gives an upper bound from the plan; price the run before starting it.
-
-**The result to aim for:** a published correlation between fact recall and chrF++ with error bars, and an honest statement of where the proxy breaks down. A negative result — "fact recall diverges from chrF++ below tier X" — is equally publishable and would change the thresholds in `probe/score.py`.
-
----
+**After the pilot:** complete protocol 014's Method/Results/Conclusions, decide whether the tier thresholds in `probe/score.py` need moving, and only then price the full ~200-language run.
 
 **Open, carried forward in doc 03:**
 
