@@ -65,6 +65,24 @@ def extract(client: OpenAICompatClient, model: str, sentence: str) -> list[str]:
     return [f.strip() for f in facts if isinstance(f, str) and f.strip()]
 
 
+def save(out: dict, model: str, items: int) -> None:
+    """Write the whole file. Called after every language, not only at the end.
+
+    Extraction is hundreds of calls over tens of minutes, and the first version
+    of this script held everything in memory until the final write -- so any
+    failure, anywhere, threw away every call already paid for. Rewriting a small
+    JSON file per language costs nothing next to one API call.
+    """
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(json.dumps({
+        "meta": {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                 "extractor": model, "items_per_language": items,
+                 "source": "FLORES-200 (c) Meta AI, CC BY-SA 4.0",
+                 "note": "Derived from FLORES text; share-alike applies. Not committed."},
+        "specs": out,
+    }, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--tags", default=None,
@@ -118,17 +136,11 @@ def main(argv: list[str] | None = None) -> int:
             continue
         out[tag] = {"items": items}
         built += 1
+        save(out, model, a.items)
         print(f"  {tag}: {len(items)} item(s), "
-              f"{sum(len(i['facts']) for i in items)} facts")
+              f"{sum(len(i['facts']) for i in items)} facts", flush=True)
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps({
-        "meta": {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                 "extractor": model, "items_per_language": a.items,
-                 "source": "FLORES-200 (c) Meta AI, CC BY-SA 4.0",
-                 "note": "Derived from FLORES text; share-alike applies. Not committed."},
-        "specs": out,
-    }, ensure_ascii=False, indent=1), encoding="utf-8")
+    save(out, model, a.items)
     print(f"\nwrote {OUT}  {len(out)} language(s)  (+{built} built, {skipped} skipped)")
     return 0
 

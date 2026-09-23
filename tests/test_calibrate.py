@@ -154,3 +154,60 @@ def test_missing_specs_are_an_empty_dict_not_a_crash(tmp_path):
     """They are derived from FLORES and never committed, so absent is the normal
     state of a fresh clone."""
     assert load_specs(tmp_path / "nope.json") == {}
+
+
+# -- the instrument must be qualified ----------------------------------------
+
+class _Bt:
+    def __init__(self, ident="remote:bt", text="back"):
+        self.id, self._text = ident, text
+        self.client, self.model, self.pivot = None, "bt", "en"
+
+    def translate(self, text):
+        from llmlc.bt import BackTranslation
+        return BackTranslation(self._text, None, "bt")
+
+
+class _Client:
+    def __init__(self, text="translated"):
+        self.text = text
+
+    def complete(self, model, prompt, **kw):
+        from llmlc.client import Completion
+        return Completion(self.text, None, model=model)
+
+
+def test_an_unqualified_reader_yields_chrf_but_never_a_fabricated_recall(monkeypatch, tmp_path):
+    """Protocol 005: a back-translator that cannot read a language does not fail,
+    it fabricates. Letting that reach the judge would corrupt the recall side of
+    the very correlation this study measures."""
+    from llmlc.bt import Qualification, QualStatus
+    from llmlc.probe import calibrate as cal
+    from llmlc.probe.corpus import Corpus
+    from llmlc.scheme import load_scheme
+
+    bt = _Bt()
+    monkeypatch.setattr(cal, "route", lambda *a, **k: (
+        bt, Qualification(QualStatus.NO_CONTROL, 0.0, bt.id, "af")))
+    spec = {"items": [{"id": "af-0", "source": "The dog barks.",
+                       "reference": "Die hond blaf.", "facts": ["A dog barks."]}]}
+    with Corpus(tmp_path / "c.jsonl") as corpus:
+        r = cal.calibrate_language(scheme=load_scheme("default"), tag="af", engine="m",
+                                   client=_Client("Die hond blaf."), backtranslators=[bt],
+                                   judge_model="j", spec=spec, corpus=corpus)
+    assert r.qualified is False
+    assert r.items[0].chrf is not None, "chrF++ needs no back-translator"
+    assert r.items[0].recall is None, "recall must be absent, not fabricated"
+    assert r.paired == []
+    assert r.calls["backtranslation"] == 0, "an unqualified reader is never called"
+    assert "not measured" in (r.note or "")
+
+
+def test_unqualified_languages_are_counted_in_the_report():
+    """They contribute no pair, so they must be visible rather than silently thin
+    out the sample."""
+    a = result("af", [item("a", 60.0, 0.9)])
+    b = result("cv", [item("c", 20.0)])
+    b.qualified = False
+    stats = correlate([a, b])
+    assert stats["n_unqualified"] == 1 and stats["unqualified"] == ["cv"]

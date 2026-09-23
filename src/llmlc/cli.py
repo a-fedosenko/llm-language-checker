@@ -237,6 +237,8 @@ def cmd_calibrate(a: argparse.Namespace) -> int:
     The one command that measures the instrument rather than a language.
     """
     import json
+    from llmlc.db import create_all
+    from llmlc.db.qualcache import DbQualificationCache
     from llmlc.probe.calibrate import calibrate_language, correlate, load_specs
 
     if not settings.aggregator_base_url or not settings.aggregator_admin_api_key:
@@ -279,6 +281,8 @@ def cmd_calibrate(a: argparse.Namespace) -> int:
             print(f"  {t:10} {len(specs[t]['items'])} item(s)")
         return 0
 
+    create_all()
+    cache = DbQualificationCache()
     results = []
     print(f"\n  {'tag':10}{'chrF++':>9}{'recall':>9}{'paired':>9}")
     with Corpus(to_db=True) as corpus:
@@ -286,16 +290,18 @@ def cmd_calibrate(a: argparse.Namespace) -> int:
             r = calibrate_language(
                 scheme=scheme, tag=tag, engine=a.engine, client=client,
                 backtranslators=bts, judge_model=judge, spec=specs[tag],
-                corpus=corpus, pivot=a.pivot, n_items=a.items)
+                corpus=corpus, pivot=a.pivot, n_items=a.items, cache=cache)
             results.append(r)
             c = f"{r.mean_chrf:.1f}" if r.mean_chrf is not None else "—"
             rec = f"{r.mean_recall:.2f}" if r.mean_recall is not None else "—"
-            print(f"  {tag:10}{c:>9}{rec:>9}{len(r.paired):>9}")
+            flag = "" if r.qualified else f"  {GREY}bt unqualified{RESET}"
+            print(f"  {tag:10}{c:>9}{rec:>9}{len(r.paired):>9}{flag}")
         corpus_path = corpus.path
 
     stats = correlate(results)
     print(f"\n{BOLD}correlation{RESET}  {stats['n_items']} paired item(s), "
-          f"{stats['n_languages']} language(s)")
+          f"{stats['n_languages']} language(s)"
+          f"{f'  ({stats["n_unqualified"]} language(s) had no qualified reader)' if stats['n_unqualified'] else ''}")
     print(f"  item-level Spearman     {stats['item_spearman']}")
     print(f"  language-level Spearman {stats['language_spearman']}")
     print(f"  mean offset (recall - chrF++/100) {stats['mean_offset_recall_minus_chrf']}")

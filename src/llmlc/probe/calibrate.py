@@ -32,7 +32,7 @@ import pathlib
 import statistics
 from dataclasses import dataclass, field
 
-from llmlc.bt import RemoteBackTranslator
+from llmlc.bt import Qualification, QualificationCache, RemoteBackTranslator, route
 from llmlc.client import OpenAICompatClient
 from llmlc.probe import pivot as pivot_mod
 from llmlc.probe.chrf import chrf
@@ -87,6 +87,8 @@ class CalibrationResult:
     items: list[CalibrationItem] = field(default_factory=list)
     calls: dict[str, int] = field(default_factory=lambda: {"translation": 0,
                                                            "backtranslation": 0, "judge": 0})
+    qualification: dict = field(default_factory=dict)
+    qualified: bool = True
     note: str | None = None
 
     @property
@@ -176,16 +178,28 @@ def calibrate_language(
     *, scheme: Scheme, tag: str, engine: str, client: OpenAICompatClient,
     backtranslators: list[RemoteBackTranslator], judge_model: str,
     spec: dict, corpus: Corpus, pivot: str = "en", n_items: int | None = None,
+    cache: QualificationCache | None = None,
 ) -> CalibrationResult:
     """Translate, score both ways, and return the paired items for one language."""
     lang: Language | None = scheme.get(tag)
     if lang is None:
         raise KeyError(f"Unknown tag {tag!r}")
 
-    backtranslators, pivot, _ = pivot_mod.panel_for(scheme, lang, pivot, backtranslators)
-    bt = backtranslators[0]
+    backtranslators, pivot, controls = pivot_mod.panel_for(scheme, lang, pivot, backtranslators)
+
+    # Qualify the instrument, exactly as a normal scan does. A back-translator
+    # that cannot read the language does not fail loudly, it fabricates
+    # (protocol 005) -- and a fabricated back-translation would corrupt the
+    # recall side of the very correlation this study exists to measure, making
+    # the proxy look worse than it is. chrF++ needs no back-translator, so an
+    # unqualified language still contributes a reference score; it simply
+    # contributes no pair.
+    bt, qual = route(backtranslators, client, judge_model, tag,
+                     controls=controls, cache=cache)
     out = CalibrationResult(tag=tag, engine=engine, backtranslator=bt.id,
-                            judge_model=judge_model, pivot=pivot)
+                            judge_model=judge_model, pivot=pivot,
+                            qualification=qual.as_dict() if qual else {},
+                            qualified=bool(qual and qual.trustworthy))
     language_name = lang.name or tag
 
     for item in spec.get("items", [])[:n_items] if n_items else spec.get("items", []):
@@ -211,6 +225,12 @@ def calibrate_language(
         ci.gate = gate.verdict.value
         ci.chrf = chrf(gen.text or "", item["reference"])
 
+        if not out.qualified:
+            # No trustworthy reader for this language: the reference score stands
+            # on its own, and recall is left absent rather than fabricated.
+            out.items.append(ci)
+            continue
+
         tr = bt.translate(gen.text or "")
         out.calls["backtranslation"] += 1
         corpus.write(Record("backtranslation", bt.id, tag, item["id"], language_name,
@@ -232,7 +252,11 @@ def calibrate_language(
             ci.error = judgement.error
         out.items.append(ci)
 
-    if not out.paired:
+    if not out.qualified:
+        out.note = (f"Back-translator {bt.id} is "
+                    f"{out.qualification.get('status', 'unqualified')} for {tag}: recall was "
+                    f"not measured, so this language contributes chrF++ only.")
+    elif not out.paired:
         out.note = "No item produced both scores; nothing to correlate for this language."
     return out
 
@@ -246,6 +270,7 @@ def correlate(results: list[CalibrationResult]) -> dict:
     which is what the tool actually claims, since tiers are per language.
     """
     items = [i for r in results for i in r.paired]
+    unqualified = [r.tag for r in results if not r.qualified]
     item_rho = spearman([i.chrf for i in items], [i.recall for i in items])
 
     langs = [r for r in results if r.mean_chrf is not None and r.mean_recall is not None]
@@ -261,6 +286,7 @@ def correlate(results: list[CalibrationResult]) -> dict:
 
     return {
         "n_items": len(items), "n_languages": len(langs),
+        "n_unqualified": len(unqualified), "unqualified": sorted(unqualified),
         "item_spearman": None if item_rho is None else round(item_rho, 3),
         "language_spearman": None if lang_rho is None else round(lang_rho, 3),
         "mean_offset_recall_minus_chrf": (round(statistics.fmean(offsets), 3)
