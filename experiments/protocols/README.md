@@ -27,6 +27,7 @@ changed as a result.
 | [011](011-reliability-and-tier.md) | 2026-09-17 | Should low reliability cap the tier? | No. n=3 cannot support a cap, and it would restate unwillingness as inability. Availability became a second axis |
 | [012](012-variant-markers.md) | 2026-09-18 | Can a closed marker set measure dialect marking? | Yes — 1.00 under "Australian English" vs 0.00 under "English". Found three defects in the instrument and two in the pipeline |
 | [013](013-cross-lingual-judging.md) | 2026-09-19 | Can the judge grade a back-translation not in the facts' language? | Yes — 8 of 9 identical, mean diff 0.022, no hallucinated contradictions. The one disagreement was a translation artefact |
+| [014](014-fact-recall-vs-chrf.md) | 2026-09-23 | Does fact recall track chrF++? (100 languages) | Directionally yes, ρ 0.647 by language — but recall saturates at 1.0 for 84% of items, so the gate carries the tier, not the content score |
 
 ## Writing one
 

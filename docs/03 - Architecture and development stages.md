@@ -247,7 +247,7 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 | **S4** ✅ | Persistence, job API, export adapters, staleness view | **Done 2026-09-17** — results in SQLite/Postgres, `llmlc status`, `llmlc export --merge-into` verified non-destructive |
 | **S5** ✅ | Full UI | **Done 2026-09-17** — pick engine and languages, plan for free, trigger a scan, watch per-class progress, cancel, browse paged results, download artifacts |
 | **S6** ✅ | Dialects: marker files, script-split scoring, `variant_evidence` | **Done 2026-09-18** — `en-AU` and `en-GB` proven from markers; `ru-BY` `not-distinguishable`; `sr-Latn` proven by script; `kk-Latn` exposed as a base-language failure |
-| **S7** | **Calibration study** — fact-recall vs chrF++ against FLORES+ | Published error bars for the proxy metric |
+| **S7** ✅ | **Calibration study** — fact-recall vs chrF++ against FLORES+ | **Done 2026-09-23** — 100 languages; ρ 0.647 by language, and recall saturates at 1.0 for 84% of items |
 | **S8** | README, methodology page, limitations | A reader can reproduce a result and knows what it does not mean |
 | **S9** | **Public landing page** | The project is explicable to someone who has never run it |
 
@@ -794,3 +794,19 @@ That is not a defect. A four-fact checklist takes five values, and a competent t
 ### The `generation` table, finally used
 
 Corpus records now mirror into it (`Corpus(to_db=True)`), which is what makes a re-grade a query rather than a scan across run files. The file stays authoritative and is written first; a mirror failure increments a counter and is otherwise swallowed, because the record is already safe on disk and losing a scan to a database hiccup would cost far more than the mirror is worth.
+
+## S7 — the calibration study (done 2026-09-23)
+
+100 languages, 378 paired items, `openai-gpt-4o` against FLORES-200 references. Full write-up in [protocol 014](../experiments/protocols/014-fact-recall-vs-chrf.md); the numbers that change what we do are here.
+
+**The method survives, with its resolution stated.** Fact recall ranks languages the way chrF++ does at **Spearman 0.647**, which supports five-tier reporting and nothing finer. At item level it is 0.484 — below the 0.6 predicted, above the 0.4 that would have invalidated the approach.
+
+**The unpredicted result is saturation.** 317 of 378 items scored recall exactly 1.00. Above chrF++ 60 *every* item did, so the within-band correlation is undefined rather than weak. A four-fact checklist takes five values and any competent translation recovers all four: the proxy asks "did the meaning survive", and above a low bar the answer is always yes.
+
+That has a direct consequence for scoring. With 84% of items at 1.0, the `s_content ≥ 0.70 / 0.50 / 0.30` thresholds in `probe/score.py` are passed by nearly anything competent, so **in practice the tier is decided almost entirely by `s_lang` — the deterministic gate — and `s_content` behaves as a floor check rather than a quality gradient.** Either the content score gains resolution (more facts per item, or harder ones) or the documentation stops implying a gradient that is not there. This must be settled before any threshold is quoted publicly in S8 or S9.
+
+**Where the two metrics disagree, the gate is already covering it.** 22 items scored chrF++ under 20 while recalling 90%+ of the facts, and 19 of those carry a gate verdict of `wrong_script` or `wrong_language`. Asked for Arabic-script South Azerbaijani, gpt-4o answered in Latin-script Azerbaijani: chrF++ 0.38 against the reference, every fact preserved, recall 1.0. **Fact recall is script-blind and chrF++ is not** — and the tier combines recall with the gate, which is exactly what catches that. Restricting the correlation to gate-passing items moves ρ only 0.484 → 0.502, because saturation rather than script failure is the limit.
+
+So the gate is load-bearing rather than a cost optimisation: it was introduced to make negatives free, and it also stops a script failure being scored as a success.
+
+**Two languages** (`kr-Arab`, `taq-Tfng`) had no qualified back-translator and contributed chrF++ only. Qualification was added to the calibration path before the run for exactly this reason — protocol 005 showed an unqualified reader fabricates rather than failing, which would have corrupted the recall side of the correlation the study exists to measure.

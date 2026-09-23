@@ -11,9 +11,9 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/01 - Initial discussion - stage 1.md` — prior art, methodology, output contract, dialect/macrolanguage logic
 - `docs/02 - Experiment - invented language control.md` — why self-reported language support cannot be trusted
 - `docs/03 - Architecture and development stages.md` — architecture, data model, staging, and the implementation log for S0–S6
-- `experiments/protocols/README.md` — thirteen experiment protocols; 005, 011, 012 and 013 matter most
+- `experiments/protocols/README.md` — fourteen experiment protocols; **014 matters most** (it measures the method itself), then 005, 011 and 012
 
-**State:** S0–S6 complete and the S7 calibration path built but not yet run; 256 tests passing.
+**State:** S0–S7 complete; 258 tests passing. S7's result changes what can be claimed — read protocol 014 before quoting any tier threshold.
 
 **Run it:**
 ```bash
@@ -50,23 +50,18 @@ Schema changes are Alembic's. A database made by `create_all()` has no version r
 
 ---
 
-## Next step: run the S7 calibration pilot
+## Next step: S8 — README, methodology page, limitations
 
-**The path is built and proven; the study has not been run.** [Protocol 014](../experiments/protocols/014-fact-recall-vs-chrf.md) holds the hypothesis, written before any measurement, and a design note from a four-item smoke run. The only thing standing between here and a result is deciding how much to spend.
+S7 is done and it changed what the project may claim, so S8 is now the stage that matters: writing down honestly what the tool measures and what it does not.
 
-```bash
-python scripts/build_calibration_specs.py --tags <20 tags> --items 4   # ~1 call per item
-llmlc calibrate --engine openai-gpt-4o --tag <same tags> --dry-run     # free, prints the estimate
-llmlc calibrate --engine openai-gpt-4o --tag <same tags> --items 4     # 3 calls per item
-```
+**The finding S8 must not paper over.** Fact recall saturates. 317 of 378 calibration items scored exactly 1.00, and above chrF++ 60 *every* item did. Consequences, both real:
 
-Use protocol 008's twenty-language spread for the tag list, so the results sit alongside an existing run.
+1. The proxy supports **language-level, five-tier** claims (Spearman 0.647) and nothing finer. Item-level resolution is not there.
+2. **`s_content` is doing far less work than the thresholds imply.** With 84% of items at 1.0, the `0.70 / 0.50 / 0.30` content cuts in `probe/score.py` are passed by nearly anything competent, so the tier is decided almost entirely by `s_lang` — the gate. Either give the content score resolution (more facts per item, or harder facts) or stop describing it as a gradient. **Settle this before any threshold is published.**
 
-**Read the design note in protocol 014 before choosing the sample.** The smoke run found chrF++ spanning 45.6 to 73.2 while fact recall was 1.00 on every item — the item-level correlation came back *undefined*, not weak, because a constant metric has no ordering. Fact recall over a four-fact checklist separates adequate from inadequate, not good from better. **A pilot drawn from well-supported languages will measure nothing.** Weight it toward languages the model handles badly, and expect the language-level arm to carry the study.
+**The good news to write up:** the gate is load-bearing. 19 of the 22 worst metric disagreements are `wrong_script` or `wrong_language` — fact recall is script-blind, chrF++ is not, and the tier combines recall with the gate precisely so that a right-meaning/wrong-script answer is not scored as a success. `azb` is the case to quote: asked for Arabic-script South Azerbaijani, gpt-4o answered in Latin script, chrF++ 0.38, every fact preserved.
 
-**How it works, and the limitation to keep stating.** The model translates a FLORES source sentence; the same output is scored by chrF++ against the human reference and by fact recall against a checklist extracted from the source. It has to be a translation task because chrF++ needs a reference for the specific text being scored, and free compositions have none — which is why `Evidence.GOLD_REFERENCE`, declared in S2 on the assumption this would fall out of the ordinary probe, went unassigned until now. So the study calibrates on translation and the proxy is applied to free generation, and that transfer is an assumption, not a finding.
-
-**After the pilot:** complete protocol 014's Method/Results/Conclusions, decide whether the tier thresholds in `probe/score.py` need moving, and only then price the full ~200-language run.
+**Also open before S9:** the marker grammar axis still fires on nothing; marker coverage is 2 of 534 variant tags; and `data/calibration/study.json` is the artifact the landing page should publish.
 
 **Open, carried forward in doc 03:**
 

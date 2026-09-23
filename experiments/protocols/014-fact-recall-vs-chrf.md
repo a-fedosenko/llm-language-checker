@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Date** | 2026-09-23 |
-| **Status** | in progress — hypothesis recorded before the run |
+| **Status** | valid |
 | **Triggered by** | S7. The whole method rests on fact recall being a usable proxy for translation quality, and that has been asserted since doc 01 and never measured |
 | **Artifacts** | `src/llmlc/probe/calibrate.py`, `scripts/build_calibration_specs.py`, raw responses in `data/calibration/` and the `generation` table |
 
@@ -60,18 +60,70 @@ This is hypothesis 3 arriving early, and it is not a defect in either metric. Fa
 1. **The sample must be weighted toward languages the model handles badly.** A pilot drawn only from well-supported languages produces a constant and answers nothing. Protocol 008's 20-language spread is the right basis precisely because it spans the tier range.
 2. **The item-level correlation may remain uncomputable even so**, in which case the language-level arm carries the study. That is the arm that matches what the tool claims anyway, so this is a reordering of emphasis rather than a loss — but it should be predicted now rather than discovered as a disappointment.
 
+## Setup as run
+
+| | |
+|---|---|
+| Model under test | `openai-gpt-4o` |
+| Back-translator | panel `gemini-gemini-3-8-flash, deepseek-deepseek-v4-pro`, qualified per language |
+| Judge | `openai-gpt-4o-mini` · pivot `en` |
+| Sample | **100 languages** — every other tag of the 200 with FLORES references, alphabetically. A stride rather than a hand-picked list, so the sample is reproducible and not selected on anything correlated with how well a model handles it |
+| Items | 4 FLORES sentences per language; 389 built, **378 paired**, 98 languages scored |
+
+Two languages (`kr-Arab`, `taq-Tfng`) had no qualified back-translator and contributed chrF++ only, exactly as designed — a fabricated reading would have corrupted the recall side of the correlation (protocol 005).
+
 ## Method
 
-*(to be completed)*
+The model translates a FLORES source sentence into the target language. That single output is then scored twice: **chrF++** against the FLORES human reference, and **fact recall** by back-translating it into the pivot and judging against a checklist extracted from the English source. Paired per item, averaged per language, correlated by Spearman at both levels.
 
 ## Results
 
-*(to be completed)*
+| | |
+|---|---|
+| paired items | 378 across 98 languages |
+| **item-level Spearman** | **0.484** |
+| **language-level Spearman** | **0.647** |
+| mean offset (recall − chrF++/100) | **+0.482** |
+
+Offsets by quality band, and the correlation *within* each band:
+
+| band | n | mean offset | ρ within band | items scoring recall 1.0 |
+|---|---|---|---|---|
+| chrF++ ≥ 60 | 79 | +0.282 | **undefined** | **79 / 79** |
+| chrF++ 40–60 | 135 | +0.500 | 0.176 | 129 / 135 |
+| chrF++ < 40 | 164 | +0.564 | 0.414 | 109 / 164 |
+
+**Against the hypotheses:** (1) **failed** — 0.484 at item level, below the predicted 0.6, though above the 0.4 line that would have invalidated the method. (2) **confirmed** — 0.647 at language level, clearly above the item level. (3) **confirmed** — the offset widens monotonically as quality falls. (4) **confirmed** — recall is the more forgiving metric everywhere, in every band.
+
+### The finding that was not predicted: fact recall saturates
+
+**317 of 378 items scored exactly 1.00.** Above chrF++ 60, *every single item* scored 1.0, which is why ρ is undefined there — a constant has no ordering. Between 40 and 60 it is 129 of 135, and ρ collapses to 0.18. Only below chrF++ 40 does recall carry real signal.
+
+So the moderate item-level correlation is not the metrics disagreeing. It is **fact recall having almost no resolution above the bottom of the range.** A four-fact checklist can take five values, and any competent translation recovers all four. The proxy answers "did the meaning survive", and above a low bar the answer is always yes.
+
+### The disagreements are script failures, and the gate already catches them
+
+22 items scored chrF++ below 20 while recalling 90% or more of the facts. **19 of those 22 carry a gate verdict of `wrong_script` (16) or `wrong_language` (3).**
+
+> `azb` — South Azerbaijani, Arabic script. The model answered in Latin-script Azerbaijani: *"JAS 39C Gripen təyyarəsi yerli vaxtla saat 9:30 radələrində (0230 UTC)…"*. chrF++ **0.38** against the Arabic-script reference — almost no character overlap — while the back-translation recovered every fact, giving recall **1.0**.
+>
+> `bjn-Arab` (Banjar, Arabic script) and `ks-Deva` (Kashmiri, Devanagari) fail identically: right meaning, wrong script, chrF++ 0.34 and 11.05.
+
+**Fact recall is script-blind and language-blind; chrF++ is neither.** That is not a defect in the proxy so much as a statement of what it measures — and the tool does not use recall alone. A tier is a function of `s_lang` (the deterministic gate) *and* `s_content` (recall), and the gate is precisely what catches wrong script and wrong language for free. The two halves of the score are covering each other's blind spots, which is what the design intended, now demonstrated rather than assumed.
+
+Restricting the correlation to items the gate passed moves ρ only from 0.484 to **0.502**, because saturation, not script failure, is what limits it.
 
 ## Conclusions
 
-*(to be completed)*
+1. **The proxy is directionally sound and low-resolution.** It ranks languages the way chrF++ does at ρ 0.647, which supports the five-tier reporting the tool actually does. It does not support finer claims, and none should be made.
+2. **`s_content` does much less work than the thresholds imply.** With 84% of items at recall 1.0, the `≥ 0.70 / 0.50 / 0.30` content thresholds in `probe/score.py` are passed by nearly anything competent — so in practice **the tier is decided almost entirely by `s_lang`, the gate.** That is a real and uncomfortable statement about the current scoring, and the honest reading is that `s_content` currently behaves as a floor check rather than a quality gradient.
+3. **Recall systematically overstates quality, and worst where it matters most.** The offset is +0.28 at the top and +0.56 at the bottom — the bottom being exactly where a TMS decision flips between "do not offer" and "MT-assist only".
+4. **The gate is load-bearing, not a cost optimisation.** It was introduced to make negatives free; this study shows it is also what keeps a script failure from being scored as a success.
+
+**Limits:** one model, one judge, one back-translator panel, 4 items per language, and a translation task standing in for free generation. The saturation result is the most robust finding here and the least dependent on those choices; the exact ρ is the least.
 
 ## Impact
 
-*(to be completed)*
+- The method survives, with its resolution stated: **language-level ranking, five tiers, no finer.**
+- **Open for the next stage:** raise the resolution of `s_content` — more facts per item, or harder facts — or else stop treating the content thresholds as a gradient and say plainly that the gate carries the tier. This should be settled before any tier threshold is quoted publicly (S8/S9).
+- Protocol 011's open question is now partly answerable: with recall saturated, the reliability/quality relationship cannot be read off this data either, for the same reason.
