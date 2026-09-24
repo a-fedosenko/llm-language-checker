@@ -211,3 +211,77 @@ def test_unqualified_languages_are_counted_in_the_report():
     b.qualified = False
     stats = correlate([a, b])
     assert stats["n_unqualified"] == 1 and stats["unqualified"] == ["cv"]
+
+
+# -- offline re-grading (protocol 015) ---------------------------------------
+
+def test_regrade_reuses_stored_back_translations_without_retranslating():
+    """The corpus exists so a method change is a re-grade, not a re-run."""
+    from llmlc.probe import calibrate as cal
+
+    study = {"languages": [{"tag": "af", "engine": "m", "backtranslator": "bt",
+                            "pivot": "en", "n_paired": 1,
+                            "items": [{"id": "af-0", "chrf": 60.0, "gate": "pass",
+                                       "source": "s", "translation": "t",
+                                       "back_translation": "A dog barks loudly."}]}]}
+    specs = {"af": {"items": [{"id": "af-0", "facts": ["A dog barks.", "It is loud."]}]}}
+
+    calls = []
+
+    class _J:
+        ok, verdicts, raw, error = True, [], "", None
+        recall = 0.5
+
+    def fake_judge(client, model, text, facts):
+        calls.append((text, tuple(facts)))
+        return _J()
+
+    import llmlc.probe.calibrate as mod
+    old = mod.run_judge
+    mod.run_judge = fake_judge
+    try:
+        out = cal.regrade(study, specs, client=None, judge_model="j")
+    finally:
+        mod.run_judge = old
+
+    assert len(calls) == 1
+    assert calls[0][0] == "A dog barks loudly.", "the stored back-translation is judged"
+    assert out[0].items[0].recall == 0.5
+    assert out[0].items[0].chrf == 60.0, "the reference score is carried over untouched"
+    assert out[0].calls["judge"] == 1
+
+
+def test_regrade_leaves_recall_absent_where_there_is_no_new_checklist():
+    from llmlc.probe import calibrate as cal
+    study = {"languages": [{"tag": "af", "engine": "m", "backtranslator": "bt",
+                            "items": [{"id": "af-0", "chrf": 60.0,
+                                       "back_translation": "x"}]}]}
+    out = cal.regrade(study, {}, client=None, judge_model="j")
+    assert out[0].items[0].recall is None and out[0].items[0].chrf == 60.0
+
+
+def test_compare_reports_saturation_on_both_sides():
+    """Saturation, not correlation, is what protocol 014 found limiting: a metric
+    pinned at its ceiling has no ordering for a correlation to find."""
+    before = [result("af", [item("a", 80.0, 1.0), item("b", 50.0, 1.0),
+                            item("c", 20.0, 0.5)])]
+    after = [result("af", [item("a", 80.0, 0.9), item("b", 50.0, 0.6),
+                           item("c", 20.0, 0.2)])]
+    c = correlate  # noqa: F841 -- keep the import honest
+    from llmlc.probe.calibrate import compare
+    d = compare(before, after)
+    assert d["n_paired"] == 3
+    assert d["before"]["saturated"] == 2 and d["after"]["saturated"] == 0
+    assert d["before"]["saturated_share"] == 0.667, "reported rounded, for reading"
+    assert d["after"]["spearman_vs_chrf"] == pytest.approx(1.0)
+
+
+def test_compare_only_uses_items_present_and_scored_on_both_sides():
+    before = [result("af", [item("a", 80.0, 1.0), item("b", 50.0, 1.0)])]
+    after = [result("af", [item("a", 80.0, 0.9), item("b", 50.0)])]
+    assert compare_n(before, after) == 1
+
+
+def compare_n(before, after):
+    from llmlc.probe.calibrate import compare
+    return compare(before, after)["n_paired"]

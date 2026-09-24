@@ -294,3 +294,101 @@ def correlate(results: list[CalibrationResult]) -> dict:
         "offset_by_band": {k: {"n": len(v), "mean": round(statistics.fmean(v), 3)}
                            for k, v in bands.items() if v},
     }
+
+
+def regrade(study: dict, specs: dict[str, dict], client: OpenAICompatClient,
+            judge_model: str, corpus: Corpus | None = None) -> list[CalibrationResult]:
+    """Re-judge a finished study's stored back-translations against new checklists.
+
+    This is what the corpus was built for (docs/01): *when the method changes,
+    re-grade offline instead of re-running every model.* Nothing is translated
+    again, so the comparison is paired at the item level -- identical model
+    output, identical back-translation, identical chrF++, identical judge -- and
+    the checklist is the only thing that differs.
+
+    Used by protocol 015 to test whether fact recall saturates because the facts
+    are easy or because the metric is close to binary by construction.
+    """
+    out: list[CalibrationResult] = []
+    for lang in study.get("languages", []):
+        spec_items = {i["id"]: i for i in specs.get(lang["tag"], {}).get("items", [])}
+        r = CalibrationResult(tag=lang["tag"], engine=lang["engine"],
+                              backtranslator=lang["backtranslator"],
+                              judge_model=judge_model, pivot=lang.get("pivot", "en"),
+                              qualified=lang.get("n_paired", 0) > 0 or bool(spec_items))
+        for old in lang.get("items", []):
+            ci = CalibrationItem(item_id=old["id"], source=old.get("source", ""),
+                                 reference="", translation=old.get("translation"),
+                                 back_translation=old.get("back_translation"),
+                                 chrf=old.get("chrf"), gate=old.get("gate"))
+            spec = spec_items.get(old["id"])
+            if not spec or not ci.back_translation:
+                # No new checklist, or the original run never got a reading. The
+                # chrF++ score still stands; recall is left absent.
+                r.items.append(ci)
+                continue
+            judgement = run_judge(client, judge_model, ci.back_translation, spec["facts"])
+            r.calls["judge"] += 1
+            if corpus is not None:
+                corpus.write(Record("judgement", judge_model, lang["tag"], old["id"],
+                                    "regrade", "", judgement.raw, judgement.error,
+                                    meta={"verdicts": [v.value for v in judgement.verdicts],
+                                          "facts": len(spec["facts"])}))
+            if judgement.ok:
+                ci.recall = judgement.recall
+            else:
+                ci.error = judgement.error
+            r.items.append(ci)
+        out.append(r)
+    return out
+
+
+def compare(before: list[CalibrationResult], after: list[CalibrationResult]) -> dict:
+    """Paired comparison of two gradings of the same items.
+
+    Reports saturation on each side, because that -- not the correlation -- is
+    what protocol 014 found limiting: a metric pinned at its ceiling has no
+    ordering for a correlation to find.
+    """
+    def index(rs):
+        return {i.item_id: i for r in rs for i in r.items}
+
+    a, b = index(before), index(after)
+    shared = [k for k in a if k in b
+              and a[k].recall is not None and b[k].recall is not None
+              and a[k].chrf is not None]
+
+    def summary(items, label):
+        rec = [i.recall for i in items]
+        chr_ = [i.chrf for i in items]
+        return {
+            "label": label, "n": len(items),
+            "saturated": sum(1 for v in rec if v == 1.0),
+            "saturated_share": round(sum(1 for v in rec if v == 1.0) / len(rec), 3) if rec else None,
+            "floored": sum(1 for v in rec if v == 0.0),
+            "mean_recall": round(statistics.fmean(rec), 3) if rec else None,
+            "spearman_vs_chrf": (lambda x: None if x is None else round(x, 3))(
+                spearman(chr_, rec)),
+        }
+
+    return {
+        "n_paired": len(shared),
+        "before": summary([a[k] for k in shared], "plain"),
+        "after": summary([b[k] for k in shared], "hard"),
+        "by_band": {
+            band: {
+                "n": len(sel),
+                "before_saturated": sum(1 for k in sel if a[k].recall == 1.0),
+                "after_saturated": sum(1 for k in sel if b[k].recall == 1.0),
+                "before_rho": (lambda x: None if x is None else round(x, 3))(
+                    spearman([a[k].chrf for k in sel], [a[k].recall for k in sel])),
+                "after_rho": (lambda x: None if x is None else round(x, 3))(
+                    spearman([b[k].chrf for k in sel], [b[k].recall for k in sel])),
+            }
+            for band, sel in (
+                ("chrf>=60", [k for k in shared if a[k].chrf >= 60]),
+                ("chrf 40-60", [k for k in shared if 40 <= a[k].chrf < 60]),
+                ("chrf<40", [k for k in shared if a[k].chrf < 40]),
+            ) if sel
+        },
+    }

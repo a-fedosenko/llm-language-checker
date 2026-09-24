@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Date** | 2026-09-23 |
-| **Status** | valid |
+| **Status** | valid, with **conclusion 2 revised** by [016](016-which-metric-is-wrong.md) — see the correction below |
 | **Triggered by** | S7. The whole method rests on fact recall being a usable proxy for translation quality, and that has been asserted since doc 01 and never measured |
 | **Artifacts** | `src/llmlc/probe/calibrate.py`, `scripts/build_calibration_specs.py`, raw responses in `data/calibration/` and the `generation` table |
 
@@ -112,6 +112,16 @@ So the moderate item-level correlation is not the metrics disagreeing. It is **f
 **Fact recall is script-blind and language-blind; chrF++ is neither.** That is not a defect in the proxy so much as a statement of what it measures — and the tool does not use recall alone. A tier is a function of `s_lang` (the deterministic gate) *and* `s_content` (recall), and the gate is precisely what catches wrong script and wrong language for free. The two halves of the score are covering each other's blind spots, which is what the design intended, now demonstrated rather than assumed.
 
 Restricting the correlation to items the gate passed moves ρ only from 0.484 to **0.502**, because saturation, not script failure, is what limits it.
+
+## Correction, added 2026-09-24
+
+**This protocol treated chrF++ as ground truth, and never justified doing so.** [Protocol 016](016-which-metric-is-wrong.md) adjudicated the disagreements with a blind third opinion and found that in the chrF++ 40–60 band, **90% of the items where recall said 1.00 are adequate translations**. chrF++ was penalising legitimate paraphrase against its single reference.
+
+So the framing below — "the proxy is low resolution", "`s_content` is a broken gradient" — is **wrong in the direction that matters**. Fact recall was reporting those translations as adequate because they are adequate. Adequacy is close to binary above a threshold, and `s_content` is an **adequacy floor** that works, not a gradient that failed.
+
+Conclusion 4 below is not merely unaffected but strengthened: 016 found an LLM adjudicator missed **15 of 15** real script mismatches while the deterministic gate caught all of them.
+
+The original conclusions are kept unedited below, as the convention requires.
 
 ## Conclusions
 

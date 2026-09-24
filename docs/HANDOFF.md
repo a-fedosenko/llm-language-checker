@@ -11,9 +11,9 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/01 - Initial discussion - stage 1.md` — prior art, methodology, output contract, dialect/macrolanguage logic
 - `docs/02 - Experiment - invented language control.md` — why self-reported language support cannot be trusted
 - `docs/03 - Architecture and development stages.md` — architecture, data model, staging, and the implementation log for S0–S6
-- `experiments/protocols/README.md` — fourteen experiment protocols; **014 matters most** (it measures the method itself), then 005, 011 and 012
+- `experiments/protocols/README.md` — sixteen experiment protocols; **016 matters most** (it revises 014 and vindicates the gate), then 014, 005 and 012
 
-**State:** S0–S7 complete; 258 tests passing. S7's result changes what can be claimed — read protocol 014 before quoting any tier threshold.
+**State:** S0–S7 complete; 262 tests passing. Read protocols 014 and **016** together before quoting any tier threshold — 016 revises 014's central conclusion.
 
 **Run it:**
 ```bash
@@ -52,16 +52,21 @@ Schema changes are Alembic's. A database made by `create_all()` has no version r
 
 ## Next step: S8 — README, methodology page, limitations
 
-S7 is done and it changed what the project may claim, so S8 is now the stage that matters: writing down honestly what the tool measures and what it does not.
+S7 plus its two follow-ups settled what the tool measures. S8 writes that down, and there is now a clean story to tell.
 
-**The finding S8 must not paper over.** Fact recall saturates. 317 of 378 calibration items scored exactly 1.00, and above chrF++ 60 *every* item did. Consequences, both real:
+**The method, in one table:**
 
-1. The proxy supports **language-level, five-tier** claims (Spearman 0.647) and nothing finer. Item-level resolution is not there.
-2. **`s_content` is doing far less work than the thresholds imply.** With 84% of items at 1.0, the `0.70 / 0.50 / 0.30` content cuts in `probe/score.py` are passed by nearly anything competent, so the tier is decided almost entirely by `s_lang` — the gate. Either give the content score resolution (more facts per item, or harder facts) or stop describing it as a gradient. **Settle this before any threshold is published.**
+| component | measures | shape |
+|---|---|---|
+| `s_lang` — deterministic gate | right language, right script, not degenerate | the discriminator |
+| `s_content` — fact recall | did the meaning survive | an adequacy floor, near-binary and correctly so |
+| chrF++ | surface proximity to one reference | back-translator qualification only |
 
-**The good news to write up:** the gate is load-bearing. 19 of the 22 worst metric disagreements are `wrong_script` or `wrong_language` — fact recall is script-blind, chrF++ is not, and the tier combines recall with the gate precisely so that a right-meaning/wrong-script answer is not scored as a success. `azb` is the case to quote: asked for Arabic-script South Azerbaijani, gpt-4o answered in Latin script, chrF++ 0.38, every fact preserved.
+**The one decision S8 must make:** `s_content`'s thresholds (0.70 / 0.50 / 0.30) distinguish almost nothing above the floor, because adequacy has no gradient to distinguish. Either collapse them to a single floor check, or document plainly that the tier is carried by `s_lang`. **Do not publish them as a gradient.**
 
-**Also open before S9:** the marker grammar axis still fires on nothing; marker coverage is 2 of 534 variant tags; and `data/calibration/study.json` is the artifact the landing page should publish.
+**The finding to lead the methodology page with.** Protocol 016 asked an LLM to verify a writing system, offering `wrong-script` explicitly as one of three answers. There were 15 real script mismatches; it flagged **zero**. The deterministic Unicode check caught all 15 — and that adjudicator's controls had behaved perfectly (100% on known-good, 5% on known-bad). This is the project's core design choice measured rather than asserted, and it is the most persuasive single result in the repository after the invented-language control in doc 02.
+
+**Also worth writing up:** chrF++ is not ground truth for usability. 36 of 40 mid-range disagreements were adequate translations that chrF++ marked down for paraphrase. Anyone building something similar will reach for chrF++ by default; this is the counterexample.
 
 **Open, carried forward in doc 03:**
 

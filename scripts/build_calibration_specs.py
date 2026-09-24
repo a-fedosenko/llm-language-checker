@@ -35,6 +35,10 @@ from llmlc.config import settings  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "calibration" / "specs.json"
 
+#: Two checklist styles. `plain` asks what the sentence says; `hard` asks for the
+#: details a merely adequate translation drops. Protocol 014 found `plain`
+#: saturates -- 84% of items scored a perfect recall -- so `hard` exists to test
+#: whether that is a property of the checklist or of the metric (protocol 015).
 EXTRACT_PROMPT = """Extract the checkable factual claims from this sentence.
 
 SENTENCE:
@@ -49,9 +53,34 @@ Rules:
 
 Reply with JSON only: {{"facts": ["...", "..."]}} and nothing else."""
 
+HARD_PROMPT = """Extract the factual claims from this sentence that a careless translation \
+would lose.
 
-def extract(client: OpenAICompatClient, model: str, sentence: str) -> list[str]:
-    c = client.complete(model, EXTRACT_PROMPT.format(sentence=sentence), max_tokens=400)
+SENTENCE:
+{sentence}
+
+Target the detail that survives only a faithful rendering:
+  - exact numbers, quantities, dates, times and units, with their precise values
+  - negation, and any claim about something NOT happening or NOT being the case
+  - modality and hedging: may, might, expected to, reportedly, approximately
+  - who did what to whom — agent and patient, not merely that an event occurred
+  - causation and sequence: because, after, despite, in order to
+  - named entities exactly as given, including titles and roles
+
+Rules:
+  - Each fact must be decidable from the sentence alone, with no outside knowledge.
+  - Each fact must be one simple English clause.
+  - A fact must be specific enough that a vague paraphrase of the sentence would FAIL it.
+  - Do not invent detail the sentence does not state.
+  - Between 4 and 8 facts.
+
+Reply with JSON only: {{"facts": ["...", "..."]}} and nothing else."""
+
+
+def extract(client: OpenAICompatClient, model: str, sentence: str,
+            profile: str = "plain") -> list[str]:
+    prompt = (HARD_PROMPT if profile == "hard" else EXTRACT_PROMPT).format(sentence=sentence)
+    c = client.complete(model, prompt, max_tokens=500)
     if not c.ok:
         return []
     raw = (c.text or "").strip()
@@ -91,6 +120,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--items", type=int, default=4, help="sentences per language")
     p.add_argument("--model", default=None, help="extraction model (not the model under test)")
     p.add_argument("--refresh", action="store_true", help="re-extract tags already built")
+    p.add_argument("--profile", choices=("plain", "hard"), default="plain",
+                   help="'hard' targets the detail a careless translation loses (protocol 015)")
+    p.add_argument("--out", default=None, help="output path; defaults by profile")
     a = p.parse_args(argv)
 
     if not settings.aggregator_base_url or not settings.aggregator_admin_api_key:
@@ -101,6 +133,11 @@ def main(argv: list[str] | None = None) -> int:
     controls = load_controls()
     wanted = ([t.strip() for t in a.tags.split(",") if t.strip()] if a.tags
               else sorted(t for t, e in controls.items() if e.get("kind") == "reference"))
+
+    global OUT
+    OUT = (pathlib.Path(a.out) if a.out else
+           (ROOT / "data" / "calibration" /
+            ("specs.json" if a.profile == "plain" else f"specs.{a.profile}.json")))
 
     existing: dict[str, dict] = {}
     if OUT.exists() and not a.refresh:
@@ -124,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
         for i, item in enumerate(entry["items"][: a.items]):
             # `reference` is the English side; `text` is the target language.
             source, reference = item["reference"], item["text"]
-            facts = extract(client, model, source)
+            facts = extract(client, model, source, a.profile)
             if len(facts) < 3:
                 print(f"  {tag} item {i}: extraction returned {len(facts)} facts, dropped",
                       file=sys.stderr)

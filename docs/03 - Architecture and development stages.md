@@ -810,3 +810,31 @@ That has a direct consequence for scoring. With 84% of items at 1.0, the `s_cont
 So the gate is load-bearing rather than a cost optimisation: it was introduced to make negatives free, and it also stops a script failure being scored as a success.
 
 **Two languages** (`kr-Arab`, `taq-Tfng`) had no qualified back-translator and contributed chrF++ only. Qualification was added to the calibration path before the run for exactly this reason — protocol 005 showed an unqualified reader fabricates rather than failing, which would have corrupted the recall side of the correlation the study exists to measure.
+
+## S7 revised — what the calibration actually showed (2026-09-24)
+
+The S7 write-up above concluded that fact recall is "low resolution" and that `s_content` behaves as a floor rather than a gradient. Two follow-up experiments say the first half of that was wrong and the second half was right for the wrong reason.
+
+**S7 treated chrF++ as ground truth without justifying it.** chrF++ is character n-gram overlap against a *single* human reference, so a correct translation that picks other words scores low. [Protocol 016](../experiments/protocols/016-which-metric-is-wrong.md) put a blind, language-qualified third opinion on the disagreements: in the chrF++ 40–60 band, **36 of 40 items where recall said 1.00 are adequate translations.** Recall was right; chrF++ was charging them for paraphrase.
+
+So the revised picture, and it is a simpler one:
+
+| component | what it measures | shape |
+|---|---|---|
+| `s_lang` — the deterministic gate | is this the requested language, in the requested script, not degenerate | the discriminator |
+| `s_content` — fact recall | did the meaning survive | an **adequacy floor**, near-binary by nature and correctly so |
+| chrF++ | surface proximity to one reference | right for back-translator qualification, wrong as an arbiter of usability |
+
+[Protocol 015](../experiments/protocols/015-harder-fact-checklists.md) tried to sharpen `s_content` with harder checklists and moved saturation by 1.6 points. That null is uninformative on its own — the checklists came out barely harder, which was recorded before the run — but it is consistent with 016: there is no gradient there to find, because adequacy does not have one.
+
+### The finding to carry into every later stage
+
+016 asked an LLM to verify the writing system, offering `wrong-script` explicitly as one of three answers. There were **15 real script mismatches in the sample. It flagged zero.** The deterministic Unicode check caught all 15.
+
+Its controls had behaved perfectly — 100% adequate on known-good items, 5% on known-bad — and it was still completely blind on that dimension. **Controls behaving is necessary and not sufficient.**
+
+This is the project's central design choice measured rather than argued: doc 01 put language and script identification on a local deterministic gate and used the LLM only for meaning, on the grounds that LID beats asking a model. 15 against 0. **The gate is not a cost optimisation and must not be replaced by a model call, however capable the model.**
+
+### Consequence for S8
+
+`s_content`'s three thresholds (0.70 / 0.50 / 0.30) distinguish very little above the floor, and now we know why — there is nothing there to distinguish. Whether they collapse to a single floor check is the open question S8 must settle before any threshold is published.
