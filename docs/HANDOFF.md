@@ -11,9 +11,9 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/01 - Initial discussion - stage 1.md` — prior art, methodology, output contract, dialect/macrolanguage logic
 - `docs/02 - Experiment - invented language control.md` — why self-reported language support cannot be trusted
 - `docs/03 - Architecture and development stages.md` — architecture, data model, staging, and the implementation log for S0–S6
-- `experiments/protocols/README.md` — sixteen experiment protocols; **016 matters most** (it revises 014 and vindicates the gate), then 014, 005 and 012
+- `experiments/protocols/README.md` — seventeen protocols; **016 and 017 matter most** (they revise 014 and show the tier scale does not measure five things), then 005 and 012
 
-**State:** S0–S7 complete; 262 tests passing. Read protocols 014 and **016** together before quoting any tier threshold — 016 revises 014's central conclusion.
+**State:** S0–S7 complete; 262 tests passing. **The tier scale is known to be broken** — read 014, 016 and 017 together before quoting any tier or threshold. Fixing the scale is the next task and blocks S8.
 
 **Run it:**
 ```bash
@@ -50,23 +50,23 @@ Schema changes are Alembic's. A database made by `create_all()` has no version r
 
 ---
 
-## Next step: S8 — README, methodology page, limitations
+## Next step: fix the tier scale, then S8
 
-S7 plus its two follow-ups settled what the tool measures. S8 writes that down, and there is now a clean story to tell.
+**S8 is blocked.** Documenting five tiers would document something that does not exist ([protocol 017](../experiments/protocols/017-are-the-tiers-measurable.md)): across 40 real results there are 34 `Strong`, zero `Usable`, and on simulation `Usable` ranks *below* `None`. The function that assigns tiers orders languages worse (ρ 0.436) than one of its own inputs (`s_content`, 0.664).
 
-**The method, in one table:**
+**What the three calibration protocols agree on**, and what a new scale should be built from:
 
-| component | measures | shape |
+| component | role | evidence |
 |---|---|---|
-| `s_lang` — deterministic gate | right language, right script, not degenerate | the discriminator |
-| `s_content` — fact recall | did the meaning survive | an adequacy floor, near-binary and correctly so |
-| chrF++ | surface proximity to one reference | back-translator qualification only |
+| the deterministic gate | **eligibility filter** — wrong script or language means unusable, full stop | 016: an LLM missed 15/15 script mismatches the gate caught |
+| fact recall (`s_content`) | **the quality measurement**, reported continuously | 017: ρ 0.664, best available; 016: right on 90% of disputed items |
+| tiers | a lossy routing convenience derived from the number, never replacing it | 017: every discretisation tested lost signal |
 
-**The one decision S8 must make:** `s_content`'s thresholds (0.70 / 0.50 / 0.30) distinguish almost nothing above the floor, because adequacy has no gradient to distinguish. Either collapse them to a single floor check, or document plainly that the tier is carried by `s_lang`. **Do not publish them as a gradient.**
+**Design constraints that fell out of the data:** any tier scale must be monotonic against quality (the current one is not); `s_lang`'s three thresholds cannot be distinguished below n=20 items and should collapse to one eligibility test; and buying resolution with more items is the wrong trade for a tool whose value is breadth.
 
-**The finding to lead the methodology page with.** Protocol 016 asked an LLM to verify a writing system, offering `wrong-script` explicitly as one of three answers. There were 15 real script mismatches; it flagged **zero**. The deterministic Unicode check caught all 15 — and that adjudicator's controls had behaved perfectly (100% on known-good, 5% on known-bad). This is the project's core design choice measured rather than asserted, and it is the most persuasive single result in the repository after the invented-language control in doc 02.
+Changing this bumps `method_version`, which makes every existing result stale — exactly what `llmlc status` and the staleness machinery were built for.
 
-**Also worth writing up:** chrF++ is not ground truth for usability. 36 of 40 mid-range disagreements were adequate translations that chrF++ marked down for paraphrase. Anyone building something similar will reach for chrF++ by default; this is the counterexample.
+**Then S8** documents a scale that survives contact with data, and leads with 016's script finding: it is the most persuasive result in the repository after the invented-language control in doc 02.
 
 **Open, carried forward in doc 03:**
 

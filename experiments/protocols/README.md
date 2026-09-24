@@ -30,6 +30,7 @@ changed as a result.
 | [014](014-fact-recall-vs-chrf.md) | 2026-09-23 | Does fact recall track chrF++? (100 languages) | ρ 0.647 by language; recall saturates at 1.0 for 84% of items. **Conclusion 2 revised by 016** |
 | [015](015-harder-fact-checklists.md) | 2026-09-24 | Does saturation go away with harder fact checklists? | No change (83.7% → 82.1%) — but the intervention was too weak to conclude anything, as recorded before the run |
 | [016](016-which-metric-is-wrong.md) | 2026-09-24 | When recall and chrF++ disagree, which is wrong? | chrF++, in the mid range: 90% of disagreements are adequate translations. And an LLM missed 15/15 script mismatches the deterministic gate caught |
+| [017](017-are-the-tiers-measurable.md) | 2026-09-24 | Is the five-tier scale measurable? | No — `Basic` never occurs, `Usable` is mis-ordered, and the tier function orders languages worse (0.436) than one of its own inputs (0.664) |
 
 ## Writing one
 

@@ -838,3 +838,42 @@ This is the project's central design choice measured rather than argued: doc 01 
 ### Consequence for S8
 
 `s_content`'s three thresholds (0.70 / 0.50 / 0.30) distinguish very little above the floor, and now we know why — there is nothing there to distinguish. Whether they collapse to a single floor check is the open question S8 must settle before any threshold is published.
+
+## The tier scale does not measure five things (2026-09-24)
+
+[Protocol 017](../experiments/protocols/017-are-the-tiers-measurable.md), re-analysis only, no model calls.
+
+Across all 40 results ever produced: **34 `Strong`, 4 `None`, 1 `Basic`, 1 `Token`, and zero `Usable`.** Simulated over the 100 calibration languages the spread is wider but no better ordered:
+
+| tier | n | mean chrF++ |
+|---|---|---|
+| Strong | 47 | 52.0 |
+| None | 34 | 34.5 |
+| Token | 16 | 32.0 |
+| Usable | 3 | **20.9** |
+| Basic | 0 | — |
+
+`Usable` ranks *below* `None` and `Token`. A tier beneath the tiers it outranks is not measuring anything, and `Basic` never occurs at all. The scale separates `Strong` from everything else: two outcomes wearing five labels.
+
+**The cause is the tier function, not the inputs.** Ordering languages against chrF++:
+
+| | ρ |
+|---|---|
+| `s_content` alone, continuous | **0.664** |
+| 2 outcomes | 0.459 |
+| **current 5 tiers** | **0.436** |
+| 3 outcomes | 0.398 |
+| `s_lang` alone | 0.370 |
+
+`tier_for()` orders languages *worse than one of its own inputs*. It hard-gates on `s_lang` and then bins `s_content` coarsely, and both steps discard signal — about a third of the ordering information present before the function runs. Fewer tiers do not help; 3 scored worse than 5.
+
+Two predictions were wrong and are worth recording. The gate was expected to be the better quality predictor; it is the worse one, by nearly half. And fewer buckets was expected to help; bucketing at all, on top of a hard gate, is the problem.
+
+`s_lang` also cannot earn its thresholds at the sample sizes we run: over *n* items it moves in steps of 1/*n*, so separating 0.95 from 0.90 needs **n ≥ 20**. At the ladder's 3 items, `0.95 / 0.90 / 0.80` is one threshold wearing three hats.
+
+### What this implies, for S8 to settle
+
+- **The gate filters; it does not grade.** Protocol 016 proved it irreplaceable for script and language — an LLM missed 15 of 15 — and 017 shows it is a poor quality signal. Wrong script means unusable, full stop; everything that clears it is graded on adequacy.
+- **Fact recall is the measurement, not the weak half.** Three protocols now agree: 015 (insensitive to how the checklist is cut), 016 (right about 90% of disputed items), 017 (best available quality signal).
+- **Publish the number.** Whatever tiers ship for TMS routing, `s_content` belongs in the output continuously, and any discretisation must at least be monotonic.
+- **Do not buy resolution with items.** n ≥ 20 is the wrong trade for a tool whose value is breadth.
