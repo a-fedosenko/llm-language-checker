@@ -16,11 +16,11 @@ client = TestClient(app)
 
 
 def row(tag, engine="m1", **kw):
-    base = dict(engine=engine, tag=tag, cls=f"{tag}|Latn", tier="Strong",
-                evidence="fact-recall", s_lang=1.0, s_content=0.9, ci_low=0.8,
+    base = dict(engine=engine, tag=tag, cls=f"{tag}|Latn", tier="Proficient",
+                evidence="fact-recall", s_lang=1.0, s_content=0.98, ci_low=0.95,
                 ci_high=1.0, borderline=False, reliability=1.0, refusals=0,
                 designator=tag, backtranslator="bt:a", judge="j",
-                method_version="1.0.0")
+                method_version="2.0.0")
     base.update(kw)
     return base
 
@@ -32,12 +32,14 @@ def seeded(tmp_path):
     with session() as s:
         for i in range(12):
             upsert_result(s, row(f"x{i:02d}"))
-        upsert_result(s, row("de", tier="Usable"))
-        upsert_result(s, row("de", engine="m2", tier="Basic"))
-        upsert_result(s, row("ug", tier="Strong", reliability=0.333, refusals=2,
+        upsert_result(s, row("de", tier="Assisted", s_content=0.8))
+        upsert_result(s, row("de", engine="m2", tier="Assisted", s_content=0.6))
+        upsert_result(s, row("ug", tier="Proficient", reliability=0.333, refusals=2,
                              items=[{"spec": "a", "gate": "pass"}]))
-        upsert_result(s, row("fr", tier="Usable", reliability=0.66, refusals=1))
-        upsert_result(s, row("nn", tier="None", reliability=0.0, refusals=3,
+        upsert_result(s, row("fr", tier="Assisted", s_content=0.7,
+                             reliability=0.66, refusals=1))
+        upsert_result(s, row("nn", tier="Unusable", s_lang=0.0, s_content=0.0,
+                             reliability=0.0, refusals=3,
                              evidence="deterministic-negative"))
         upsert_result(s, row("sw", resolves_to={"swh_Latn": 3}))
         upsert_result(s, row("kk", resolves_to={"kaz_Cyrl": 2, "kaz_Latn": 1}))
@@ -106,16 +108,16 @@ def test_availability_filters_in_sql_so_total_and_summary_agree():
 
 
 def test_the_ug_case_no_longer_reads_as_plain_light_review():
-    """The finding that prompted this: Strong at reliability 0.33 said "light review"
-    and nothing about refusing two requests in three."""
+    """The finding that prompted this: a top-tier result at reliability 0.33 said
+    "light review" and nothing about refusing two requests in three."""
     r = client.get("/results/m1/ug").json()
-    assert r["tier"] == "Strong", "capability is unchanged; it wrote the language"
+    assert r["tier"] == "Proficient", "capability is unchanged; it wrote the language"
     assert "fallback" in r["workflow"] and "2 refusal(s) of 3" in r["workflow"]
 
 
 def test_tier_is_not_capped_by_availability():
     """Capping would restate a refusal as an inability, which is a different claim."""
-    assert client.get("/results/m1/ug").json()["tier"] == "Strong"
+    assert client.get("/results/m1/ug").json()["tier"] == "Proficient"
 
 
 # -- resolution --------------------------------------------------------------

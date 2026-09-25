@@ -14,9 +14,14 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-#: Tiers that earn a designator in the mergeable file. Presence there reads as
-#: "we will send this locale to this engine".
-MERGEABLE_TIERS = {"Basic", "Usable", "Strong"}
+from llmlc.export.artifacts import MERGEABLE_FROM
+
+#: Tiers that earn a designator in the mergeable file, as the strings a stored
+#: row carries. Derived from `MERGEABLE_FROM` rather than restated: this file
+#: held its own hand-written copy of the set, which protocol 018's rename would
+#: have turned into a silent empty export -- every tier excluded, no error, a
+#: consuming system quietly told nothing is supported.
+MERGEABLE_TIERS = {t.value for t in MERGEABLE_FROM}
 
 
 @runtime_checkable

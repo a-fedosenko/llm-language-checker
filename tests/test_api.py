@@ -46,8 +46,8 @@ def test_results_endpoint_returns_a_summary():
 
 
 def test_results_filtering_by_tier():
-    body = client.get("/results", params={"tier": "Strong"}).json()
-    assert all(r["tier"] == "Strong" for r in body["items"])
+    body = client.get("/results", params={"tier": "Proficient"}).json()
+    assert all(r["tier"] == "Proficient" for r in body["items"])
 
 
 def test_unknown_result_404s():

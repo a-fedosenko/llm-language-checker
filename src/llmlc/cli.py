@@ -18,6 +18,7 @@ from llmlc.export.artifacts import METHOD_VERSION
 from llmlc.probe.corpus import Corpus
 from llmlc.probe.pipeline import check_language
 from llmlc.probe.scan import plan
+from llmlc.probe.score import ELIGIBLE_MIN_LANG
 from llmlc.probe.specs import load_specs
 from llmlc.scheme import load_scheme
 
@@ -92,10 +93,18 @@ def _report(result, a) -> None:
           f"{GREY}pivot{RESET} {result.pivot}   {GREY}bt{RESET} {result.backtranslator} "
           f"[{q.status.value}"
           f"{f' {q.kind} {q.score:.0f}' if q.status.value != 'no-control' else ''}]")
-    print(f"\n  {BOLD}{s.tier.value}{RESET}"
-          f"{'  (borderline)' if s.borderline else ''}   — {s.workflow}")
-    print(f"  s_lang {s.s_lang:.2f}   s_content {s.s_content:.2f}   "
-          f"90% CI [{s.ci[0]:.2f}, {s.ci[1]:.2f}]   evidence: {s.evidence.value}")
+    # The number leads and the tier follows it. The tier is derived from the
+    # number and loses signal doing so (protocol 018); printing it first invited
+    # exactly the reading -- tier as the measurement -- that the five-tier scale
+    # got away with for as long as it did.
+    print(f"\n  content {BOLD}{s.s_content:.2f}{RESET}"
+          f"   90% CI [{s.ci[0]:.2f}, {s.ci[1]:.2f}]"
+          f"{'  (borderline)' if s.borderline else ''}")
+    print(f"  {s.tier.value} — {s.workflow}")
+    print(f"  eligibility {s.s_lang:.2f} "
+          f"({'passes' if s.eligible else 'below'} the {ELIGIBLE_MIN_LANG:.2f} filter)"
+          f"{f', {s.voided} item(s) voided' if s.voided else ''}"
+          f"   evidence: {s.evidence.value}")
     if s.reliability < 1.0:
         print(f"  reliability {s.reliability:.2f}  ({s.refusals} refusal(s) of {s.n_items})")
     if result.resolves_to:

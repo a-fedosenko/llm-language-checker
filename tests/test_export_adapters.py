@@ -3,17 +3,24 @@ from llmlc.export.adapters import (CanonicalAdapter, MappedAdapter, build_suppor
                                    merge_support, removals)
 
 ROWS = [
-    {"tag": "cv", "engine": "openai-gpt-4o", "tier": "Strong", "designator": "Chuvash"},
-    {"tag": "de", "engine": "openai-gpt-4o", "tier": "Basic", "designator": "German"},
-    {"tag": "ee", "engine": "openai-gpt-4o", "tier": "None", "designator": "Éwé"},
+    {"tag": "cv", "engine": "openai-gpt-4o", "tier": "Proficient", "designator": "Chuvash"},
+    {"tag": "de", "engine": "openai-gpt-4o", "tier": "Assisted", "designator": "German"},
+    {"tag": "ee", "engine": "openai-gpt-4o", "tier": "Unusable", "designator": "Éwé"},
     {"tag": "ti", "engine": "openai-gpt-4o", "tier": "Token", "designator": "ትግርኛ"},
 ]
 
 
-def test_only_basic_and_above_earn_a_designator():
+def test_everything_that_cleared_the_filter_earns_a_designator():
     out = build_support(ROWS)
     assert out["cv"] and out["de"]
-    assert out["ee"] == {} and out["ti"] == {}, "measured-but-unsupported is an empty mapping"
+    assert out["ee"] == {}, "measured-but-unsupported is an empty mapping"
+
+
+def test_a_tier_from_an_older_method_never_earns_a_designator():
+    """`ti` above carries "Token", which was a supported tier under method 1.x and
+    is not a tier at all under 2.x. A stale row must fall out of the export rather
+    than be matched by whatever string happens to be in the column."""
+    assert build_support(ROWS)["ti"] == {}
 
 
 def test_engine_key_gets_the_mt_prefix():

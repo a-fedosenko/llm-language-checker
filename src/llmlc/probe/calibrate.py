@@ -38,6 +38,7 @@ from llmlc.probe import pivot as pivot_mod
 from llmlc.probe.chrf import chrf
 from llmlc.probe.corpus import Corpus, Record
 from llmlc.probe.gate import check as gate_check
+from llmlc.probe.pipeline import _accepted, _relatives
 from llmlc.probe.judge import judge as run_judge
 from llmlc.probe.score import Evidence
 from llmlc.scheme import Language, Scheme
@@ -220,8 +221,19 @@ def calibrate_language(
         # is scored rather than dropped: chrF++ near zero for text that is not
         # the language is a true statement about the translation, and dropping it
         # would quietly restrict the study to the cases that went well.
+        #
+        # `accept_lang` and `relatives` are not optional here, whatever the
+        # verdict is used for. Without them this call is a *different gate* from
+        # the one probe/pipeline.py runs: it convicts every macrolanguage that
+        # correctly resolves to one of its own members. Protocol 018 found the
+        # S7 study had scored Swahili, Malay, Albanian, Estonian, Uzbek,
+        # Mongolian and Nepali as 4-of-4 `wrong_language` for exactly this
+        # reason, and protocol 017 then drew a conclusion about the gate from
+        # numbers the gate never produced.
         gate = gate_check(gen.text, prompt=prompt, expect_lang=lang.iso639_3,
-                          expect_script=lang.script)
+                          expect_script=lang.script,
+                          relatives=_relatives(scheme, lang),
+                          accept_lang=_accepted(scheme, lang))
         ci.gate = gate.verdict.value
         ci.chrf = chrf(gen.text or "", item["reference"])
 

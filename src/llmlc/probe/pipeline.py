@@ -36,6 +36,16 @@ class ItemOutcome:
         return self.gate.passed
 
     @property
+    def lang_void(self) -> bool:
+        """The gate declined to rule rather than convicting.
+
+        `low_confidence` and `too_short` say the instrument could not see well
+        enough, not that the model failed. Scoring keeps them out of the
+        eligibility denominator instead of counting them as failures.
+        """
+        return not self.gate.passed and not self.gate.is_negative
+
+    @property
     def content(self) -> float | None:
         return self.judgement.recall if self.judgement and self.judgement.ok else None
 
@@ -148,6 +158,7 @@ def check_language(
 
     contents = [i.content for i in items if i.content is not None]
     lang_pass = [i.lang_ok for i in items]
+    voided = sum(1 for i in items if i.lang_void)
     contradictions = sum(i.judgement.contradictions for i in items
                          if i.judgement and i.judgement.ok)
 
@@ -171,7 +182,8 @@ def check_language(
     return CheckResult(
         tag=tag, engine=engine, language=lang, designator=des.value,
         score=score(lang_pass=lang_pass, content=[c for c in contents],
-                    evidence=evidence, contradictions=contradictions, notes=notes),
+                    evidence=evidence, voided=voided,
+                    contradictions=contradictions, notes=notes),
         items=items, backtranslator=backtranslator.id, judge_model=judge_model,
         pivot=pivot, qualification=qual, resolves_to=resolves,
     )

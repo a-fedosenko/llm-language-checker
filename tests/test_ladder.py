@@ -8,7 +8,7 @@ def _result(trials, designator):
     return LadderResult(
         tag="cv", engine="e", language=None, designator=designator,
         designator_kinds=("A",), trials=trials,
-        score=Score(Tier.STRONG, 1.0, 0.9, (0.8, 1.0), False, Evidence.FACT_RECALL, 3),
+        score=Score(Tier.PROFICIENT, 1.0, 0.98, (0.95, 1.0), False, Evidence.FACT_RECALL, 3),
         items=[], backtranslator="bt", judge_model="j", pivot="en",
         qualification=None, rungs_run=2)
 

@@ -202,12 +202,15 @@ def workflow_for(tier: str | None, reliability: float | None, refusals: int | No
     try:
         t = Tier(tier)
     except ValueError:
+        # A tier string from method 1.x -- "Strong", "Token" -- no longer names a
+        # value on this scale. Saying nothing is right: the row is stale, and
+        # `llmlc status` is where a reader is told so.
         return ""
     base = WORKFLOW[t]
     attempts = n_items or 0
     caveat = AVAILABILITY_CAVEAT[availability_for(
         reliability if reliability is not None else 1.0, attempts=attempts)]
-    if not caveat or t is Tier.NONE:
+    if not caveat or t is Tier.UNUSABLE:
         return base
     return f"{base} -- {caveat} ({refusals or 0} refusal(s) of {attempts})"
 

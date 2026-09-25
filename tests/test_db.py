@@ -16,7 +16,7 @@ def db(tmp_path):
 
 
 def row(**kw):
-    base = dict(engine="m", tag="cv", cls="chv|Cyrl", tier="Strong", evidence="fact-recall",
+    base = dict(engine="m", tag="cv", cls="chv|Cyrl", tier="Proficient", evidence="fact-recall",
                 s_lang=1.0, s_content=0.9, ci_low=0.8, ci_high=1.0, borderline=False,
                 designator="Chuvash", backtranslator="bt:a", judge="j",
                 method_version="1.0.0", tested_at=datetime.now(timezone.utc))
@@ -27,10 +27,10 @@ def row(**kw):
 def test_insert_then_update_same_identity():
     with session() as s:
         _, a = upsert_result(s, row())
-        _, b = upsert_result(s, row(tier="Usable"))
+        _, b = upsert_result(s, row(tier="Assisted"))
     assert (a, b) == ("inserted", "updated")
     with session() as s:
-        assert results_for(s)[0].tier == "Usable"
+        assert results_for(s)[0].tier == "Assisted"
 
 
 def test_a_different_backtranslator_is_a_different_result_not_an_update():
@@ -44,20 +44,20 @@ def test_a_different_backtranslator_is_a_different_result_not_an_update():
 
 def test_older_method_version_never_overwrites_newer():
     with session() as s:
-        upsert_result(s, row(method_version="1.1.0", tier="Strong"))
+        upsert_result(s, row(method_version="1.1.0", tier="Proficient"))
     with session() as s:
-        _, action = upsert_result(s, row(method_version="1.1.0", tier="Token",
+        _, action = upsert_result(s, row(method_version="1.1.0", tier="Unusable",
                                          tested_at=datetime.now(timezone.utc) - timedelta(days=1)))
     assert action == "kept", "a stale re-run must not clobber a fresher measurement"
     with session() as s:
-        assert results_for(s)[0].tier == "Strong"
+        assert results_for(s)[0].tier == "Proficient"
 
 
 def test_newer_timestamp_wins_at_the_same_version():
     with session() as s:
-        upsert_result(s, row(tier="Strong"))
+        upsert_result(s, row(tier="Proficient"))
     with session() as s:
-        _, action = upsert_result(s, row(tier="Token",
+        _, action = upsert_result(s, row(tier="Unusable",
                                          tested_at=datetime.now(timezone.utc) + timedelta(hours=1)))
     assert action == "updated"
 
@@ -114,7 +114,7 @@ def test_naive_timestamps_from_sqlite_do_not_break_the_merge_rule():
     with session() as s:
         upsert_result(s, row(tested_at=datetime.now()))          # naive
     with session() as s:
-        _, action = upsert_result(s, row(tier="Usable",
+        _, action = upsert_result(s, row(tier="Assisted",
                                          tested_at=datetime.now(timezone.utc)))  # aware
     assert action in {"updated", "kept"}
 
@@ -198,10 +198,10 @@ def test_existing_duplicates_are_folded_into_one_row():
     with session() as s:
         assert len([r for r in results_for(s) if r.tag == "kk-Latn"]) == 2
         upsert_result(s, row(tag="kk-Latn", backtranslator="remote:bt",
-                             evidence="fact-recall", tier="Strong", tested_at=now))
+                             evidence="fact-recall", tier="Proficient", tested_at=now))
     with session() as s:
         rows = [r for r in results_for(s) if r.tag == "kk-Latn"]
-    assert len(rows) == 1 and rows[0].tier == "Strong"
+    assert len(rows) == 1 and rows[0].tier == "Proficient"
 
 
 def test_a_stale_rerun_still_cannot_clobber_a_fresher_row():
@@ -212,9 +212,9 @@ def test_a_stale_rerun_still_cannot_clobber_a_fresher_row():
     now = datetime.now(timezone.utc)
     with session() as s:
         upsert_result(s, row(tag="kk-Latn", backtranslator="remote:bt",
-                             tier="Strong", tested_at=now))
+                             tier="Proficient", tested_at=now))
         _, status = upsert_result(s, row(tag="kk-Latn", backtranslator=NO_INSTRUMENT,
                                          tier="None", tested_at=now - timedelta(days=1)))
     assert status == "kept"
     with session() as s:
-        assert [r.tier for r in results_for(s) if r.tag == "kk-Latn"] == ["Strong"]
+        assert [r.tier for r in results_for(s) if r.tag == "kk-Latn"] == ["Proficient"]

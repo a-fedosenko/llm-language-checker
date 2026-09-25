@@ -121,7 +121,7 @@ def test_two_pivots_produce_two_results_rather_than_overwriting_one(tmp_path):
     reset_for_tests(f"sqlite+pysqlite:///{tmp_path/'t.db'}")
 
     def row(**kw):
-        base = dict(engine="m", tag="en", cls="eng|Latn", tier="None",
+        base = dict(engine="m", tag="en", cls="eng|Latn", tier="Unusable",
                     evidence="unverified", s_lang=1.0, s_content=0.0, ci_low=0.0,
                     ci_high=0.0, borderline=False, designator="English",
                     backtranslator="remote:bt", judge="j", pivot="en",
@@ -132,10 +132,10 @@ def test_two_pivots_produce_two_results_rather_than_overwriting_one(tmp_path):
     with session() as s:
         upsert_result(s, row())
         upsert_result(s, row(backtranslator="remote:bt@de", pivot="de",
-                             tier="Strong", evidence="fact-recall", s_content=1.0))
+                             tier="Proficient", evidence="fact-recall", s_content=1.0))
     with session() as s:
         rows = {r.pivot: r.tier for r in results_for(s)}
-    assert rows == {"en": "None", "de": "Strong"}
+    assert rows == {"en": "Unusable", "de": "Proficient"}
 
 
 # -- the panel ---------------------------------------------------------------

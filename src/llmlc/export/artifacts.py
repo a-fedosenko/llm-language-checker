@@ -15,11 +15,22 @@ from llmlc import __version__
 from llmlc.probe.pipeline import CheckResult
 from llmlc.probe.score import Tier
 
-METHOD_VERSION = "1.0.0"
+#: Bumped to 2.0.0 by protocol 018, which replaced the five-tier scale with an
+#: eligibility filter plus a continuous adequacy score. Major, not minor: the
+#: tier vocabulary changed outright, so a 1.x row is not a worse measurement of
+#: the same thing but a measurement of something else. `llmlc status` reports
+#: every 1.x row as stale, and repo.upsert_result will not let one overwrite a
+#: 2.x row.
+METHOD_VERSION = "2.0.0"
 
 #: Tiers that earn a designator in the mergeable file. Presence there reads as
 #: "we will send this locale to this engine".
-MERGEABLE_FROM = {Tier.BASIC, Tier.USABLE, Tier.STRONG}
+#:
+#: Which is to say: everything that cleared the eligibility filter. The line the
+#: file draws is now exactly the line the filter draws, rather than a third
+#: threshold of its own -- a locale is either one this engine can be sent, behind
+#: whatever review its tier calls for, or one it cannot.
+MERGEABLE_FROM = {Tier.ASSISTED, Tier.PROFICIENT}
 
 
 def support_entry(result: CheckResult) -> dict:

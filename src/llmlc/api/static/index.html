@@ -6,14 +6,14 @@
   :root {
     --bg: #fbfbfa; --fg: #1a1a18; --muted: #6b6b63; --line: #e3e3dd;
     --card: #fff; --accent: #2c5f4a;
-    --strong: #2c5f4a; --usable: #4a7c59; --basic: #b8860b; --token: #a0522d; --none: #8b3a3a;
+    --proficient: #2c5f4a; --assisted: #b8860b; --unusable: #8b3a3a;
     --warn: #b8860b; --bad: #8b3a3a; --ok: #4a7c59;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme=light]) {
       --bg: #16161a; --fg: #e8e8e3; --muted: #9a9a92; --line: #2e2e34;
       --card: #1e1e23; --accent: #7fb69a;
-      --strong: #7fb69a; --usable: #8fbf7f; --basic: #d4a94a; --token: #d08a5a; --none: #d47b7b;
+      --proficient: #7fb69a; --assisted: #d4a94a; --unusable: #d47b7b;
       --warn: #d4a94a; --bad: #d47b7b; --ok: #8fbf7f;
     }
   }
@@ -60,8 +60,8 @@
   tr.detail td { background: color-mix(in oklab, var(--accent) 4%, transparent); }
   .tag { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 16.2px; }
   .tier { font-weight: 600; white-space: nowrap; }
-  .Strong { color: var(--strong); } .Usable { color: var(--usable); }
-  .Basic { color: var(--basic); } .Token { color: var(--token); } .None { color: var(--none); }
+  .Proficient { color: var(--proficient); } .Assisted { color: var(--assisted); }
+  .Unusable { color: var(--unusable); }
   .num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
   .ev { font-size: 15px; color: var(--muted); }
   .flag { display: inline-block; font-size: 13.8px; padding: 1px 6px; border-radius: 3px;
@@ -131,6 +131,13 @@
     instrument, not a verdict on the model. <strong>Tier is capability; availability is willingness</strong>
     — a model can write a language well and still refuse most requests for it. Results are comparable
     only within the same back-translator, judge and method version.
+    <br><br>
+    <strong>The content score is the measurement; the tier is shorthand for it.</strong> A deterministic
+    check decides whether the model wrote the requested language and script at all — wrong script or
+    wrong language means unusable, full stop, and that check is never handed to a language model, which
+    missed 15 of 15 script mismatches it caught. Everything that clears it is graded by how much of the
+    required content survived a round trip, and the three tiers are a lossy view of that one number,
+    kept only because a TMS has to route on something.
   </div>
 
   <nav role="tablist">
@@ -378,11 +385,11 @@ const HELP = {
   'language': ['Language',
     'Name from the loaded catalogue (ISO 639-3 plus SIL langtags). Looked up rather than stored on the result, so it cannot drift from the catalogue.'],
   'tier': ['Tier',
-    'Graded capability: None, Token, Basic, Usable, Strong — from the share of items in the right language and the content score. It says what the model can write, not how often it will.'],
+    'A routing shorthand <em>derived</em> from the content score, not a measurement in its own right — read the number first. <code>Unusable</code>: the model did not write the requested language or script, so nothing else about it matters. <code>Assisted</code>: it did, but facts were lost on the way — MT-assist behind a mandatory human pass. <code>Proficient</code>: essentially everything survived — light review. Three values rather than five because a five-value scale was measured and did not exist (protocol 017): one of its tiers was never assigned in 40 results and another ranked below the bottom.'],
   'content': ['Content score',
-    'Mean fact recall. The model writes to a content spec, the text is translated back to the pivot language, and a judge checks which required facts survived the round trip.'],
+    'Mean fact recall over the items that cleared the gate, and <em>the</em> measurement this tool makes. The model writes to a content spec, the text is translated back to the pivot language, and a judge checks which required facts survived the round trip. It reads as an adequacy floor rather than a quality gradient — above a threshold, adequacy is close to binary (protocol 016) — so compare the number, and treat the tier as a lossy view of it.'],
   'ci': ['90% confidence interval',
-    'Bootstrap interval over the per-item content scores. Samples are small, so it is wide. A result whose interval spans a tier boundary is flagged <code>borderline</code> rather than rounded to one side.'],
+    'Bootstrap interval over the per-item content scores. Samples are small, so it is wide. A result whose interval spans the 0.95 cut between <code>Assisted</code> and <code>Proficient</code> is flagged <code>borderline</code> rather than rounded to one side.'],
   'availability': ['Availability',
     'How often the model was willing to answer at all: reliable ≥ 0.90, intermittent ≥ 0.60, unreliable above 0, refused at 0. A separate axis from tier — a model can write a language well and still decline most requests for it.'],
   'evidence': ['Evidence class',
@@ -514,7 +521,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') hideTip(); }
 window.addEventListener('scroll', hideTip, true);
 
 const PAGE = 100;
-const TIERS = ['Strong', 'Usable', 'Basic', 'Token', 'None'];
+const TIERS = ['Proficient', 'Assisted', 'Unusable'];
 const AVAIL_CLASS = { reliable: 'ok', intermittent: 'warn', unreliable: 'bad', refused: 'bad' };
 let state = { offset: 0, total: 0, open: null, trigger: null, poll: null };
 
@@ -661,8 +668,9 @@ function detailHtml(r) {
   return `
     <dl class="detail-grid">
       <dt>workflow</dt><dd>${esc(r.workflow || '')}</dd>
-      <dt>scores</dt><dd>s_lang ${num(r.s_lang)} · s_content ${num(r.s_content)} ·
-        reliability ${r.reliability == null ? '—' : num(r.reliability)}
+      <dt>scores</dt><dd>eligibility ${num(r.s_lang)}
+        <span class="ev">${r.s_lang >= 0.5 ? 'passes the 0.50 filter' : 'below the 0.50 filter'}</span>
+        · content ${num(r.s_content)} · reliability ${r.reliability == null ? '—' : num(r.reliability)}
         (${r.refusals || 0} refusal(s))</dd>
       <dt>instrument</dt><dd>back-translator ${esc(r.backtranslator)}
         ${q.status ? `<span class="flag">${esc(q.status)}${q.kind ? ' ' + esc(q.kind) : ''}${
