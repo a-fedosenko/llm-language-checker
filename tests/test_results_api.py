@@ -167,3 +167,20 @@ def test_artifact_download_refuses_anything_but_the_two_artifacts():
 
 def test_engines_endpoint_reports_what_has_been_measured():
     assert client.get("/engines").json()["measured"] == ["m1", "m2"]
+
+
+# -- staleness is stated, not left to be inferred -----------------------------
+
+def test_a_row_from_an_older_method_is_marked_stale():
+    """Protocol 018 changed the scale, so a 1.x tier string names nothing here:
+    it renders with no colour and no workflow sentence. Unlabelled, that silence
+    reads as "nothing to say about this language" rather than "different scale"."""
+    with session() as s:
+        upsert_result(s, row("old", tier="Strong", method_version="1.0.0"))
+    r = client.get("/results/m1/old").json()
+    assert r["stale"] is True
+    assert r["workflow"] == "", "an unparseable tier must not be given a workflow"
+
+
+def test_a_current_row_is_not_marked_stale():
+    assert client.get("/results/m1/de").json()["stale"] is False

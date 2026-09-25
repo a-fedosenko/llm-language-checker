@@ -165,6 +165,14 @@ def _db_summary(s, clauses) -> dict:
     return out
 
 
+def _is_stale(method_version: str | None) -> bool:
+    from llmlc.db.repo import _version_key
+    from llmlc.export.artifacts import METHOD_VERSION
+    if not method_version:
+        return True
+    return _version_key(method_version) < _version_key(METHOD_VERSION)
+
+
 def _serialise(r) -> dict:
     return {
         "tag": r.tag, "engine": r.engine, "tier": r.tier, "evidence": r.evidence,
@@ -173,6 +181,12 @@ def _serialise(r) -> dict:
         "availability": _availability(r.reliability), "refusals": r.refusals,
         "workflow": workflow_for(r.tier, r.reliability, r.refusals,
                                  len(r.items or []) + (r.refusals or 0)),
+        # Stated rather than left for the reader to infer from a version string.
+        # A row measured under an older method carries a tier that no longer
+        # names anything -- it renders with no colour and no workflow sentence,
+        # and silence there reads as "we have nothing to say about this
+        # language" rather than "this was measured on a different scale".
+        "stale": _is_stale(r.method_version),
         "designator": {"winner": r.designator, **(r.designator_detail or {})},
         "provenance": r.provenance, "variant_evidence": r.variant_evidence,
         "inherited_from": r.inherited_from, "resolves_to": r.resolves_to,
@@ -234,6 +248,7 @@ def _from_files(root: pathlib.Path | None = None) -> list[dict]:
                 row["availability"] = _availability(row.get("reliability"))
                 row["workflow"] = workflow_for(row.get("tier"), row.get("reliability"),
                                                row.get("refusals"), row.get("n_items"))
+                row["stale"] = _is_stale(row.get("method_version"))
                 latest[(row.get("engine", ""), row.get("tag", ""),
                         row.get("method_version", ""))] = row
     return list(latest.values())
