@@ -11,7 +11,7 @@ Vendor language lists are marketing. "Supports 100+ languages" has no definition
 This is **not** a linguistic authority and **not** a benchmark leaderboard. It is an empirical probe with known limits:
 
 - It measures **generation adequacy in a target language** — not chat quality, not instruction-following in that language, not cultural appropriateness. Those dissociate.
-- Sample sizes are small. Results carry confidence intervals, and a result whose interval straddles a tier boundary is reported as `borderline`, never rounded.
+- Sample sizes are small. Results carry confidence intervals, and a result whose interval straddles the tier boundary is reported as `borderline`, never rounded.
 - For languages with no aligned reference text, quality cannot be assessed at all. Those are reported `unverified` — which is an honest answer, not a failure.
 - Results are only comparable within the same back-translator, judge, and method version. All three are recorded on every result.
 - The **pivot language** — the language everything is back-translated into for judging — cannot be graded against itself, so it is measured through a fallback pivot and its results carry that pivot in the instrument id.
@@ -106,9 +106,9 @@ Briefly — the full method, its rationale, and the experiments behind it are in
 
 1. **Content-controlled generation.** The model is given a *semantic specification* in a pivot language and asked to write in the target language, choosing its own words. Not a sentence to translate (which rewards copying and punishes paraphrase) and not free writing (which lets the model fall back on memorised text).
 2. **Designator selection.** An LLM has no language-code interface — whatever string you pass is just tokens in a prompt. Several candidate designators are tried and the best-performing one is kept, so a negative verdict means "under our best designator," never "under one arbitrary string."
-3. **A local deterministic gate.** Refusal, copying, wrong script, wrong language (GlotLID), confusion with a nearest high-resource relative, degenerate repetition, memorised boilerplate. Free, local, and it resolves most negatives before any paid call.
-4. **Fact-recall scoring.** Surviving output is back-translated by a fixed, independent back-translator; a blind judge then checks which of the specified facts survived. Grading happens entirely in the pivot language, so **the judge never needs to know the target language.**
-5. **Graded verdict.** `None / Token / Basic / Usable / Strong`, with a confidence interval, an evidence class, and the full configuration that produced it.
+3. **A local deterministic eligibility filter.** Refusal, copying, wrong script, wrong language (GlotLID), confusion with a nearest high-resource relative, degenerate repetition, memorised boilerplate. Free, local, and it resolves most negatives before any paid call. It decides *membership* and then stops: a model that does not write the requested language or script is unusable for it, full stop, and nothing else about it is measured. This job is never handed to a language model — asked to verify a writing system and given the category by name, one flagged 0 of 15 real mismatches that this check caught.
+4. **Fact-recall scoring.** Surviving output is back-translated by a fixed, independent back-translator; a blind judge then checks which of the specified facts survived. Grading happens entirely in the pivot language, so **the judge never needs to know the target language.** This number is the measurement, and it is published continuously.
+5. **A routing tier, derived from the number.** `Unusable / Assisted / Proficient` — do not offer, MT-assist behind a mandatory human pass, or light review. Three values because a five-value scale was built, measured, and found not to exist: one of its tiers was never assigned in 40 results and another ranked below the bottom. The tier is a lossy convenience for a TMS that has to route on something; the score is the result. Each carries a confidence interval, an evidence class, and the full configuration that produced it.
 
 The back-translator is validated per language against human reference text before it is trusted, so a failure of the instrument is never reported as a failure of the model.
 

@@ -877,3 +877,75 @@ Two predictions were wrong and are worth recording. The gate was expected to be 
 - **Fact recall is the measurement, not the weak half.** Three protocols now agree: 015 (insensitive to how the checklist is cut), 016 (right about 90% of disputed items), 017 (best available quality signal).
 - **Publish the number.** Whatever tiers ship for TMS routing, `s_content` belongs in the output continuously, and any discretisation must at least be monotonic.
 - **Do not buy resolution with items.** n ≥ 20 is the wrong trade for a tool whose value is breadth.
+
+## S7 closed: the scale rebuilt, and a bug that had been answering for the gate (2026-09-25)
+
+[Protocol 018](../experiments/protocols/018-eligibility-and-adequacy.md), re-analysis only, no model calls. It built the scale 017 named, measured it, and found that part of what 017 measured was not real.
+
+### The bug first, because it changes how the rest reads
+
+The first table of ineligible languages — those the gate said were not in the requested language at all — was led by **Swahili at mean chrF++ 79.8, Malay at 67.1, Tagalog at 60.7**, each with four of four items marked `wrong_language`. Nothing scores chrF++ 80 against the Swahili reference by writing something other than Swahili.
+
+`probe/calibrate.py` called the gate with `expect_lang` and `expect_script` and nothing else. `probe/pipeline.py` — the production path — also passes `accept_lang` and `relatives`. **Without `accept_lang`, a macrolanguage that correctly resolves to one of its own members is convicted of `wrong_language`.** Asking for Swahili (`swa`) and receiving Coastal Swahili (`swh`) is the macrolanguage resolving to a member, which is the answer; `pipeline._accepted` exists to say so. Swahili, Malay, Albanian, Estonian, Uzbek, Mongolian and Nepali are all macrolanguages in the shipped scheme, and all of them were scored as total failures.
+
+So the `gate` column in the S7 study was produced by an instrument that exists nowhere else in the codebase. `scripts/regate.py` recomputes it from the committed translations and the local GlotLID model — free, deterministic. **68 of 385 verdicts change**, and `s_lang` correlates with mean chrF++ at **0.524, not the 0.370** protocol 017 reported. That figure is withdrawn.
+
+017's conclusions survive, which is the part worth being precise about. On corrected verdicts the five-tier assignment still scores 0.595 against `s_content`'s 0.686, still non-monotonic, `Usable` still below `None`, `Basic` still empty. The direction was right; the size of the gap was not.
+
+**The general lesson is convention 12's, one level up.** An analysis harness that re-implements a production call will drift from it, and the drift arrives looking like a finding. The gate call is now shared rather than restated, and the scale has a test that runs it over the calibration study instead of over invented numbers.
+
+### The scale
+
+```
+eligibility   s_lang >= 0.50 over the items the gate was willing to rule on
+              -> below it: Unusable, and nothing else is measured
+adequacy      s_content, mean fact recall over the items that cleared the
+              filter. Published as a number. This is the measurement.
+tier          Unusable | Assisted (< 0.95) | Proficient (>= 0.95)
+```
+
+Measured over the 98 calibration languages:
+
+| tier | n | mean chrF++ | workflow |
+|---|---|---|---|
+| Unusable | 19 | 29.0 | do not offer |
+| Assisted | 27 | 31.4 | MT-assist only, mandatory human pass |
+| Proficient | 52 | 53.6 | light review |
+
+**Monotonic**, ρ 0.647 against the continuous score's 0.686 — a loss of 0.04 to discretisation, where the old scale lost about a third of its inputs' ordering.
+
+Three decisions, each with the evidence that forced it:
+
+- **One eligibility threshold, not three.** 017's arithmetic: below n = 20 items the three cannot be told apart. 0.5 is chosen not because the ordering prefers it — 0.5, 0.75 and 0.95 all order monotonically within 0.03 of ρ — but because all three capture the same 23 wrong-script items and 0.5 rejects 74 items to do it where 0.95 rejects 139. Rejecting 65 more to catch nothing more is a filter that has started guessing.
+- **The adequacy cut at 0.95, at the top of the range.** This is protocol 016 arriving as a design constraint. Fact recall is an adequacy *floor*, not a gradient; a floor has one edge and the edge is "essentially every fact survived". Cuts at 0.50, 0.70 and 0.85 were all tested and all produce a non-monotonic scale, because cutting a floor in the middle splits off a band of 2 to 9 languages that is not a quality band.
+- **Three new names.** `Unusable` / `Assisted` / `Proficient`. `Strong` and `None` could have survived a rename, and deliberately did not: a reused label with a changed meaning lets a stale row read as comparable. A 1.x tier string now fails to parse, which is correct.
+
+### What justifies the filter, and it is not chrF++
+
+The ineligible set averages chrF++ 29.0 against the lowest graded band's 31.4 — ordered correctly, by 2.4 points on 19 languages. Too thin to lean on, and beside the point. The filter's justification is the deterministic script audit, run over all 378 items with no model and no reference:
+
+| | wrong script | items | |
+|---|---|---|---|
+| eligible | 4 | 304 | **1%** |
+| ineligible | 23 | 74 | **31%** |
+
+A model that writes fluent Indonesian when asked for Acehnese is unusable for Acehnese whatever its surface overlap with the reference. That is a correctness requirement, not a point on a quality scale, and it is why the filter and the grade are two different things rather than two terms of one formula.
+
+### Also fixed, also found by reading the list
+
+- **A voided verdict leaves the eligibility denominator.** `probe/gate.py` said of a low-confidence LID call that it is *"too weak to count against the model"*, while the arithmetic counted it as a failure anyway. Now it does not. Affects one language in 98, and makes the code match the comment.
+- **`export/adapters.py` held a second, hand-written copy of the mergeable tier set** — `{"Basic", "Usable", "Strong"}`. The rename would have turned it into a silent empty export: every tier excluded, no error, a consuming system quietly told nothing is supported. It derives from `export/artifacts.py` now.
+
+### Three instrument defects recorded, not fixed
+
+Each would produce a false `Unusable`, which matters more than it used to: the filter is no longer one term among several.
+
+- **`tl` — Tagalog convicted for writing Filipino.** chrF++ 60.7, GlotLID calling it `fil_Latn` at 0.99. Filipino is the standardised register of Tagalog, but they are separate ISO codes with no macrolanguage relation, so `accept_lang` does not reach it. Needs an explicit acceptance pair, and the scheme may hold others.
+- **Chinese is unmeasurable as shipped.** Two independent defects at once: `lid.detect_script` maps every CJK ideograph to `Hani` while the scheme expects `Hans`/`Hant`, so every item is `wrong_script`; and `MIN_CHARS = 25` convicts a correct Chinese sentence as `too_short`. Behind the script bug sits a real finding the tool cannot currently report — asked for Cantonese, the model returned Mandarin at LID 0.91. Simplified versus traditional is a distinction the tool *should* catch and `detect_script` cannot see at all, so this is a protocol, not a patch.
+- **`mag` → `bho`.** Magahi answered in Bhojpuri. The conviction is right, the label is not: `wrong_language` where `relative_substitution` is the truth, because the two are neighbours in fact but not macrolanguage siblings in the scheme.
+
+### Consequences
+
+`METHOD_VERSION` 1.0.0 → 2.0.0, and all 11 stored results are stale. That is the staleness machinery doing the job it was built for.
+
+**S8 is unblocked.** It documents a scale that has been measured rather than asserted, and should lead with 016's script finding — 15 of 15 against 0 of 15 — which is the most persuasive result in the repository after the invented-language control in doc 02.

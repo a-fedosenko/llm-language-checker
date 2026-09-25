@@ -30,7 +30,8 @@ changed as a result.
 | [014](014-fact-recall-vs-chrf.md) | 2026-09-23 | Does fact recall track chrF++? (100 languages) | ρ 0.647 by language; recall saturates at 1.0 for 84% of items. **Conclusion 2 revised by 016** |
 | [015](015-harder-fact-checklists.md) | 2026-09-24 | Does saturation go away with harder fact checklists? | No change (83.7% → 82.1%) — but the intervention was too weak to conclude anything, as recorded before the run |
 | [016](016-which-metric-is-wrong.md) | 2026-09-24 | When recall and chrF++ disagree, which is wrong? | chrF++, in the mid range: 90% of disagreements are adequate translations. And an LLM missed 15/15 script mismatches the deterministic gate caught |
-| [017](017-are-the-tiers-measurable.md) | 2026-09-24 | Is the five-tier scale measurable? | No — `Basic` never occurs, `Usable` is mis-ordered, and the tier function orders languages worse (0.436) than one of its own inputs (0.664) |
+| [017](017-are-the-tiers-measurable.md) | 2026-09-24 | Is the five-tier scale measurable? | No — `Basic` never occurs, `Usable` is mis-ordered, and the tier function orders languages worse (0.436) than one of its own inputs (0.664). **H2's correlation withdrawn by 018** |
+| [018](018-eligibility-and-adequacy.md) | 2026-09-25 | Does an eligibility filter plus a published adequacy score replace it? | Yes — monotonic, ρ 0.647 against the number's 0.686. And the study's gate verdicts were wrong: the calibration harness convicted every macrolanguage |
 
 ## Writing one
 
@@ -40,4 +41,11 @@ that mattered most, and in both cases the prediction was written down first.
 
 Record the inconvenient results. Protocol 002 exists because a conclusion in 001
 had to be withdrawn; 005 exists because a documented claim turned out to be
-backwards. Those are the entries a reader should be able to find.
+backwards; 018 withdrew a correlation from 017 after finding that the analysis
+harness had re-implemented a production call and got it wrong. Those are the
+entries a reader should be able to find.
+
+Read the raw evidence before believing a number. 018's first table had Swahili
+at chrF++ 79.8 in the "did not write Swahili" bucket, which is not a subtle
+signal — but it is only visible to someone who looked at the list rather than the
+correlation.

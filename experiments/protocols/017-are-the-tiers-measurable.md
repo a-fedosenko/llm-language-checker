@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Date** | 2026-09-24 |
-| **Status** | valid — three of the four hypotheses were wrong |
+| **Status** | valid, with **the H2 correlation withdrawn** by [018](018-eligibility-and-adequacy.md) — see the correction below. Conclusions unchanged |
 | **Triggered by** | Across all 40 results ever produced: 34 `Strong`, 4 `None`, 1 `Basic`, 1 `Token`, and **zero `Usable`**. The tier is the tool's headline output, and it appears to have two outcomes rather than five |
 | **Artifacts** | re-analysis only — `data/results/evidence.*.jsonl` and `data/calibration/study.json`. No model calls |
 
@@ -56,7 +56,7 @@ I predicted the gate would be the better predictor of quality. It is not, by a w
 | signal | Spearman vs mean chrF++ |
 |---|---|
 | `s_content` (fact recall) | **0.664** |
-| `s_lang` (gate pass rate) | 0.370 |
+| `s_lang` (gate pass rate) | 0.370 — **withdrawn, see the correction below; the corrected figure is 0.524** |
 
 Fact recall orders languages by quality nearly twice as well as the gate does. Taken with protocol 016 — where recall was right about 90% of the disputed items — the picture is consistent: **recall is a good measurement that we have been treating as the weak half of the score.**
 
@@ -80,10 +80,32 @@ Note also that fewer tiers did not help: 3 outcomes (0.398) scored *worse* than 
 
 `s_lang` over *n* items takes values in steps of 1/*n*. Separating 0.95 from 0.90 needs steps below 0.05, so **n ≥ 20 items per language** — six to seven times the current cost. At the ladder's 3 items the three thresholds 0.95 / 0.90 / 0.80 are one threshold wearing three hats.
 
+## Correction, added 2026-09-25
+
+**The `s_lang` figures in this protocol were computed from gate verdicts the gate
+never produced.** [Protocol 018](018-eligibility-and-adequacy.md) found that
+`probe/calibrate.py` calls `gate_check` without `accept_lang` or `relatives`,
+while `probe/pipeline.py` passes both. Without `accept_lang`, a macrolanguage
+that correctly resolves to one of its own members is convicted of
+`wrong_language` — so Swahili, Malay, Albanian, Estonian, Uzbek, Mongolian and
+Nepali were all scored 4 of 4 `wrong_language` while averaging chrF++ 50–80.
+
+Recomputed with production semantics, 68 of 385 item verdicts change and
+**`s_lang` correlates with mean chrF++ at 0.524, not 0.370.** H2's numbers are
+withdrawn.
+
+**The conclusions below stand.** `s_content` is still the better signal — 0.686
+against 0.524 on corrected verdicts, using production's own rule that an item the
+gate rejected carries no content score — and the finding that matters most here,
+that the tier assignment orders languages worse than one of its own inputs,
+reproduces: 0.595 against 0.686, still non-monotonic, `Usable` still below `None`
+and `Token`, `Basic` still empty. What was wrong was the size of the gap between
+the two signals, not its direction.
+
 ## Conclusions
 
 1. **The five-tier scale is not measurable as defined.** `Basic` never occurs, `Usable` is vanishingly rare and mis-ordered, and `None` and `Token` do not separate. It reports two outcomes.
-2. **The gate should filter, not grade.** Protocol 016 proved the gate is irreplaceable for catching wrong script and wrong language — an LLM missed 15 of 15. But it is a poor *quality* signal (0.370), and using it as a hard pre-gate before grading is what breaks the ordering.
+2. **The gate should filter, not grade.** Protocol 016 proved the gate is irreplaceable for catching wrong script and wrong language — an LLM missed 15 of 15. But it is a weaker *quality* signal than fact recall (0.524 against 0.686, corrected), and using it as a hard pre-gate before grading is what breaks the ordering.
 3. **Fact recall deserves promotion, not repair.** It is the best quality signal available (0.664), it was right in 016's adjudication, and protocol 015 showed it is insensitive to how the checklist is cut. Three protocols now point the same way.
 4. **The tier should be derived from the continuous score, not replace it.** Whatever scale ships, `s_content` belongs in the output as a number. A TMS needs a routing decision, so some discretisation is unavoidable — but discretising is a lossy presentation step, and the current one loses a third of the signal before anyone sees it.
 

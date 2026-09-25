@@ -11,9 +11,9 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/01 - Initial discussion - stage 1.md` — prior art, methodology, output contract, dialect/macrolanguage logic
 - `docs/02 - Experiment - invented language control.md` — why self-reported language support cannot be trusted
 - `docs/03 - Architecture and development stages.md` — architecture, data model, staging, and the implementation log for S0–S6
-- `experiments/protocols/README.md` — seventeen protocols; **016 and 017 matter most** (they revise 014 and show the tier scale does not measure five things), then 005 and 012
+- `experiments/protocols/README.md` — eighteen protocols; **016 and 018 matter most** (016 is the script finding that shapes the whole design; 018 rebuilt the scale and withdrew one of 017's numbers), then 017, 005 and 012
 
-**State:** S0–S7 complete; 262 tests passing. **The tier scale is known to be broken** — read 014, 016 and 017 together before quoting any tier or threshold. Fixing the scale is the next task and blocks S8.
+**State:** S0–S7 complete; 276 tests passing. **The tier scale was rebuilt on 2026-09-25** ([protocol 018](../experiments/protocols/018-eligibility-and-adequacy.md)) — three tiers derived from a published adequacy score, behind a deterministic eligibility filter. Every stored result is stale under `method_version` 2.0.0, which is what `llmlc status` is for. S8 is unblocked and is the next task.
 
 **Run it:**
 ```bash
@@ -40,36 +40,51 @@ Schema changes are Alembic's. A database made by `create_all()` has no version r
 5. **`no-control` is never a pass.** Where the back-translator cannot be qualified for a language, the result is `unverified` with the reason named.
 6. Before claiming a finding, **read the raw evidence**. Three of the last four real bugs were found by looking at actual output rather than by tests: two marker defects in S6, and a duplicate-row bug that surfaced only as two identical rows in the UI.
 7. **Tier is capability; availability is willingness** (protocol 011). Refusals are excluded from `s_lang` and reported separately. Do not let one become the other — the workflow sentence carries the caveat, the tier does not move.
-8. **`runner.py` is the only definition of "run a scan".** The CLI and the HTTP trigger differ in how they report progress and who may call them, nothing else. Add scan behaviour there, not in `cli.py`.
-9. **Inheriting a tier is not inheriting a claim** (S6). A variant tag gets its own `variant_evidence` by script, markers, an authored `not-distinguishable`, or `untested`. The last two are different on purpose: one is a finished decision, the other is countable remaining work.
-10. **The pivot language is measured through a different pivot** (protocol 013). Back-translating English into English grades nothing, so `en` falls through to `de`, then `fr`, then `es`. The pivot rides in the back-translator id (`remote:model@de`), which keeps qualifications cached per pivot and stops two incomparable measurements of one language from overwriting each other.
-11. **A deterministic negative has no instrument.** It stores `NO_INSTRUMENT` (`"(not needed)"`) because the local gate settled it and nothing read the language — so it is comparable to *every* back-translator's result rather than none of them, and `repo.upsert_result` collapses it onto the same row. A sentinel sitting in an identity column is why `kk-Latn` appeared twice.
-12. **Where a defect would be invisible in the output, the guard goes in the loader.** Marker scoring is string matching, so a wrong marker yields a plausible number with nothing to flag it. Three such defects are now rejected at load time rather than trusted to review (protocol 012).
+8. **The content score is the measurement; the tier is a lossy view of it** (protocol 018). Quote the number. Three tiers exist because a TMS has to route on something, and they cost 0.04 of Spearman against the number they come from — the five they replaced cost about a third. Eligibility is a filter, not the first term of a grade: wrong script or wrong language means `Unusable`, full stop, and that check is never handed to a model (016: 15/15 against 0/15).
+9. **An analysis harness calls the production function; it never re-implements it** (protocol 018). `calibrate.py` called the gate without `accept_lang`, which convicted every macrolanguage of writing the wrong language — Swahili at chrF++ 79.8 in the "not Swahili" bucket. 68 of 385 verdicts were wrong and protocol 017 drew a conclusion from them. The drift arrives looking like a finding.
+10. **`runner.py` is the only definition of "run a scan".** The CLI and the HTTP trigger differ in how they report progress and who may call them, nothing else. Add scan behaviour there, not in `cli.py`.
+11. **Inheriting a tier is not inheriting a claim** (S6). A variant tag gets its own `variant_evidence` by script, markers, an authored `not-distinguishable`, or `untested`. The last two are different on purpose: one is a finished decision, the other is countable remaining work.
+12. **The pivot language is measured through a different pivot** (protocol 013). Back-translating English into English grades nothing, so `en` falls through to `de`, then `fr`, then `es`. The pivot rides in the back-translator id (`remote:model@de`), which keeps qualifications cached per pivot and stops two incomparable measurements of one language from overwriting each other.
+13. **A deterministic negative has no instrument.** It stores `NO_INSTRUMENT` (`"(not needed)"`) because the local gate settled it and nothing read the language — so it is comparable to *every* back-translator's result rather than none of them, and `repo.upsert_result` collapses it onto the same row. A sentinel sitting in an identity column is why `kk-Latn` appeared twice.
+14. **Where a defect would be invisible in the output, the guard goes in the loader.** Marker scoring is string matching, so a wrong marker yields a plausible number with nothing to flag it. Three such defects are now rejected at load time rather than trusted to review (protocol 012).
 
 **On the scan trigger.** `POST /scans` is bound to loopback (`SCAN_TRIGGER=off|loopback|any`, default `loopback`), because reaching it already implies access to the machine holding the `.env`. Only the socket peer address counts — a forged `X-Forwarded-For` is tested to fail. Docker needs `any`, where the control is the port binding, and compose publishes on `127.0.0.1`. A browser-started scan must name a `max_calls`; the CLI need not. One scan at a time; a second gets `409`. Cancellation is checked between classes, and orphaned `running` jobs are reaped at API startup.
 
 ---
 
-## Next step: fix the tier scale, then S8
+## Next step: S8 — README, methodology and limitations
 
-**S8 is blocked.** Documenting five tiers would document something that does not exist ([protocol 017](../experiments/protocols/017-are-the-tiers-measurable.md)): across 40 real results there are 34 `Strong`, zero `Usable`, and on simulation `Usable` ranks *below* `None`. The function that assigns tiers orders languages worse (ρ 0.436) than one of its own inputs (`s_content`, 0.664).
+The scale is settled, so S8 is unblocked. It documents a scale that has been measured rather than asserted, and it should **lead with protocol 016's script finding**: an LLM adjudicator, told explicitly to look, flagged 0 of 15 real script mismatches that the local deterministic gate caught. That is the most persuasive result in the repository after the invented-language control in doc 02, and it is the argument for the whole architecture in one number.
 
-**What the three calibration protocols agree on**, and what a new scale should be built from:
+**The scale to document** ([protocol 018](../experiments/protocols/018-eligibility-and-adequacy.md), and `probe/score.py` is written to explain itself):
 
-| component | role | evidence |
-|---|---|---|
-| the deterministic gate | **eligibility filter** — wrong script or language means unusable, full stop | 016: an LLM missed 15/15 script mismatches the gate caught |
-| fact recall (`s_content`) | **the quality measurement**, reported continuously | 017: ρ 0.664, best available; 016: right on 90% of disputed items |
-| tiers | a lossy routing convenience derived from the number, never replacing it | 017: every discretisation tested lost signal |
+```
+eligibility   s_lang >= 0.50 over the items the gate was willing to rule on
+              -> below it: Unusable, and nothing else is measured
+adequacy      s_content, mean fact recall over the items that cleared the
+              filter. Published as a number. This is the measurement.
+tier          Unusable | Assisted (< 0.95) | Proficient (>= 0.95)
+```
 
-**Design constraints that fell out of the data:** any tier scale must be monotonic against quality (the current one is not); `s_lang`'s three thresholds cannot be distinguished below n=20 items and should collapse to one eligibility test; and buying resolution with more items is the wrong trade for a tool whose value is breadth.
+| tier | n of 98 calibration languages | mean chrF++ | workflow |
+|---|---|---|---|
+| Unusable | 19 | 29.0 | do not offer |
+| Assisted | 27 | 31.4 | MT-assist only, mandatory human pass |
+| Proficient | 52 | 53.6 | light review |
 
-Changing this bumps `method_version`, which makes every existing result stale — exactly what `llmlc status` and the staleness machinery were built for.
+Monotonic, ρ 0.647 against the continuous score's 0.686. **Three things S8 must not get wrong:**
 
-**Then S8** documents a scale that survives contact with data, and leads with 016's script finding: it is the most persuasive result in the repository after the invented-language control in doc 02.
+- The number is the result and the tier is shorthand for it. Writing the tiers up as the output is how the last scale survived as long as it did.
+- The eligibility filter is justified by the script audit (31% wrong script in the rejected set against 1% in the kept set), **not** by chrF++, which orders that boundary correctly by only 2.4 points. Say so.
+- The limits are real and belong in the text: one model, one judge, one back-translator panel, four items per language, a translation task standing in for free generation, and chrF++ as the yardstick with protocol 016's caveat that it is an imperfect one.
+
+**Re-running the numbers:** `scripts/regate.py` then `scripts/rescale.py` reproduce every figure above from `data/calibration/study.json`, free and offline. `rescale.py`'s last table calls `probe/score.py` itself, so the documentation and the code cannot drift.
+
+**Then S9**, the public landing page, which is Andrei's portfolio piece and should publish browsable results rather than describe the method.
 
 **Open, carried forward in doc 03:**
 
+- **Three instrument defects that would each produce a false `Unusable`** (protocol 018), and the filter is now load-bearing in a way it was not: `tl` (Tagalog) is convicted for answering in Filipino, which is its standardised register but a separate ISO code `accept_lang` does not reach; **Chinese is unmeasurable as shipped** — `detect_script` maps every CJK ideograph to `Hani` where the scheme expects `Hans`/`Hant`, and `MIN_CHARS = 25` convicts a correct Chinese sentence as `too_short`; and `mag` answered in Bhojpuri is labelled `wrong_language` where `relative_substitution` is the truth. The Chinese one needs its own protocol, not a patch: simplified versus traditional is a distinction the tool *should* catch and `detect_script` cannot see at all.
 - **One test fails from a clean clone**: `test_shipped_controls_cover_flores_breadth_and_the_hand_seeded_gap` needs `data/controls/flores.json`, untracked as licence-encumbered. Pre-existing since `3032687` and unrelated to recent work; everything passes where the data has been built. `tests/test_pivot.py` handles the same situation by skipping when no reference control is present, and that test should probably do the same.
 - Marker coverage is 2 of 534 variant tags. The method is proven on English — which is also the pivot, and the easiest possible case — and untested where it would be load-bearing (`ar-EG` vs `ar-MA`). Drafting is a model-plus-human-review job, per doc 01.
 - The marker **grammar axis never fires** — 0 hits in 28 generations. Its contexts need rewriting to force *in hospital* / *different to*, or the axis should be dropped rather than left as dead weight.
@@ -80,4 +95,4 @@ Changing this bumps `method_version`, which makes every existing result stale �
 - Whether refusal predicts quality is unanswerable at n=3 (protocol 011). S7's ~200-language run is where to test it, and availability is derived rather than stored precisely so the rule can change.
 - `kk-Latn` deserves a second look with a different model: asked properly, gpt-4o returns Latin script that GlotLID reads as Crimean Tatar and Turkmen. A recent official alphabet with little training text is a plausible genuine gap rather than a gpt-4o quirk.
 
-**Remaining stages:** S7 calibration study · S8 README and methodology page · S9 public landing page, which is Andrei's portfolio piece and should publish browsable results, not just describe the method.
+**Remaining stages:** S8 README and methodology page · S9 public landing page, which is Andrei's portfolio piece and should publish browsable results, not just describe the method.
