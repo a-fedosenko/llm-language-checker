@@ -147,3 +147,65 @@ def test_target_ranked_second_but_negligible_does_not_rescue():
               lid_result=LidResult("rus_Cyrl", "rus", "Cyrl", 0.97, "test",
                                    [("chv_Cyrl", 0.01)]))
     assert r.verdict is GateVerdict.WRONG_LANGUAGE
+
+
+# -- protocol 019: the script check can name what the catalogue asks about ----
+
+def test_simplified_and_traditional_are_distinguished():
+    """GlotLID labels every Chinese variety `_Hani`, so the distinction has to
+    come from which characters appear. Asked for Cantonese, gpt-4o answered in
+    simplified Mandarin -- a real failure the gate could not previously see."""
+    from llmlc.probe.lid import detect_script
+    simplified = "当地媒体报道，一辆机场消防车在出动时翻车。"
+    traditional = "當地媒體報導，一輛機場消防車在出勤時翻車。"
+    assert detect_script(simplified, "Hans") == "Hans"
+    assert detect_script(traditional, "Hant") == "Hant"
+    assert detect_script(simplified, "Hant") == "Hans", "the text decides, not the request"
+
+
+def test_a_composite_script_tolerates_embedded_latin():
+    """Real output carries proper nouns and units in Latin. An early version of
+    this required a composite's parts to be the *only* scripts present and
+    convicted a Japanese sentence about the 'JAS 39C Gripen'."""
+    from llmlc.probe.lid import detect_script
+    assert detect_script("JAS 39C Gripenは午前9時30分頃、滑走路に墜落した。", "Jpan") == "Jpan"
+    assert detect_script("안녕하세요, JAS 39C 세계입니다.", "Kore") == "Kore"
+
+
+def test_a_mostly_latin_text_is_not_rescued_by_a_composite():
+    from llmlc.probe.lid import detect_script
+    assert detect_script("This is English with one か character.", "Jpan") == "Latn"
+
+
+def test_an_unverifiable_script_abstains_rather_than_convicting():
+    """Tengwar and Klingon are not encoded; Zyyy asserts no script at all. The
+    gate cannot check these by any means available, and before protocol 019 it
+    returned `wrong_script` for them unconditionally."""
+    from llmlc.probe.lid import script_is_verifiable
+    assert not script_is_verifiable("Teng") and not script_is_verifiable("Piqd")
+    assert not script_is_verifiable("Zyyy") and not script_is_verifiable("Brai")
+    assert script_is_verifiable("Hans") and script_is_verifiable("Olck")
+    assert script_is_verifiable("Laoo") and script_is_verifiable("Hang")
+
+    g = check("ᏣᎳᎩ ᎦᏬᏂᎯᏍᏗ ᎠᏂᏴᏫᏯ ᎤᏂᏬᏂᎯᏍᏗ ᎠᎴ ᎾᏍᎩ ᎠᏂᏴᏫᏯ", prompt="p",
+              expect_lang=None, expect_script="Teng")
+    assert g.verdict is not GateVerdict.WRONG_SCRIPT
+
+
+def test_the_length_floor_follows_the_script():
+    """A correct Chinese sentence is 20 characters. The 25-character floor voided
+    five of nineteen adequate Chinese items in the calibration study."""
+    short_chinese = "当地媒体报道，一辆机场消防车在出动时翻车。"
+    assert len(short_chinese) < 25
+    g = check(short_chinese, prompt="p", expect_lang=None, expect_script="Hans")
+    assert g.verdict is not GateVerdict.TOO_SHORT
+    assert check("短", prompt="p", expect_lang=None,
+                 expect_script="Hans").verdict is GateVerdict.TOO_SHORT
+
+
+def test_ambiguous_han_voids_rather_than_convicts():
+    """Characters shared by both forms carry no signal. Unsure is `low_confidence`,
+    which leaves the eligibility denominator; it is not evidence against a model."""
+    g = check("中文" * 12, prompt="p", expect_lang=None, expect_script="Hant")
+    assert g.verdict in (GateVerdict.LOW_CONFIDENCE, GateVerdict.DEGENERATE)
+    assert g.verdict is not GateVerdict.WRONG_SCRIPT

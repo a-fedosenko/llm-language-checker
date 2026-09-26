@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 
-from llmlc.probe.lid import LidResult, identify
+from llmlc.probe.lid import LidResult, identify, script_is_verifiable
 
 
 class GateVerdict(str, Enum):
@@ -56,6 +56,15 @@ MEMORISED_MARKERS = (
 )
 
 MIN_CHARS = 25
+
+#: Scripts that say in a few characters what Latin needs a line for. Protocol 019
+#: found five of nineteen Chinese and Cantonese items in the calibration study
+#: sitting under the 25-character floor while recalling every fact -- correct
+#: output voided for being short in a script that is short. The floor is a
+#: guard against a one-word answer, and one word is not 25 characters everywhere.
+DENSE_SCRIPTS = frozenset({"Hani", "Hans", "Hant", "Jpan", "Kore", "Hang",
+                           "Thai", "Mymr", "Khmr", "Laoo", "Tibt", "Bopo"})
+MIN_CHARS_DENSE = 10
 
 #: Below this, a top-1 LID label is too weak to convict a model on. Correct calls
 #: have been observed as low as 0.63, so a weak disagreement voids the item
@@ -128,21 +137,41 @@ def check(text: str | None, *, prompt: str, expect_lang: str | None,
             checks["memorised"] = True
             return GateResult(GateVerdict.MEMORISED, detail=marker, checks=checks)
 
-    if len(stripped) < MIN_CHARS:
-        return GateResult(GateVerdict.TOO_SHORT, detail=f"{len(stripped)} chars", checks=checks)
+    floor = MIN_CHARS_DENSE if expect_script in DENSE_SCRIPTS else MIN_CHARS
+    if len(stripped) < floor:
+        return GateResult(GateVerdict.TOO_SHORT,
+                          detail=f"{len(stripped)} chars, floor {floor}", checks=checks)
 
     rep = _repetition_ratio(stripped)
     checks["repetition_ratio"] = rep  # type: ignore[assignment]
     if rep > 0.4:
         return GateResult(GateVerdict.DEGENERATE, detail=f"repetition ratio {rep:.2f}", checks=checks)
 
-    lid = lid_result or identify(stripped)
+    lid = lid_result or identify(stripped, expect_script=expect_script)
+
+    # A script the catalogue names but nothing here can verify -- unencoded,
+    # undeciphered, Braille, or one of the codes that assert no script at all.
+    # Before protocol 019 these convicted unconditionally: 1,274 tags of 9,589
+    # could never pass, whatever the model wrote. Abstaining is the only honest
+    # answer, and it is recorded on the result rather than being silent.
+    if expect_script and not script_is_verifiable(expect_script):
+        checks["script"] = None  # type: ignore[assignment]
+        expect_script = None
 
     if expect_script and lid.script and lid.script != expect_script:
+        # `Hani` means the sample was too short or too common to tell simplified
+        # from traditional. That is the instrument being unsure, which voids the
+        # item, rather than evidence the model used the wrong writing system.
+        if lid.script == "Hani" and expect_script in ("Hans", "Hant"):
+            return GateResult(GateVerdict.LOW_CONFIDENCE, lid=lid,
+                              detail="Han text too short or too common to tell "
+                                     f"{expect_script} from its sibling",
+                              checks=checks)
         checks["script"] = False
         return GateResult(GateVerdict.WRONG_SCRIPT, lid=lid,
                           detail=f"expected {expect_script}, got {lid.script}", checks=checks)
-    checks["script"] = True
+    if expect_script:
+        checks["script"] = True
 
     accepted = {expect_lang, *(accept_lang or set())} - {None}
     if expect_lang and lid.lang and lid.lang not in accepted:

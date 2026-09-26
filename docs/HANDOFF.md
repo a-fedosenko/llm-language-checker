@@ -11,9 +11,9 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/01 - Initial discussion - stage 1.md` — prior art, methodology, output contract, dialect/macrolanguage logic
 - `docs/02 - Experiment - invented language control.md` — why self-reported language support cannot be trusted
 - `docs/03 - Architecture and development stages.md` — architecture, data model, staging, and the implementation log for S0–S6
-- `experiments/protocols/README.md` — eighteen protocols; **016 and 018 matter most** (016 is the script finding that shapes the whole design; 018 rebuilt the scale and withdrew one of 017's numbers), then 017, 005 and 012
+- `experiments/protocols/README.md` — nineteen protocols; **016 and 018 matter most** (016 is the script finding that shapes the whole design; 018 rebuilt the scale and withdrew one of 017's numbers), then 017, 005 and 012
 
-**State:** S0–S7 complete; 276 tests passing. **The tier scale was rebuilt on 2026-09-25** ([protocol 018](../experiments/protocols/018-eligibility-and-adequacy.md)) — three tiers derived from a published adequacy score, behind a deterministic eligibility filter. Every stored result is stale under `method_version` 2.0.0, which is what `llmlc status` is for. S8 is unblocked and is the next task.
+**State:** S0–S7 complete; 284 tests passing. **The tier scale was rebuilt on 2026-09-25** ([protocol 018](../experiments/protocols/018-eligibility-and-adequacy.md)) — three tiers derived from a published adequacy score, behind a deterministic eligibility filter. Every stored result is stale under `method_version` 2.0.0, which is what `llmlc status` is for. S8 is unblocked and is the next task.
 
 **Run it:**
 ```bash
@@ -54,6 +54,8 @@ Schema changes are Alembic's. A database made by `create_all()` has no version r
 
 ## Next step: S8 — README, methodology and limitations
 
+**The breadth run is unblocked**: of the six classes it could not have passed, five are fixed by [protocol 019](../experiments/protocols/019-script-check-completeness.md) and `sat|Olck` now fails for the right reason. Run it before writing S8 — the documentation is better written around a real cross-engine table than ahead of one.
+
 The scale is settled, so S8 is unblocked. It documents a scale that has been measured rather than asserted, and it should **lead with protocol 016's script finding**: an LLM adjudicator, told explicitly to look, flagged 0 of 15 real script mismatches that the local deterministic gate caught. That is the most persuasive result in the repository after the invented-language control in doc 02, and it is the argument for the whole architecture in one number.
 
 **The scale to document** ([protocol 018](../experiments/protocols/018-eligibility-and-adequacy.md), and `probe/score.py` is written to explain itself):
@@ -84,7 +86,9 @@ Monotonic, ρ 0.647 against the continuous score's 0.686. **Three things S8 must
 
 **Open, carried forward in doc 03:**
 
-- **Three instrument defects that would each produce a false `Unusable`** (protocol 018), and the filter is now load-bearing in a way it was not: `tl` (Tagalog) is convicted for answering in Filipino, which is its standardised register but a separate ISO code `accept_lang` does not reach; **Chinese is unmeasurable as shipped** — `detect_script` maps every CJK ideograph to `Hani` where the scheme expects `Hans`/`Hant`, and `MIN_CHARS = 25` convicts a correct Chinese sentence as `too_short`; and `mag` answered in Bhojpuri is labelled `wrong_language` where `relative_substitution` is the truth. The Chinese one needs its own protocol, not a patch: simplified versus traditional is a distinction the tool *should* catch and `detect_script` cannot see at all.
+- **`tl` (Tagalog) is convicted for answering in Filipino**, which is its standardised register but a separate ISO code that `accept_lang` does not reach; the scheme may hold other such pairs. And `mag` answered in Bhojpuri is labelled `wrong_language` where `relative_substitution` is the truth — the conviction is right, the label is not. *(The Chinese half of this item was fixed by [protocol 019](../experiments/protocols/019-script-check-completeness.md).)*
+- **22 scripts, 27 tags, cannot be verified by any means available** — Tengwar, Klingon, Indus, Mayan and eighteen others, unencoded or undeciphered. The gate abstains on these rather than convicting, which is correct, but nothing tests it because there is no output to test against.
+- **The script-only fallback is still on the old table.** `lid.py` supports running with no GlotLID model at reduced power; in that mode the 29 hand-written prefixes were the instrument, and 1,274 tags could never pass. Protocol 019 fixed the GlotLID path and left this one.
 - **One test fails from a clean clone**: `test_shipped_controls_cover_flores_breadth_and_the_hand_seeded_gap` needs `data/controls/flores.json`, untracked as licence-encumbered. Pre-existing since `3032687` and unrelated to recent work; everything passes where the data has been built. `tests/test_pivot.py` handles the same situation by skipping when no reference control is present, and that test should probably do the same.
 - Marker coverage is 2 of 534 variant tags. The method is proven on English — which is also the pivot, and the easiest possible case — and untested where it would be load-bearing (`ar-EG` vs `ar-MA`). Drafting is a model-plus-human-review job, per doc 01.
 - The marker **grammar axis never fires** — 0 hits in 28 generations. Its contexts need rewriting to force *in hospital* / *different to*, or the axis should be dropped rather than left as dead weight.

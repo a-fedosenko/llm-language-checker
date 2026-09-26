@@ -32,6 +32,7 @@ changed as a result.
 | [016](016-which-metric-is-wrong.md) | 2026-09-24 | When recall and chrF++ disagree, which is wrong? | chrF++, in the mid range: 90% of disagreements are adequate translations. And an LLM missed 15/15 script mismatches the deterministic gate caught |
 | [017](017-are-the-tiers-measurable.md) | 2026-09-24 | Is the five-tier scale measurable? | No — `Basic` never occurs, `Usable` is mis-ordered, and the tier function orders languages worse (0.436) than one of its own inputs (0.664). **H2's correlation withdrawn by 018** |
 | [018](018-eligibility-and-adequacy.md) | 2026-09-25 | Does an eligibility filter plus a published adequacy score replace it? | Yes — monotonic, ρ 0.647 against the number's 0.686. And the study's gate verdicts were wrong: the calibration harness convicted every macrolanguage |
+| [019](019-script-check-completeness.md) | 2026-09-26 | Can the script check name the scripts the catalogue asks about? | Not all of them — 40 scripts blocked, 63 tags of them Chinese. Fixed from Unicode's own data; simplified vs traditional now decided 7/7. The protocol's own premise was overstated tenfold |
 
 ## Writing one
 
@@ -49,3 +50,9 @@ Read the raw evidence before believing a number. 018's first table had Swahili
 at chrF++ 79.8 in the "did not write Swahili" bucket, which is not a subtle
 signal — but it is only visible to someone who looked at the list rather than the
 correlation.
+
+The same rule applies to your own premises. 019 opened by asserting that 1,274
+tags could never pass the script check, measured from one function in isolation
+without checking what its caller did with the result. The real figure was 119.
+A trigger is a claim like any other, and it was wrong in the direction that made
+the work look more urgent.
