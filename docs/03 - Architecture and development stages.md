@@ -30,6 +30,8 @@ Keeping these would be cargo cult. They can return the day someone genuinely hos
 
 ## Services
 
+> **This section is the S0 plan, and three of its five services were never built.** It is kept because the reasoning still explains the shape of the code, and because deleting a plan hides that it changed. **What actually exists is described in *Services as built* below, and that is the section to trust.** Corrected 2026-09-29.
+
 Five containers. The split is justified by **model lifetime and hardware affinity**, not by fashion: the two ML services load large models once and hold them, and exactly one of them wants the GPU.
 
 ```mermaid
@@ -71,6 +73,39 @@ Resolved once at `bt` startup, overridable by `HARDWARE_PROFILE` in `.env`, and 
 Verified reference machine: RTX 4060 Laptop 8 GB, Docker 27.5.1 with the `nvidia` runtime registered, `docker run --gpus all` confirmed working. That machine lands on `gpu-fp16`, marginally — `gpu-int8` is the safer default and should be what the autodetect picks at 8 GB.
 
 `docker compose --profile gpu up` adds the device reservation; the default profile is CPU so that `docker compose up` works everywhere.
+
+---
+
+## Services as built (corrected 2026-09-29)
+
+**One container, and the GPU is not used.**
+
+| Planned | As built | |
+|---|---|---|
+| `api` | **`api`** — FastAPI, serves the UI and the results API | the only service |
+| `ui` | folded into `api` | a single `index.html`, no build step, no second container |
+| `worker` | folded into the CLI and `runner.py` | a scan is a process, not a service; `runner.py` is the one definition of one |
+| `postgres` | **dropped** for SQLite on a bind mount | single writer, single tenant; supporting both cost two real bugs |
+| `lid` | in-process, `probe/lid.py` | GlotLID is CPU-only and loads in about a second; an HTTP hop bought nothing |
+| `bt` | **never built** | see below |
+
+### Why there is no local back-translator, and what that cost
+
+The `bt` service — MADLAD-400-3B on the GPU, NLLB-200 on CPU — was scheduled for S3, then deferred to S6, and neither stage recorded that it had not happened. S1 used the remote path as a deliberate stopgap (`bt/remote.py` still says *"the local MADLAD/NLLB back-translator arrives in S3"*), S2 built qualification and per-language routing on top of it, and by S3 the remote panel worked well enough that nobody came back to it. Every result this project has ever produced was back-translated by a remote model.
+
+That is a defensible outcome — the remote panel is qualified per language against human reference text, which is the property that actually matters (protocol 005) — but it was never a decision, and it left three things wrong:
+
+1. **Results claimed an instrument that never ran.** `hardware.detect()` still resolved to `gpu-int8` on the reference machine, and that string was stamped on every result and job row. A row reading `hardware_profile: gpu-int8` asserts MADLAD-400-3B read the text; Gemini read it. The `backtranslator` column held the truth and this field contradicted it — on a field whose entire purpose is to say when two results are comparable (docs/01). `detect()` now separates *what this machine could run* (`capable_of`, still probed, still reported by `/hardware`) from *what actually read the text* (`profile`, which is `api` until `bt/local.py` exists). The detection logic is kept and tested so it can be switched back on by one constant.
+2. **The container ran a degraded gate.** `api.Dockerfile` installed the package without extras, and `fasttext` is an optional extra — so inside Docker GlotLID could not load and `probe/lid` fell back to script-only, losing the language half of the gate. Harmless while scans run from the host CLI, which is what we do; not harmless the moment a scan is started from the browser, which the UI offers. The image now installs `.[lid]`.
+3. **This document described a system that does not exist**, which S8 would have documented.
+
+### What the GPU would still be for
+
+Not cost. A 200-language scan is single-digit dollars, and back-translation is a third of it.
+
+**Reproducibility.** The S0 comparison table in this document scored API-only as *"Reproducibility: none — vendors change models"*, and that judgement was right. A published dataset whose instrument is a vendor endpoint cannot be re-graded by a reader, and cannot be re-graded by us once the vendor retires the model. A local MADLAD checkpoint is pinnable, and anyone with the raw corpus could reproduce every score.
+
+That is a real argument and it is unfinished business, not a closed question. It is deliberately **not** being acted on mid-programme: results are only comparable within the same back-translator (convention 4), so switching instruments while the cross-engine scans are running would strand everything measured so far. The place to decide it is S8, with the data in hand.
 
 ---
 

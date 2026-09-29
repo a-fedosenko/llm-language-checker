@@ -1,6 +1,11 @@
 # Single container. Results go to a SQLite file under ./data, so there is no
 # database service to run -- this is a single-tenant local tool.
-# `docker compose --profile gpu up` will add the GPU back-translator (S6).
+#
+# There is no `gpu` profile and no `bt` service. Back-translation is remote, by a
+# panel qualified per language (see bt/qualify.py); the local MADLAD/NLLB service
+# planned for S3 and then S6 was never built, and docs/03 records why it was left
+# out rather than pretending it exists. `data/models/` is still mounted because
+# GlotLID lives there, and GlotLID is CPU-only.
 services:
   api:
     build:

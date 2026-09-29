@@ -87,18 +87,20 @@ The core speaks canonical **BCP-47** (`kk`, `kk-Latn`, `sr-Cyrl-RS`). Any other 
 
 ### Hardware
 
-The stack detects available hardware at startup and selects a profile automatically:
+**No GPU is required, and none is currently used.** Everything runs on CPU: language identification is GlotLID, which is CPU-only, and back-translation goes to a remote model qualified per language against human reference text.
 
-| Detected | Profile | Back-translator | Coverage |
-|---|---|---|---|
-| GPU ≥ 10 GB VRAM | `gpu-fp16` | MADLAD-400-3B-MT, fp16 | ~400 languages |
-| GPU 4–10 GB VRAM | `gpu-int8` | MADLAD-400-3B-MT, int8 | ~400 languages |
-| CPU only, or < 4 GB | `cpu` | NLLB-200-distilled-600M | ~200 languages |
-| `BT_REMOTE_MODEL` set | `api` | a configured remote model | as qualified per language |
+`GET /hardware` reports two different things, and the difference matters:
 
-`GET /hardware` reports the resolved profile, and it is recorded on every result — results produced by different back-translators are not comparable.
+| field | means |
+|---|---|
+| `profile` | what actually read the text. **`api`** — a remote back-translator — unless you override it |
+| `capable_of` | what this machine *would* run if a local back-translator existed: `gpu-fp16`, `gpu-int8` or `cpu` by VRAM |
 
-Language identification runs on CPU everywhere and needs no GPU. Override detection with `HARDWARE_PROFILE` in `.env`. Reference machine: RTX 4060 Laptop (8 GB) → `gpu-int8`; fp16 is deliberately reserved for larger cards, since MADLAD-3B is ~6 GB before activations.
+`profile` is recorded on every result, because results produced by different back-translators are not comparable. `capable_of` is not; it describes the box, not the measurement.
+
+A local back-translator — MADLAD-400-3B on GPU, NLLB-200 on CPU, covering ~400 languages without a network call — was designed and never built. The detection logic for it survives, tested, behind one constant in `llmlc/hardware.py`. The reason to finish it is reproducibility rather than cost: a vendor endpoint cannot be pinned, and a published dataset whose instrument has been retired cannot be re-graded. See *Services as built* in `docs/03`.
+
+Override with `HARDWARE_PROFILE` in `.env`.
 
 ## How it works
 
