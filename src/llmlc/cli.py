@@ -28,10 +28,10 @@ GREY, BOLD, RESET = "\033[90m", "\033[1m", "\033[0m"
 def _summarise(results) -> None:
     from llmlc.probe.score import Evidence
     print(f"\n{BOLD}summary{RESET}  {len(results)} language(s)")
-    print(f"  {'tag':10}{'tier':10}{'evidence':24}{'content':>9}{'reliab':>9}  designator")
+    print(f"  {'tag':10}{'tier':12}{'evidence':24}{'content':>9}{'reliab':>9}  designator")
     for r in results:
         rel = f"{r.score.reliability:.2f}" if r.score.reliability < 1.0 else "-"
-        print(f"  {r.tag:10}{r.score.tier.value:10}{r.score.evidence.value:24}"
+        print(f"  {r.tag:10}{r.score.tier.value:12}{r.score.evidence.value:24}"
               f"{r.score.s_content:>9.2f}{rel:>9}  {getattr(r, 'designator', '')[:32]}")
     unverified = sum(r.score.evidence is Evidence.UNVERIFIED for r in results)
     real = len(results) - unverified
@@ -154,7 +154,7 @@ def cmd_scan(a: argparse.Namespace) -> int:
 
     def progress(r):
         mark = f"{GREY}inherited{RESET}" if r.inherited_from else f"r{r.rungs_run}"
-        print(f"  {r.tag:14}{r.score.tier.value:9}{r.score.evidence.value:24}{mark}")
+        print(f"  {r.tag:14}{r.score.tier.value:12}{r.score.evidence.value:24}{mark}")
 
     outcome = runner.execute(req, job_id, on_result=progress)
     result = outcome.result
