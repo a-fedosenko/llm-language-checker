@@ -6,7 +6,7 @@ import json
 import pathlib
 import sys
 
-from llmlc import runner
+from llmlc import bootstrap, runner
 from llmlc.bt import QualificationCache, RemoteBackTranslator
 from llmlc.client import OpenAICompatClient
 from llmlc.config import settings
@@ -43,11 +43,12 @@ def cmd_check(a: argparse.Namespace) -> int:
         print("No endpoint configured. Copy .env.example to .env and fill it in.", file=sys.stderr)
         return 2
     panel = [m.strip() for m in a.backtranslator.split(",") if m.strip()]
-    rejected = [m for m in panel if m == a.engine]
-    panel = [m for m in panel if m != a.engine]
+    family = runner.model_family(a.engine)
+    rejected = [m for m in panel if runner.model_family(m) == family]
+    panel = [m for m in panel if runner.model_family(m) != family]
     if rejected:
-        print(f"{GREY}skipping {', '.join(rejected)} as back-translator: same as the model "
-              f"under test, which would measure self-consistency{RESET}", file=sys.stderr)
+        print(f"{GREY}skipping {', '.join(rejected)} as back-translator: same family as "
+              f"the model under test, which measures self-consistency{RESET}", file=sys.stderr)
     if not panel:
         print("No back-translator left after excluding the model under test.", file=sys.stderr)
         return 2
@@ -176,6 +177,30 @@ def cmd_scan(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_bootstrap(a: argparse.Namespace) -> int:
+    """Fetch the first-run assets a scan needs but the repository cannot ship."""
+    st = bootstrap.status()
+    if a.check:
+        print(f"{BOLD}{'ready' if st['ready'] else 'NOT ready'}{RESET}   "
+              f"{bootstrap.disk_free_mb()} MB free")
+        for asset in st["assets"]:
+            mark = "ok" if asset["present"] else "MISSING"
+            size = (f"{asset['bytes'] / (1 << 20):.0f} MB" if asset["present"]
+                    else asset["size_hint"])
+            print(f"  {mark:8}{asset['title']:44}{size}")
+            if not asset["present"]:
+                print(f"{GREY}           without it: {asset['degraded']}{RESET}")
+        return 0 if st["ready"] else 1
+
+    if st["ready"] and not a.force:
+        print("Everything a scan needs is already present. --force to refetch.")
+        return 0
+    out = bootstrap.ensure(a.asset or None)
+    tail = "ready" if out["ready"] else "still missing: " + ", ".join(out["missing"])
+    print(f"\n{BOLD}{tail}{RESET}")
+    return 0 if out["ready"] else 1
+
+
 def cmd_status(a: argparse.Namespace) -> int:
     """What has been measured, and what is out of date."""
     create_all()
@@ -273,7 +298,7 @@ def cmd_calibrate(a: argparse.Namespace) -> int:
         return 2
 
     panel = [m.strip() for m in a.backtranslator.split(",")
-             if m.strip() and m.strip() != a.engine]
+             if m.strip() and runner.model_family(m.strip()) != runner.model_family(a.engine)]
     if not panel:
         print("No back-translator left after excluding the model under test.", file=sys.stderr)
         return 2
@@ -412,6 +437,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="only languages that have a back-translator control")
     sc.add_argument("--living-only", action="store_true")
     sc.add_argument("--limit", type=int, default=None)
+    bs = sub.add_parser("bootstrap", help="fetch the first-run assets a scan needs")
+    bs.add_argument("--check", action="store_true", help="report readiness, fetch nothing")
+    bs.add_argument("--asset", action="append", help="fetch only this asset (repeatable)")
+    bs.add_argument("--force", action="store_true")
+    bs.set_defaults(func=cmd_bootstrap)
+
     sc.add_argument("--backtranslator",
                     default="gemini-gemini-3-8-flash,deepseek-deepseek-v4-pro")
     sc.add_argument("--judge", default=None)

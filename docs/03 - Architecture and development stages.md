@@ -984,3 +984,47 @@ Each would produce a false `Unusable`, which matters more than it used to: the f
 `METHOD_VERSION` 1.0.0 → 2.0.0, and all 11 stored results are stale. That is the staleness machinery doing the job it was built for.
 
 **S8 is unblocked.** It documents a scale that has been measured rather than asserted, and should lead with 016's script finding — 15 of 15 against 0 of 15 — which is the most persuasive result in the repository after the invented-language control in doc 02.
+
+## S8 — distribution: making "clone and run" true (2026-09-29)
+
+The stage plan went S7 calibration → S8 README → S9 landing page, and skipped the thing between them: **the app was not actually clone-and-run for scanning.** Tested against the container rather than assumed, a fresh clone hit three walls.
+
+| | what a fresh clone got | why |
+|---|---|---|
+| GlotLID | absent, and **nothing fetched it** | 1.6 GB, gitignored. `lid.MODEL_URL` was defined and never called |
+| FLORES controls | absent | CC BY-SA derived text, correctly not committed; built by a script the image does not contain |
+| browser scan | **HTTP 403** | compose defaulted `SCAN_TRIGGER=loopback`, and in Docker the peer is always the bridge gateway, so it can never match |
+
+The first two are worse than missing features, because **the tool ran anyway.** Without GlotLID the gate keeps its script check and silently loses its language check — the half protocol 004 established carries it, and the half that answers the question the tool exists for. Without controls, `no-control is never a pass` turns a 200-language scan into ~197 `unverified`. Both failures are quiet, and quiet is the problem: this is the same rule as protocol 019's abstain-don't-convict and protocol 005's qualify-before-trusting. **When the instrument is missing, say so; never quietly answer worse.**
+
+### What was built
+
+- **`llmlc/bootstrap.py`** — an asset registry that knows what each file is, what it costs, what licence keeps it out of the repository, and *what breaks without it* in the terms the tool reports in. `status()` answers "is the instrument complete", which is a different question from `/health`'s "is the service up".
+- **`GET /readiness`** and a gated **`POST /bootstrap`**. Gated exactly like `POST /scans`: it is the other endpoint that reaches the network and writes to the user's disk, and 1.6 GB is not something a passing caller should start.
+- **A readiness banner in the UI**, with a download button, shown only when something is missing.
+- **`llmlc bootstrap [--check]`** for the terminal, and `AUTO_BOOTSTRAP=1` for unattended deployment. Not automatic by default: 1.6 GB arriving unannounced on `compose up` would be a rude surprise.
+- **The FLORES control builder moved from `scripts/` into the package.** The image copies `src/` and not `scripts/`, so anything implemented only in a script cannot be run by someone who cloned and ran `docker compose up`. `scripts/build_controls.py` is now a thin wrapper.
+- **`SCAN_TRIGGER` defaults to `any` in compose** — the documented-correct Docker setting, finally wired. This is not a loosening: the control there is the port binding, published on `127.0.0.1` by default.
+
+### The panel policy, decided here
+
+Cross-engine comparison is the point of the tool, and convention 4 says results are comparable only within the same back-translator. The old default panel was `gemini-3-8-flash, deepseek-v4-pro` — **both of which are engines we want to scan.** Scanning a panel member forces it out of its own panel, so it gets measured through a different instrument from every other engine, which invalidates the comparison by the tool's own rule.
+
+The policy, in three parts:
+
+1. **Panel members come from outside the scan set.** New default: `gemini-gemini-3-6-flash, deepseek-deepseek-v4-flash`. Neither is under test, so one instrument serves everyone.
+2. **The guard excludes the engine's whole family, not just its model id.** docs/01 asked for *"never the model under test, preferably not the same family"*; the preference is now enforced, because a sibling shares tokenizer, training data and failure modes and is the reader most likely to decode a broken output charitably. `runner.model_family()` splits on the vendor prefix — a rough heuristic, and documented as one.
+3. **Order is measured, not alphabetical.** `route()` takes the first member that qualifies, so order decides which reader most results actually use. Both candidates qualified on all eight languages spot-checked (de, ru, sw, am, my, ace, zh-CN, ug), but `gemini-3-6-flash` is clearly stronger at the hard end — `ug` 59.3 against 40.3, `am` 62.8 against 48.5 — so it goes first.
+
+What that yields for the four-engine programme:
+
+| engine under test | reads through |
+|---|---|
+| `openai-gpt-4o` | gemini-3-6-flash, then deepseek-v4-flash |
+| `groq-qwen3-8-27b` | gemini-3-6-flash, then deepseek-v4-flash |
+| `deepseek-deepseek-v4-pro` | gemini-3-6-flash |
+| `gemini-gemini-3-8-flash` | deepseek-v4-flash *(family excluded)* |
+
+**Three of the four land on the same reader**, so most of the matrix is directly comparable. The fourth sits on the weaker reader, which biases *against* gemini rather than for it — a qualified-but-weaker reader loses facts and understates recall. That is the safe direction, and it is stated on every row: the back-translator is part of the uniqueness constraint and is shown in the UI.
+
+**The remaining engines will be scanned through the container, as a new user would**, rather than from the host CLI. If a cloner cannot reproduce what we did, that should surface here and not in a GitHub issue.

@@ -140,6 +140,8 @@
     kept only because a TMS has to route on something.
   </div>
 
+  <div class="note bad" id="readiness" hidden></div>
+
   <nav role="tablist">
     <button role="tab" data-tab="results" aria-selected="true">Results</button>
     <button role="tab" data-tab="resolution" aria-selected="false">Resolution</button>
@@ -503,6 +505,34 @@ function hideTip() {
 
 // Delegated, so help on tables rendered later needs no extra wiring. Click as
 // well as hover, because a touch device has no hover.
+async function checkReadiness() {
+  // A scan runs perfectly well with a missing instrument and measures less than
+  // it claims. Saying so is the same rule as `no-control is never a pass`.
+  let r;
+  try { r = await (await fetch('readiness')).json(); } catch { return; }
+  const el = $('#readiness');
+  if (!r || r.ready) { el.hidden = true; return; }
+  const rows = r.assets.filter(a => !a.present).map(a =>
+    `<li><strong>${esc(a.title)}</strong> (${esc(a.size_hint)}) — ${esc(a.degraded)}</li>`).join('');
+  el.innerHTML = `<strong>This instrument is incomplete. A scan will run and measure less than it reports.</strong>
+    <ul style="margin:8px 0 8px 18px">${rows}</ul>
+    Neither file can ship in the repository — one is 1.6 GB, the other is CC BY-SA derived text.
+    <button id="do-bootstrap">Download now</button>
+    <span class="ev" id="bootstrap-msg">${r.disk_free_mb} MB free on disk</span>`;
+  el.hidden = false;
+  $('#do-bootstrap').onclick = async () => {
+    const btn = $('#do-bootstrap'), msg = $('#bootstrap-msg');
+    btn.disabled = true; msg.textContent = 'downloading — this takes a few minutes and does not resume if you close the tab';
+    try {
+      const res = await fetch('bootstrap', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+      const body = await res.json();
+      if (!res.ok) { msg.textContent = body.detail || 'failed'; btn.disabled = false; return; }
+      msg.textContent = 'done'; checkReadiness();
+    } catch (e) { msg.textContent = String(e); btn.disabled = false; }
+  };
+}
+checkReadiness();
+
 document.addEventListener('mouseover', e => {
   const btn = e.target.closest?.('.help');
   if (btn) showTip(btn); else if (!e.target.closest?.('#tip')) hideTip();

@@ -20,6 +20,7 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 source .venv/bin/activate          # or use .venv/bin/llmlc directly
 set -a && . .env && set +a         # aggregator endpoint + key, gitignored
 llmlc scan --engine openai-gpt-4o --tag de,cv --dry-run
+llmlc bootstrap --check            # is the instrument complete? (GlotLID + controls)
 llmlc status                       # what is measured, what is stale
 llmlc markers                      # variant coverage and the remaining gap
 llmlc calibrate --engine <model> --dry-run   # the S7 study; needs specs built first
@@ -101,4 +102,6 @@ Monotonic, ρ 0.647 against the continuous score's 0.686. **Three things S8 must
 - Whether refusal predicts quality is unanswerable at n=3 (protocol 011). S7's ~200-language run is where to test it, and availability is derived rather than stored precisely so the rule can change.
 - `kk-Latn` deserves a second look with a different model: asked properly, gpt-4o returns Latin script that GlotLID reads as Crimean Tatar and Turkmen. A recent official alphabet with little training text is a plausible genuine gap rather than a gpt-4o quirk.
 
-**Remaining stages:** S8 README and methodology page · S9 public landing page, which is Andrei's portfolio piece and should publish browsable results, not just describe the method.
+**The back-translator panel is fixed and must stay outside the scan set** (S8, doc 03). `gemini-gemini-3-6-flash, deepseek-deepseek-v4-flash`, in that order, and the guard drops the engine's whole *family* rather than just its id. Putting a model under test into the panel strands it on a different instrument from every other engine and invalidates the cross-engine comparison by convention 4.
+
+**Remaining stages:** S8 distribution ✅ · S9 README and methodology page · S10 public landing page, which is Andrei's portfolio piece and should publish browsable results, not just describe the method.

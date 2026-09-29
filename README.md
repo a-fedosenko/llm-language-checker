@@ -26,15 +26,24 @@ There is no hosted service and no public deployment. **You run it locally or in 
 git clone https://github.com/a-fedosenko/llm-language-checker
 cd llm-language-checker
 cp .env.example .env      # add your OpenAI-compatible endpoint + key
-docker compose up
+docker compose up -d
 ```
 
 - UI: <http://localhost:8000> — browse results, plan and start a scan, watch it run
 - API and interactive docs: <http://localhost:8000/docs>
 
+**Before your first scan, fetch the two files the repository cannot ship.** The UI says so on arrival and offers a button; `llmlc bootstrap` does the same from a terminal, and `AUTO_BOOTSTRAP=1` does it at startup.
+
+| | why it is not committed | without it |
+|---|---|---|
+| GlotLID, ~1.6 GB | too large for a repository | the gate checks script but not **language** — a model answering in Indonesian when asked for Acehnese would pass |
+| FLORES-200 controls, ~25 MB download | CC BY-SA 4.0; share-alike attaches to derived text | only `cv`, `de`, `ru` can have a back-translator qualified, so nearly every language reports `unverified` |
+
+Browsing existing results needs neither. Scanning needs both, and the tool will tell you rather than quietly measuring less than it reports.
+
 The published port is bound to `127.0.0.1`. There is no authentication, because there is no second user; widening `API_BIND` puts an unguarded tool on your network.
 
-No network fetch is needed at setup — the language catalogue ships in the repo.
+The language catalogue ships in the repo, so browsing needs no network fetch. Scanning needs the two assets above.
 
 Results go to a local SQLite file — there is no database service to run:
 
@@ -44,7 +53,7 @@ llmlc scan --engine <model> --tag de,fr,cv    # measure
 llmlc status                                   # what is measured, what is stale
 llmlc markers                                  # variant coverage, and the remaining gap
 llmlc export --merge-into your-master.json     # mergeable artifact
-uvicorn llmlc.api.main:app                     # UI on :8000
+llmlc bootstrap --check                        # is the instrument complete?
 pytest
 ```
 

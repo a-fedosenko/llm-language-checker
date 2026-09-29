@@ -32,7 +32,36 @@ from llmlc.probe.scan import ScanBudget, plan, scan
 from llmlc.probe.specs import load_specs
 from llmlc.scheme import load_scheme
 
-DEFAULT_PANEL = "gemini-gemini-3-8-flash,deepseek-deepseek-v4-pro"
+#: The back-translator panel, ordered. Chosen so that a comparison programme can
+#: hold the instrument fixed (convention 4: results are comparable only within
+#: the same back-translator).
+#:
+#: Neither member is a model we scan. That is the point: if the panel contains an
+#: engine under test, that engine must be dropped from its own panel and is then
+#: measured through a different instrument from every other engine, which makes
+#: the cross-engine comparison -- the thing the tool is for -- invalid by its own
+#: rule. Picking readers from outside the scan set keeps one instrument for
+#: everyone.
+#:
+#: Order is deliberate and measured, not alphabetical. Both qualify on all eight
+#: languages spot-checked (de, ru, sw, am, my, ace, zh-CN, ug), but
+#: gemini-3-6-flash scores higher on the hard end -- ug 59.3 against 40.3, am
+#: 62.8 against 48.5 -- and `route()` takes the first member that qualifies. The
+#: stronger reader goes first so it is the one most results actually use.
+def model_family(model_id: str) -> str:
+    """The vendor prefix of an aggregator model id: `gemini-gemini-3-8-flash` -> `gemini`.
+
+    A heuristic, and knowingly a rough one: on this aggregator the prefix names
+    *who serves* the model rather than who built it, so `groq-qwen3-8-27b` reads
+    as family `groq` when Qwen is Alibaba's. That happens to be harmless here --
+    nothing else in the catalogue is Qwen -- but a panel drawn from two different
+    hosts of the same underlying model would defeat this check, and the fix then
+    is to name the panel explicitly rather than to make the heuristic cleverer.
+    """
+    return model_id.split("-", 1)[0]
+
+
+DEFAULT_PANEL = "gemini-gemini-3-6-flash,deepseek-deepseek-v4-flash"
 
 #: Job ids asked to stop. A set rather than a flag because the id is the handle
 #: the UI already has, and because a cancelled job that has already finished
@@ -102,13 +131,22 @@ class ScanRequest:
 
     @property
     def panel(self) -> list[str]:
-        """The back-translator panel, with the model under test removed.
+        """The back-translator panel, with the model under test's whole family removed.
 
-        A model back-translating itself measures self-consistency, not
-        intelligibility (protocol 005).
+        A model back-translating itself measures self-consistency rather than
+        intelligibility (protocol 005). docs/01 asked for more than that --
+        *"never the model under test, preferably not the same family"* -- and the
+        preference is now enforced, because a sibling shares tokenizer, training
+        data and failure modes, and is the most likely reader to decode a broken
+        output charitably. That would inflate a score in exactly the place the
+        tool is trying to discriminate.
+
+        Dropping a family can empty the panel, and both callers fail closed
+        rather than fall back to self-grading.
         """
+        family = model_family(self.engine)
         return [m.strip() for m in self.backtranslator.split(",")
-                if m.strip() and m.strip() != self.engine]
+                if m.strip() and model_family(m.strip()) != family]
 
 
 @dataclass

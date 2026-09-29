@@ -20,7 +20,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from llmlc import __version__, hardware, runner
+from llmlc import __version__, bootstrap, hardware, runner
 from llmlc.api import results as results_store
 from llmlc.config import settings
 from llmlc.scheme import Language, Scheme, load_scheme
@@ -37,6 +37,20 @@ async def lifespan(_app: FastAPI):
             print(f"[llmlc] job {job_id} was left running by a previous process; marked failed")
     except Exception as e:  # noqa: BLE001 -- never let this stop the server booting
         print(f"[llmlc] could not reconcile jobs at startup: {e}")
+
+    try:
+        if bootstrap.auto():
+            print("[llmlc] first-run assets fetched (AUTO_BOOTSTRAP)")
+        else:
+            missing = bootstrap.status()["missing"]
+            if missing:
+                # Printed, not fatal. The UI serves committed results perfectly
+                # well without these; it is *scanning* that would measure less
+                # than it reports, and the readiness banner says so there.
+                print(f"[llmlc] first-run assets missing: {', '.join(missing)} — "
+                      f"run `llmlc bootstrap` or use the button in the UI")
+    except Exception as e:  # noqa: BLE001
+        print(f"[llmlc] readiness check failed: {e}")
     yield
 
 
@@ -62,6 +76,39 @@ def health() -> dict:
     except FileNotFoundError:
         loaded, tags = False, 0
     return {"status": "ok", "version": __version__, "scheme_loaded": loaded, "tags": tags}
+
+
+@app.get("/readiness")
+def readiness() -> dict:
+    """What a scan needs, and whether it is here.
+
+    Separate from `/health`, which answers "is the service up". This answers "is
+    the instrument complete" -- and they are different questions, because the
+    service runs perfectly well while measuring with half a gate. Stating that is
+    the same rule as `no-control is never a pass`: when the instrument is
+    missing, say so rather than quietly answer worse.
+    """
+    st = bootstrap.status()
+    st["disk_free_mb"] = bootstrap.disk_free_mb()
+    return st
+
+
+@app.post("/bootstrap")
+def bootstrap_fetch(request: Request, body: BootstrapRequest | None = None) -> dict:
+    """Fetch the missing first-run assets.
+
+    Gated exactly like `POST /scans`: it is the other endpoint that reaches the
+    network and writes to the user's disk, and 1.6 GB is not something a passing
+    caller should be able to start. Same setting, same reasoning.
+    """
+    _check_trigger_allowed(request)
+    keys = (body.assets if body else None) or None
+    try:
+        return bootstrap.ensure(keys)
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except OSError as e:
+        raise HTTPException(status_code=502, detail=f"fetch failed: {e}") from e
 
 
 @app.get("/hardware")
@@ -289,6 +336,10 @@ class ScanTrigger(BaseModel):
     pivot: str = "en"
     sweep_all: bool = False
     scheme: str | None = None
+
+
+class BootstrapRequest(BaseModel):
+    assets: list[str] | None = Field(None, description="asset keys; omit for all missing")
 
 
 def _trigger_state() -> dict:

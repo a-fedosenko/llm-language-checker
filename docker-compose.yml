@@ -18,7 +18,16 @@ services:
       # container the caller's address is the bridge gateway and never loopback,
       # so the port binding below is what limits who can reach it -- which is why
       # opening the trigger here is a deliberate, separate act.
-      SCAN_TRIGGER: ${SCAN_TRIGGER:-loopback}
+      # `any`, not `loopback`, and this is the one place the difference is not a
+      # loosening. Inside a container the caller's address is always the bridge
+      # gateway, so `loopback` can never match and the UI's scan button returns
+      # 403 for everyone -- which is what a fresh clone used to hit. The control
+      # here is the port binding below, published on 127.0.0.1 by default.
+      SCAN_TRIGGER: ${SCAN_TRIGGER:-any}
+      # Set to 1 to fetch GlotLID (~1.6 GB) and build the FLORES controls at
+      # startup instead of pressing the button in the UI. Off by default: 1.6 GB
+      # arriving unannounced on `compose up` would be a rude surprise.
+      AUTO_BOOTSTRAP: ${AUTO_BOOTSTRAP:-0}
     env_file:
       - path: .env
         required: false
