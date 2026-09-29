@@ -28,6 +28,10 @@ data/controls/flores.json
 # Build artifacts
 *.egg-info/
 
+# Run logs: scan output, the container's stdout. Regenerable and noisy.
+*.log
+data/runs/
+
 # User-supplied locale lists are never committed; the public catalogue is.
 schemes/*.json
 !schemes/default.json
