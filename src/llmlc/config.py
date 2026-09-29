@@ -36,7 +36,15 @@ class Settings(BaseSettings):
 
     #: Hard ceiling on a scan started from the browser, whatever it asks for.
     #: The CLI has no ceiling: someone typing a command is already deliberate.
-    scan_trigger_max_calls: int = 2000
+    #:
+    #: 5000, not 2000. The natural first scan -- every living language that has a
+    #: back-translator control, which is what the docs point a new user at -- is
+    #: 199 classes and cost 2,379 calls in practice. A ceiling below the tool's
+    #: own advertised job turns a user's first click into a 400, and teaches them
+    #: to raise the limit blindly rather than to read it. The ceiling is here to
+    #: bound what a *passing caller* can spend, not to stop the owner doing the
+    #: thing the tool is for.
+    scan_trigger_max_calls: int = 5000
 
     def redacted(self) -> dict:
         d = self.model_dump()
