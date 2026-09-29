@@ -23,7 +23,7 @@ llmlc scan --engine openai-gpt-4o --tag de,cv --dry-run
 llmlc status                       # what is measured, what is stale
 llmlc markers                      # variant coverage and the remaining gap
 llmlc calibrate --engine <model> --dry-run   # the S7 study; needs specs built first
-uvicorn llmlc.api.main:app --port 8099    # UI; 8000/8010/8025/8077/8081/8082/8088 are taken
+docker compose up -d               # UI at http://localhost:${API_PORT:-8000}
 pytest -q
 ```
 
@@ -47,6 +47,8 @@ Schema changes are Alembic's. A database made by `create_all()` has no version r
 12. **The pivot language is measured through a different pivot** (protocol 013). Back-translating English into English grades nothing, so `en` falls through to `de`, then `fr`, then `es`. The pivot rides in the back-translator id (`remote:model@de`), which keeps qualifications cached per pivot and stops two incomparable measurements of one language from overwriting each other.
 13. **A deterministic negative has no instrument.** It stores `NO_INSTRUMENT` (`"(not needed)"`) because the local gate settled it and nothing read the language — so it is comparable to *every* back-translator's result rather than none of them, and `repo.upsert_result` collapses it onto the same row. A sentinel sitting in an identity column is why `kk-Latn` appeared twice.
 14. **Where a defect would be invisible in the output, the guard goes in the loader.** Marker scoring is string matching, so a wrong marker yields a plausible number with nothing to flag it. Three such defects are now rejected at load time rather than trusted to review (protocol 012).
+
+**Run the server in Docker, never on the host.** `docker compose up -d`, not `uvicorn` in a terminal. The reason is containment: a host process has the whole filesystem and network, a container does not. `API_PORT` and `API_BIND` in `.env` set where it listens; the default bind is loopback and should stay that way, because the UI has no authentication and the port binding is the only control. **The image bakes `src/` in with `COPY` and bind-mounts only `./data`, so after any code change you must `docker compose build --no-cache api`** — otherwise the UI serves old code over current data, which is exactly how an 11-day-old image came to render method-2.0.0 results through a five-tier vocabulary that no longer exists.
 
 **On the scan trigger.** `POST /scans` is bound to loopback (`SCAN_TRIGGER=off|loopback|any`, default `loopback`), because reaching it already implies access to the machine holding the `.env`. Only the socket peer address counts — a forged `X-Forwarded-For` is tested to fail. Docker needs `any`, where the control is the port binding, and compose publishes on `127.0.0.1`. A browser-started scan must name a `max_calls`; the CLI need not. One scan at a time; a second gets `409`. Cancellation is checked between classes, and orphaned `running` jobs are reaped at API startup.
 

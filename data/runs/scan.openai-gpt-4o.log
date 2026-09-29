@@ -1,1 +1,414 @@
 Warning : `load_model` does not return WordVectorModel or SupervisedModel any more, but a `FastText` object which is very similar.
+[1m199[0m tag(s) -> [1m199[0m class(es) (0 inherit without further calls)
+[90mjob 8[0m
+  ace           Unusable    deterministic-negative  r1
+  ace-Arab      Unusable    deterministic-negative  r1
+  acm           Proficient  fact-recall             r2
+  acq           Unusable    unverified              r2
+  aeb           Proficient  fact-recall             r3
+  af            Proficient  fact-recall             r2
+  ak            Assisted    fact-recall             r2
+  am            Assisted    fact-recall             r3
+  apc           Assisted    fact-recall             r3
+  ar            Proficient  fact-recall             r3
+  ars           Proficient  fact-recall             r3
+  ary           Assisted    fact-recall             r3
+  arz           Proficient  fact-recall             r3
+  as            Proficient  fact-recall             r3
+  ast           Proficient  fact-recall             r2
+  awa           Proficient  fact-recall             r3
+  ay            Unusable    deterministic-negative  r1
+  az            Proficient  fact-recall             r2
+  azb           Unusable    deterministic-negative  r1
+  ba            Proficient  fact-recall             r2
+  ban           Unusable    deterministic-negative  r1
+  be            Proficient  fact-recall             r3
+  bem           Unusable    deterministic-negative  r1
+  bg            Proficient  fact-recall             r3
+  bho           Proficient  fact-recall             r3
+  bjn           Unusable    deterministic-negative  r1
+  bjn-Arab      Unusable    deterministic-negative  r1
+  bm            Assisted    fact-recall             r2
+  bn            Proficient  fact-recall             r3
+  bo            Assisted    fact-recall             r2
+  bs            Proficient  fact-recall             r3
+  bug           Unusable    deterministic-negative  r1
+  ca            Assisted    fact-recall             r3
+  ceb           Proficient  fact-recall             r2
+  cjk           Unusable    deterministic-negative  r1
+  ckb           Assisted    fact-recall             r2
+  crh-Latn      Assisted    fact-recall             r3
+  cs            Proficient  fact-recall             r3
+  cv            Unusable    deterministic-negative  r1
+  cy            Proficient  fact-recall             r2
+  da            Proficient  fact-recall             r3
+  de            Proficient  fact-recall             r3
+  din           Unusable    deterministic-negative  r1
+  dyu           Unusable    deterministic-negative  r1
+  dz            Unusable    deterministic-negative  r1
+  ee            Assisted    fact-recall             r2
+  el            Proficient  fact-recall             r3
+  es            Proficient  fact-recall             r2
+  et            Proficient  fact-recall             r2
+  eu            Proficient  fact-recall             r2
+  fa            Assisted    fact-recall             r3
+  fi            Proficient  fact-recall             r2
+  fj            Unusable    deterministic-negative  r1
+  fo            Proficient  fact-recall             r2
+  fon           Unusable    deterministic-negative  r1
+  fr            Proficient  fact-recall             r2
+  fur           Proficient  fact-recall             r2
+  fuv           Unusable    deterministic-negative  r1
+  ga            Proficient  fact-recall             r2
+  gd            Proficient  fact-recall             r3
+  gl            Proficient  fact-recall             r2
+  gn            Unusable    deterministic-negative  r1
+  gu            Proficient  fact-recall             r3
+  ha            Proficient  fact-recall             r3
+  he            Proficient  fact-recall             r2
+  hi            Proficient  fact-recall             r3
+  hne           Proficient  fact-recall             r2
+  hr            Proficient  fact-recall             r3
+  ht            Assisted    fact-recall             r3
+  hu            Proficient  fact-recall             r2
+  hy            Proficient  fact-recall             r2
+  id            Proficient  fact-recall             r2
+  ig            Assisted    fact-recall             r3
+  ilo           Proficient  fact-recall             r2
+  is            Proficient  fact-recall             r2
+  it            Proficient  fact-recall             r2
+  ja            Proficient  fact-recall             r2
+  jv            Proficient  fact-recall             r2
+  ka            Proficient  fact-recall             r2
+  kab           Unusable    deterministic-negative  r1
+  kac           Unusable    deterministic-negative  r1
+  kam           Unusable    deterministic-negative  r1
+  kbp           Unusable    deterministic-negative  r1
+  kea           Unusable    deterministic-negative  r1
+  kg            Unusable    deterministic-negative  r1
+  ki            Assisted    fact-recall             r2
+  kk            Proficient  fact-recall             r3
+  km            Proficient  fact-recall             r3
+  kmb           Unusable    deterministic-negative  r1
+  kn            Proficient  fact-recall             r2
+  ko-Hang       Proficient  fact-recall             r2
+  kr            Unusable    deterministic-negative  r1
+  kr-Arab       Unusable    deterministic-negative  r1
+  ks            Unusable    deterministic-negative  r1
+  ks-Deva       Unusable    deterministic-negative  r1
+  ku            Assisted    fact-recall             r2
+  ky            Proficient  fact-recall             r2
+  lb            Proficient  fact-recall             r3
+  lg            Assisted    fact-recall             r3
+  li            Unusable    deterministic-negative  r1
+  lij           Unusable    deterministic-negative  r1
+  lmo           Unusable    deterministic-negative  r1
+  ln            Proficient  fact-recall             r2
+  lo            Proficient  fact-recall             r3
+  lt            Proficient  fact-recall             r3
+  ltg           Unusable    deterministic-negative  r1
+  lua           Unusable    deterministic-negative  r1
+  luo           Unusable    deterministic-negative  r1
+  lus           Unusable    deterministic-negative  r1
+  lv            Proficient  fact-recall             r2
+  mag           Proficient  fact-recall             r2
+  mai           Proficient  fact-recall             r2
+  mg            Assisted    fact-recall             r3
+  mi            Proficient  fact-recall             r3
+  min           Proficient  fact-recall             r2
+  min-Arab      Unusable    deterministic-negative  r1
+  mk            Proficient  fact-recall             r2
+  ml            Assisted    fact-recall             r3
+  mn            Proficient  fact-recall             r2
+  mni           Unusable    deterministic-negative  r1
+  mos           Unusable    deterministic-negative  r1
+  mr            Proficient  fact-recall             r3
+  ms            Proficient  fact-recall             r2
+  mt            Proficient  fact-recall             r2
+  my            Assisted    fact-recall             r3
+  nb            Proficient  fact-recall             r2
+  ne            Proficient  fact-recall             r3
+  nl            Proficient  fact-recall             r2
+  nn            Proficient  fact-recall             r3
+  nso           Proficient  fact-recall             r2
+  nus           Unusable    deterministic-negative  r1
+  ny            Proficient  fact-recall             r2
+  oc            Proficient  fact-recall             r2
+  om            Unusable    deterministic-negative  r1
+  or            Proficient  fact-recall             r3
+  pa            Proficient  fact-recall             r2
+  pag           Unusable    deterministic-negative  r1
+  pap           Proficient  fact-recall             r2
+  pbt           Proficient  fact-recall             r3
+  pl            Proficient  fact-recall             r3
+  prs           Unusable    deterministic-negative  r1
+  pt            Proficient  fact-recall             r2
+  quy           Unusable    deterministic-negative  r1
+  rn            Proficient  fact-recall             r2
+  ro            Proficient  fact-recall             r3
+  ru            Proficient  fact-recall             r2
+  rw            Proficient  fact-recall             r2
+  sat           Unusable    deterministic-negative  r1
+  sc            Unusable    deterministic-negative  r1
+  scn           Proficient  fact-recall             r2
+  sd            Proficient  fact-recall             r2
+  sg            Unusable    deterministic-negative  r1
+  shn           Unusable    deterministic-negative  r1
+  si            Proficient  fact-recall             r2
+  sk            Proficient  fact-recall             r3
+  sl            Proficient  fact-recall             r3
+  sm            Proficient  fact-recall             r2
+  sn            Assisted    fact-recall             r3
+  so            Proficient  fact-recall             r3
+  sq            Proficient  fact-recall             r3
+  sr            Proficient  fact-recall             r3
+  ss            Unusable    deterministic-negative  r1
+  st            Proficient  fact-recall             r2
+  su            Assisted    fact-recall             r3
+  sv            Proficient  fact-recall             r2
+  sw            Proficient  fact-recall             r2
+  szl           Unusable    deterministic-negative  r1
+  ta            Proficient  fact-recall             r2
+  taq           Unusable    deterministic-negative  r1
+  taq-Tfng      Unusable    deterministic-negative  r1
+  te            Assisted    fact-recall             r3
+  tg            Proficient  fact-recall             r3
+  th            Proficient  fact-recall             r2
+  ti            Assisted    fact-recall             r2
+  tk            Proficient  fact-recall             r3
+  tl            Unusable    deterministic-negative  r1
+  tn            Proficient  fact-recall             r2
+  tpi           Assisted    fact-recall             r2
+  tr            Proficient  fact-recall             r2
+  ts            Assisted    fact-recall             r2
+  tt            Proficient  fact-recall             r3
+  tum           Unusable    deterministic-negative  r1
+  tzm-Tfng      Assisted    fact-recall             r2
+  ug            Proficient  fact-recall             r2
+  uk            Proficient  fact-recall             r3
+  umb           Unusable    deterministic-negative  r1
+  ur            Proficient  fact-recall             r3
+  uz            Proficient  fact-recall             r3
+  vec           Proficient  fact-recall             r2
+  vi            Proficient  fact-recall             r3
+  war           Assisted    fact-recall             r2
+  wo            Unusable    deterministic-negative  r1
+  xh            Proficient  fact-recall             r2
+  yi            Proficient  fact-recall             r2
+  yo            Assisted    fact-recall             r3
+  yue           Proficient  fact-recall             r2
+  zh-AU         Proficient  fact-recall             r2
+  zh-CN         Proficient  fact-recall             r3
+  zu            Proficient  fact-recall             r2
+
+[1mscan[0m 199 tag(s) in 4290s
+  classes probed 199   inherited 0
+  calls: 2379  (1357 gen, 511 bt, 511 judge)   12.0 per tag
+
+[1msummary[0m  199 language(s)
+  tag       tier        evidence                  content   reliab  designator
+  ace       Unusable    deterministic-negative       0.00     0.00  Aceh
+  ace-Arab  Unusable    deterministic-negative       0.00     0.00  Aceh (Arabic script)
+  acm       Proficient  fact-recall                  1.00        -  Arabic, Mesopotamian (Arabic scr
+  acq       Unusable    unverified                   0.00     0.00  Arabic, Ta’izzi-Adeni (Arabic sc
+  aeb       Proficient  fact-recall                  0.96        -  Arabic, Tunisian (Arabic script)
+  af        Proficient  fact-recall                  1.00        -  Afrikaans
+  ak        Assisted    fact-recall                  0.87        -  Akan
+  am        Assisted    fact-recall                  0.92        -  Amharic (Ge'ez script)
+  apc       Assisted    fact-recall                  0.93        -  Arabic, Levantine (Arabic script
+  ar        Proficient  fact-recall                  0.96        -  Arabic (Arabic script)
+  ars       Proficient  fact-recall                  0.96        -  Arabic, Najdi (Arabic script)
+  ary       Assisted    fact-recall                  0.85        -  Arabic, Moroccan (Arabic script)
+  arz       Proficient  fact-recall                  0.95        -  Arabic, Egyptian (Arabic script)
+  as        Proficient  fact-recall                  0.96        -  অসমীয়া
+  ast       Proficient  fact-recall                  1.00        -  Asturian
+  awa       Proficient  fact-recall                  0.95        -  Awadhi (Devanagari script)
+  ay        Unusable    deterministic-negative       0.00     0.00  Aymara
+  az        Proficient  fact-recall                  1.00        -  Azerbaijani
+  azb       Unusable    deterministic-negative       0.00     0.00  Azerbaijani, South (Arabic scrip
+  ba        Proficient  fact-recall                  1.00        -  башҡорт теле
+  ban       Unusable    deterministic-negative       0.00     0.00  Bali
+  be        Proficient  fact-recall                  0.96        -  Belarusian (Cyrillic script)
+  bem       Unusable    deterministic-negative       0.00     0.00  Bemba
+  bg        Proficient  fact-recall                  0.96        -  Bulgarian (Cyrillic script)
+  bho       Proficient  fact-recall                  0.96        -  Bhojpuri (Devanagari script)
+  bjn       Unusable    deterministic-negative       0.00     0.00  Banjar
+  bjn-Arab  Unusable    deterministic-negative       0.00     0.00  Banjar (Arabic script)
+  bm        Assisted    fact-recall                  0.00     0.33  Bamanankan
+  bn        Proficient  fact-recall                  0.96        -  Bengali (Bengali script)
+  bo        Assisted    fact-recall                  0.47        -  Tibetan, Central (Tibetan script
+  bs        Proficient  fact-recall                  0.96        -  Bosnian
+  bug       Unusable    deterministic-negative       0.00     0.00  Bugis
+  ca        Assisted    fact-recall                  0.92        -  Catalan
+  ceb       Proficient  fact-recall                  1.00        -  Cebuano
+  cjk       Unusable    deterministic-negative       0.00     0.00  Chokwe
+  ckb       Assisted    fact-recall                  0.80     0.33  ckb
+  crh-Latn  Assisted    fact-recall                  0.92        -  Crimean Tatar (Latin script)
+  cs        Proficient  fact-recall                  0.96        -  Czech
+  cv        Unusable    deterministic-negative       0.00     0.00  Chuvash (Cyrillic script)
+  cy        Proficient  fact-recall                  1.00        -  Welsh
+  da        Proficient  fact-recall                  0.96        -  Danish
+  de        Proficient  fact-recall                  0.96        -  German, Standard
+  din       Unusable    deterministic-negative       0.00     0.00  Dinka
+  dyu       Unusable    deterministic-negative       0.00     0.00  Jula
+  dz        Unusable    deterministic-negative       0.00     0.00  Dzongkha (Tibetan script)
+  ee        Assisted    fact-recall                  0.00     0.33  Éwé
+  el        Proficient  fact-recall                  0.96        -  Greek (Greek script)
+  es        Proficient  fact-recall                  1.00        -  Spanish
+  et        Proficient  fact-recall                  1.00        -  Estonian
+  eu        Proficient  fact-recall                  1.00        -  Basque
+  fa        Assisted    fact-recall                  0.88        -  Persian (Arabic script)
+  fi        Proficient  fact-recall                  1.00        -  Finnish
+  fj        Unusable    deterministic-negative       0.00     0.00  Fijian
+  fo        Proficient  fact-recall                  1.00        -  føroyskt
+  fon       Unusable    deterministic-negative       0.00     0.00  Fon
+  fr        Proficient  fact-recall                  1.00        -  French
+  fur       Proficient  fact-recall                  1.00     0.33  Friulian
+  fuv       Unusable    deterministic-negative       0.00     0.00  Fulfulde, Nigerian
+  ga        Proficient  fact-recall                  1.00        -  Irish
+  gd        Proficient  fact-recall                  0.96        -  Scottish Gaelic
+  gl        Proficient  fact-recall                  1.00        -  Galician
+  gn        Unusable    deterministic-negative       0.00     0.00  Guarani
+  gu        Proficient  fact-recall                  0.96        -  Gujarati (Gujarati script)
+  ha        Proficient  fact-recall                  0.96        -  Hausa
+  he        Proficient  fact-recall                  1.00        -  Hebrew (Hebrew script)
+  hi        Proficient  fact-recall                  0.95        -  Hindi (Devanagari script)
+  hne       Proficient  fact-recall                  1.00     0.67  Chhattisgarhi (Devanagari script
+  hr        Proficient  fact-recall                  0.96        -  Croatian
+  ht        Assisted    fact-recall                  0.92        -  Haitian Creole
+  hu        Proficient  fact-recall                  1.00        -  Hungarian
+  hy        Proficient  fact-recall                  1.00        -  Armenian (Armenian script)
+  id        Proficient  fact-recall                  1.00        -  Indonesian
+  ig        Assisted    fact-recall                  0.80        -  Igbo
+  ilo       Proficient  fact-recall                  1.00     0.33  Ilocano
+  is        Proficient  fact-recall                  1.00        -  Icelandic
+  it        Proficient  fact-recall                  1.00        -  Italian
+  ja        Proficient  fact-recall                  1.00        -  Japanese (Japanese script)
+  jv        Proficient  fact-recall                  1.00     0.67  Javanese
+  ka        Proficient  fact-recall                  1.00        -  Georgian (Georgian script)
+  kab       Unusable    deterministic-negative       0.00     0.00  Kabyle
+  kac       Unusable    deterministic-negative       0.00     0.00  Jingpho
+  kam       Unusable    deterministic-negative       0.00     0.00  Kamba
+  kbp       Unusable    deterministic-negative       0.00     0.00  Kabiyè
+  kea       Unusable    deterministic-negative       0.00     0.00  Kabuverdianu
+  kg        Unusable    deterministic-negative       0.00     0.00  Kongo
+  ki        Assisted    fact-recall                  0.00     0.33  Gikuyu
+  kk        Proficient  fact-recall                  0.96        -  Kazakh (Cyrillic script)
+  km        Proficient  fact-recall                  0.96        -  ខ្មែរ
+  kmb       Unusable    deterministic-negative       0.00     0.00  Kimbundu
+  kn        Proficient  fact-recall                  1.00        -  Kannada (Kannada script)
+  ko-Hang   Proficient  fact-recall                  1.00        -  Korean (Hang script)
+  kr        Unusable    deterministic-negative       0.00     0.00  Kanuri
+  kr-Arab   Unusable    deterministic-negative       0.00     0.00  Kanuri, Yerwa (Arabic script)
+  ks        Unusable    deterministic-negative       0.00     0.33  Kashmiri (Arabic script)
+  ks-Deva   Unusable    deterministic-negative       0.00     0.00  Kashmiri (Devanagari script)
+  ku        Assisted    fact-recall                  0.60        -  kurdî (kurmancî)
+  ky        Proficient  fact-recall                  1.00        -  Kyrgyz (Cyrillic script)
+  lb        Proficient  fact-recall                  0.96        -  Luxembourgish
+  lg        Assisted    fact-recall                  0.84        -  Ganda
+  li        Unusable    deterministic-negative       0.00     0.00  Limburgish
+  lij       Unusable    deterministic-negative       0.00     0.00  Ligurian
+  lmo       Unusable    deterministic-negative       0.00     0.00  Lombard
+  ln        Proficient  fact-recall                  1.00        -  Lingala
+  lo        Proficient  fact-recall                  0.96        -  Lao (Laoo script)
+  lt        Proficient  fact-recall                  0.96        -  Lithuanian
+  ltg       Unusable    deterministic-negative       0.00     0.00  Latgalian
+  lua       Unusable    deterministic-negative       0.00     0.00  Luba-Kasai
+  luo       Unusable    deterministic-negative       0.00     0.00  Dholuo
+  lus       Unusable    deterministic-negative       0.00     0.00  Mizo
+  lv        Proficient  fact-recall                  1.00        -  Latvian
+  mag       Proficient  fact-recall                  1.00        -  Magahi (Devanagari script)
+  mai       Proficient  fact-recall                  1.00        -  Maithili (Devanagari script)
+  mg        Assisted    fact-recall                  0.90     0.80  Malagasy
+  mi        Proficient  fact-recall                  0.96        -  Maori
+  min       Proficient  fact-recall                  1.00     0.67  Minangkabau
+  min-Arab  Unusable    deterministic-negative       0.00     0.00  Minangkabau (Arabic script)
+  mk        Proficient  fact-recall                  1.00        -  Macedonian (Cyrillic script)
+  ml        Assisted    fact-recall                  0.92        -  Malayalam (Malayalam script)
+  mn        Proficient  fact-recall                  1.00        -  Mongolian (Cyrillic script)
+  mni       Unusable    deterministic-negative       0.00     0.00  Meitei (Bengali script)
+  mos       Unusable    deterministic-negative       0.00     0.00  Moore
+  mr        Proficient  fact-recall                  0.96        -  Marathi (Devanagari script)
+  ms        Proficient  fact-recall                  1.00        -  Malay (macrolanguage)
+  mt        Proficient  fact-recall                  1.00        -  Maltese
+  my        Assisted    fact-recall                  0.84        -  Burmese (Myanmar script)
+  nb        Proficient  fact-recall                  1.00        -  Norwegian Bokmål
+  ne        Proficient  fact-recall                  0.96        -  Nepali (macrolanguage) (Devanaga
+  nl        Proficient  fact-recall                  1.00        -  Dutch
+  nn        Proficient  fact-recall                  0.96        -  Norwegian Nynorsk
+  nso       Proficient  fact-recall                  1.00     0.67  Sesotho sa Leboa
+  nus       Unusable    deterministic-negative       0.00     0.00  Nuer
+  ny        Proficient  fact-recall                  1.00     0.67  Chichewa
+  oc        Proficient  fact-recall                  1.00        -  occitan
+  om        Unusable    deterministic-negative       0.00     0.00  Oromo
+  or        Proficient  fact-recall                  0.96        -  Oriya (macrolanguage) (Odia scri
+  pa        Proficient  fact-recall                  1.00        -  Punjabi, Eastern (Gurmukhi scrip
+  pag       Unusable    deterministic-negative       0.00     0.00  Pangasinan
+  pap       Proficient  fact-recall                  1.00        -  Papiamento
+  pbt       Proficient  fact-recall                  0.96        -  Pashto, Southern (Arabic script)
+  pl        Proficient  fact-recall                  0.96        -  Polish
+  prs       Unusable    deterministic-negative       0.00        -  Dari (Arabic script)
+  pt        Proficient  fact-recall                  1.00        -  Portuguese
+  quy       Unusable    deterministic-negative       0.00     0.00  Quechua, Ayacucho
+  rn        Proficient  fact-recall                  1.00        -  Ikirundi
+  ro        Proficient  fact-recall                  0.96        -  Romanian
+  ru        Proficient  fact-recall                  1.00        -  Russian (Cyrillic script)
+  rw        Proficient  fact-recall                  1.00        -  Kinyarwanda
+  sat       Unusable    deterministic-negative       0.00     0.00  Santhali (Olck script)
+  sc        Unusable    deterministic-negative       0.00     0.00  Sardinian
+  scn       Proficient  fact-recall                  1.00        -  sicilianu
+  sd        Proficient  fact-recall                  1.00        -  Sindhi (Arabic script)
+  sg        Unusable    deterministic-negative       0.00     0.00  Sango
+  shn       Unusable    deterministic-negative       0.00     0.00  Shan (Myanmar script)
+  si        Proficient  fact-recall                  1.00        -  Sinhala (Sinhala script)
+  sk        Proficient  fact-recall                  0.96        -  Slovak
+  sl        Proficient  fact-recall                  0.96        -  Slovene
+  sm        Proficient  fact-recall                  1.00     0.33  Samoan
+  sn        Assisted    fact-recall                  0.80        -  Shona
+  so        Proficient  fact-recall                  0.96        -  Somali
+  sq        Proficient  fact-recall                  0.96        -  Albanian
+  sr        Proficient  fact-recall                  0.96        -  Serbian (Cyrillic script)
+  ss        Unusable    deterministic-negative       0.00     0.00  Swati
+  st        Proficient  fact-recall                  1.00        -  Sesotho
+  su        Assisted    fact-recall                  0.85     0.80  Basa Sunda
+  sv        Proficient  fact-recall                  1.00        -  Swedish
+  sw        Proficient  fact-recall                  1.00        -  Swahili (macrolanguage)
+  szl       Unusable    deterministic-negative       0.00     0.00  Silesian
+  ta        Proficient  fact-recall                  1.00        -  Tamil (Tamil script)
+  taq       Unusable    deterministic-negative       0.00     0.00  Tamasheq
+  taq-Tfng  Unusable    deterministic-negative       0.00     0.00  Tamasheq (Tifinagh script)
+  te        Assisted    fact-recall                  0.92        -  Telugu (Telugu script)
+  tg        Proficient  fact-recall                  0.96        -  Tajik (Cyrillic script)
+  th        Proficient  fact-recall                  1.00        -  Thai (Thai script)
+  ti        Assisted    fact-recall                  0.27        -  ትግርኛ
+  tk        Proficient  fact-recall                  0.95     0.80  Turkmen
+  tl        Unusable    deterministic-negative       0.00        -  Tagalog
+  tn        Proficient  fact-recall                  1.00        -  Setswana
+  tpi       Assisted    fact-recall                  0.87        -  Tok Pisin
+  tr        Proficient  fact-recall                  1.00        -  Turkish
+  ts        Assisted    fact-recall                  0.80     0.33  Tsonga
+  tt        Proficient  fact-recall                  0.96        -  Tatar (Cyrillic script)
+  tum       Unusable    deterministic-negative       0.00     0.00  Tumbuka
+  tzm-Tfng  Assisted    fact-recall                  0.00        -  Tamazight, Central Atlas (Tifina
+  ug        Proficient  fact-recall                  1.00     0.33  Uyghur (Arabic script)
+  uk        Proficient  fact-recall                  0.96        -  Ukrainian (Cyrillic script)
+  umb       Unusable    deterministic-negative       0.00     0.00  Umbundu
+  ur        Proficient  fact-recall                  0.96        -  Urdu (Arabic script)
+  uz        Proficient  fact-recall                  0.96        -  Uzbek
+  vec       Proficient  fact-recall                  1.00     0.33  Venetian
+  vi        Proficient  fact-recall                  0.96        -  Vietnamese
+  war       Assisted    fact-recall                  0.80     0.33  Waray-Waray
+  wo        Unusable    deterministic-negative       0.00     0.00  Wolof
+  xh        Proficient  fact-recall                  1.00        -  Xhosa
+  yi        Proficient  fact-recall                  1.00        -  Yiddish (Hebrew script)
+  yo        Assisted    fact-recall                  0.88        -  Yoruba
+  yue       Proficient  fact-recall                  1.00        -  Chinese, Yue (Traditional Chines
+  zh-AU     Proficient  fact-recall                  1.00        -  Chinese (Traditional Chinese scr
+  zh-CN     Proficient  fact-recall                  0.96        -  Chinese (Simplified Chinese scri
+  zu        Proficient  fact-recall                  1.00        -  Zulu
+
+  real evidence: 198/199   unverified: 1
+
+[90msupport [0mdata/results/support.openai-gpt-4o.json
+[90mevidence[0m data/results/evidence.openai-gpt-4o.2.0.0.jsonl
+[90mcorpus  [0mdata/corpus/run_1790671817.jsonl   [90mjob[0m 8
