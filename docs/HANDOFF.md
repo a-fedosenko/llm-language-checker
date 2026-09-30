@@ -4,104 +4,113 @@ Paste the block below into a new session. Everything else it needs is in the rep
 
 ---
 
-We are building **llm-language-checker**: a self-hosted, heuristic tool that measures which languages an LLM can actually produce, rather than which ones a vendor claims. It exists to populate per-locale engine support data for our TMS/CAT system, and as a portfolio project. Not commercial.
+We are building **llm-language-checker**: a self-hosted, heuristic tool that measures which languages an LLM can actually produce, rather than which ones a vendor claims. It exists to populate per-locale engine support data for our TMS/CAT system (Catmint), and as a portfolio project. Not commercial.
 
 **Read these first, in order** — they carry every decision and its reasoning:
 
 - `docs/01 - Initial discussion - stage 1.md` — prior art, methodology, output contract, dialect/macrolanguage logic
 - `docs/02 - Experiment - invented language control.md` — why self-reported language support cannot be trusted
-- `docs/03 - Architecture and development stages.md` — architecture, data model, staging, and the implementation log for S0–S6
-- `experiments/protocols/README.md` — nineteen protocols; **016 and 018 matter most** (016 is the script finding that shapes the whole design; 018 rebuilt the scale and withdrew one of 017's numbers), then 017, 005 and 012
+- `docs/03 - Architecture and development stages.md` — architecture, data model, staging, implementation log. **Read "Services as built" before believing the five-service diagram above it**, which is the S0 plan and was never built
+- `experiments/protocols/README.md` — nineteen protocols. **016 and 018 matter most**; then 019, 017, 005, 012
 
-**State:** S0–S7 complete; 284 tests passing. **The tier scale was rebuilt on 2026-09-25** ([protocol 018](../experiments/protocols/018-eligibility-and-adequacy.md)) — three tiers derived from a published adequacy score, behind a deterministic eligibility filter. Every stored result is stale under `method_version` 2.0.0, which is what `llmlc status` is for. S8 is unblocked and is the next task.
+**State:** S0–S8 complete. 295 tests. Method version **2.0.0**; 932 result rows.
+
+**Four engines are measured across 199 languages** (2026-09-29/30, jobs 10–13, ~8,900 calls). That is every living language for which a back-translator control exists — see *Coverage* below, because the number is a constraint, not a choice.
+
+| engine | Proficient | Assisted | Unusable | langs w/ refusals | reader |
+|---|---|---|---|---|---|
+| **deepseek-v4-pro** | **130** | 59 | **10** | **0** | gemini-3-6-flash |
+| gemini-3-8-flash | 114 | 68 | 17 | 3 | deepseek-v4-flash* |
+| openai-gpt-4o | 105 | 35 | 59 | 75 | gemini-3-6-flash |
+| groq-qwen3-8-27b | 66 | 71 | 62 | 75 | gemini-3-6-flash |
+
+*a different reader, so not directly comparable with the other three. It is the weaker one, which biases against gemini — its 15 `unverified`, the highest of the four, is that handicap surfacing as "could not measure" rather than as lower tiers.*
+
+On the three that share a reader: **deepseek is strictly best on 64 languages** (gpt-4o on 6), and **41 languages only deepseek can do at all**. 129 of 199 all three handle; 10 none of them can.
+
+**The dominant effect is willingness, not ability.** deepseek refused nothing across 199 languages; gpt-4o answered `CANNOT` on 200 of 725 attempts. Protocol 011's insistence on keeping availability as a second axis is what makes that readable — a single scale would have reported it as "gpt-4o cannot write these languages," which the data does not support.
 
 **Run it:**
 ```bash
-source .venv/bin/activate          # or use .venv/bin/llmlc directly
-set -a && . .env && set +a         # aggregator endpoint + key, gitignored
-llmlc scan --engine openai-gpt-4o --tag de,cv --dry-run
-llmlc bootstrap --check            # is the instrument complete? (GlotLID + controls)
+cp .env.example .env               # aggregator endpoint + key; gitignored
+docker compose up -d               # UI at http://localhost:${API_PORT:-8000}   (8089 on Andrei's machine)
+llmlc bootstrap --check            # is the instrument complete? (GlotLID + FLORES controls)
 llmlc status                       # what is measured, what is stale
 llmlc markers                      # variant coverage and the remaining gap
-llmlc calibrate --engine <model> --dry-run   # the S7 study; needs specs built first
-docker compose up -d               # UI at http://localhost:${API_PORT:-8000}
-pytest -q
+python -m pytest -q                # note: bare `pytest` misses the rootdir
+python scripts/run_programme.py --base http://localhost:8089   # the cross-engine programme, over HTTP
 ```
 
-The UI has five tabs: **Results** (paged, faceted, a row expands to its items and evidence), **Resolution** (what each tag actually got you), **Variants** (dialect evidence and the marker gap), **Scan** (plan for free, then start one), **Jobs** (per-class progress, cancel, history). Every block title and column heading carries an info icon defining the term; those definitions live in a single `HELP` dictionary in `index.html` rather than in the markup, because the same terms appear in several tables.
+The UI has five tabs: **Results** (paged, faceted, a row expands to its items and evidence), **Resolution** (what each tag actually got you), **Variants** (dialect evidence and the marker gap), **Scan** (plan for free, then start one), **Jobs** (per-class progress, cancel, history). Every block title and column heading carries an info icon defining the term; those definitions live in a single `HELP` dictionary in `index.html`.
 
 Schema changes are Alembic's. A database made by `create_all()` has no version row, so migrating one for the first time needs `alembic stamp fb431915efe4 && alembic upgrade head`.
 
 **Conventions that are not obvious from the code:**
 
-1. **Every experiment gets a protocol** in `experiments/protocols/`, following `TEMPLATE.md`, with the hypothesis written down *before* the run. Invalidated results are kept with `Status: invalidated`, not deleted. Raw responses are committed.
+1. **Every experiment gets a protocol** in `experiments/protocols/`, following `TEMPLATE.md`, with the hypothesis written down *before* the run. Invalidated results are kept with `Status: invalidated`, not deleted. This has paid for itself repeatedly: 002 withdrew a conclusion from 001, 016 overturned 014's headline, 018 withdrew a correlation from 017, and 019 found its own trigger was overstated tenfold.
 2. **Reasoning must be off** for every measurement call. Vendor defaults differ and that confound already invalidated one conclusion (protocol 002). `reasoning_effort: "none"`, with per-model fallback — gpt-4o rejects the parameter outright.
-3. **SQLite only, and one container.** No Postgres, no `worker`, `lid`, `bt` or `ui` service — `docs/03`'s five-service diagram is the S0 plan and is marked as such. A single-tenant local tool does not need a database server, and supporting both cost us two real bugs. WAL is enabled so the CLI can write on the host while the UI reads from the container through the same bind-mounted file.
-4. **Results are only comparable within the same back-translator, judge and method version.** That is why they are part of the uniqueness constraint.
+3. **SQLite only, and one container.** No Postgres, no `worker`/`lid`/`bt`/`ui` service. WAL is enabled so the CLI can write on the host while the UI reads through the bind-mounted file.
+4. **Results are only comparable within the same back-translator, judge and method version.** Part of the uniqueness constraint, and not a formality: the same engine measured through two qualified readers **disagreed on tier for 13% of 136 languages**, with a mean content delta of 0.000 — unbiased on average, noisy per language.
 5. **`no-control` is never a pass.** Where the back-translator cannot be qualified for a language, the result is `unverified` with the reason named.
-6. Before claiming a finding, **read the raw evidence**. Three of the last four real bugs were found by looking at actual output rather than by tests: two marker defects in S6, and a duplicate-row bug that surfaced only as two identical rows in the UI.
-7. **Tier is capability; availability is willingness** (protocol 011). Refusals are excluded from `s_lang` and reported separately. Do not let one become the other — the workflow sentence carries the caveat, the tier does not move.
-8. **The content score is the measurement; the tier is a lossy view of it** (protocol 018). Quote the number. Three tiers exist because a TMS has to route on something, and they cost 0.04 of Spearman against the number they come from — the five they replaced cost about a third. Eligibility is a filter, not the first term of a grade: wrong script or wrong language means `Unusable`, full stop, and that check is never handed to a model (016: 15/15 against 0/15).
-9. **An analysis harness calls the production function; it never re-implements it** (protocol 018). `calibrate.py` called the gate without `accept_lang`, which convicted every macrolanguage of writing the wrong language — Swahili at chrF++ 79.8 in the "not Swahili" bucket. 68 of 385 verdicts were wrong and protocol 017 drew a conclusion from them. The drift arrives looking like a finding.
-10. **`runner.py` is the only definition of "run a scan".** The CLI and the HTTP trigger differ in how they report progress and who may call them, nothing else. Add scan behaviour there, not in `cli.py`.
-11. **Inheriting a tier is not inheriting a claim** (S6). A variant tag gets its own `variant_evidence` by script, markers, an authored `not-distinguishable`, or `untested`. The last two are different on purpose: one is a finished decision, the other is countable remaining work.
-12. **The pivot language is measured through a different pivot** (protocol 013). Back-translating English into English grades nothing, so `en` falls through to `de`, then `fr`, then `es`. The pivot rides in the back-translator id (`remote:model@de`), which keeps qualifications cached per pivot and stops two incomparable measurements of one language from overwriting each other.
-13. **A deterministic negative has no instrument.** It stores `NO_INSTRUMENT` (`"(not needed)"`) because the local gate settled it and nothing read the language — so it is comparable to *every* back-translator's result rather than none of them, and `repo.upsert_result` collapses it onto the same row. A sentinel sitting in an identity column is why `kk-Latn` appeared twice.
-14. **Where a defect would be invisible in the output, the guard goes in the loader.** Marker scoring is string matching, so a wrong marker yields a plausible number with nothing to flag it. Three such defects are now rejected at load time rather than trusted to review (protocol 012).
+6. Before claiming a finding, **read the raw evidence**. Nearly every real bug this project found came from looking at output rather than from tests — two marker defects, a duplicate-row bug, and protocol 018's first table, which had Swahili at chrF++ 79.8 sitting in the "did not write Swahili" bucket.
+7. **Tier is capability; availability is willingness** (protocol 011). Refusals are excluded from `s_lang` and reported separately. The workflow sentence carries the caveat; the tier does not move.
+8. **The content score is the measurement; the tier is a lossy view of it** (protocol 018). Quote the number. Three tiers exist because a TMS must route on something, and they cost 0.04 of Spearman against the number they come from — the five they replaced cost about a third. Eligibility is a filter, not the first term of a grade: wrong script or wrong language means `Unusable`, full stop, and that check is never handed to a model (016: 15/15 against 0/15).
+9. **An analysis harness calls the production function; it never re-implements it** (protocol 018). `calibrate.py` called the gate without `accept_lang`, convicting every macrolanguage of writing the wrong language. 68 of 385 verdicts were wrong and protocol 017 drew a conclusion from them. The drift arrives looking like a finding.
+10. **When the instrument is missing, say so — never quietly answer worse.** Third time this has come up (005, 019, S8). A scan without GlotLID runs fine and silently loses its language check; `llmlc bootstrap` and the UI readiness banner exist so that is stated, not discovered.
+11. **`runner.py` is the only definition of "run a scan".** The CLI and the HTTP trigger differ in how they report progress and who may call them, nothing else.
+12. **Inheriting a tier is not inheriting a claim** (S6). A variant tag gets its own `variant_evidence` by script, markers, an authored `not-distinguishable`, or `untested`. The last two are different on purpose.
+13. **The pivot language is measured through a different pivot** (protocol 013). `en` falls through to `de`, then `fr`, then `es`. The pivot rides in the back-translator id (`remote:model@de`).
+14. **A deterministic negative has no instrument.** It stores `NO_INSTRUMENT` (`"(not needed)"`), so it is comparable to *every* back-translator rather than none, and `repo.upsert_result` collapses it onto one row. This is why re-running an engine through a new reader adds rows rather than replacing them, and why the 58 deterministic negatives were not duplicated.
+15. **Where a defect would be invisible in the output, the guard goes in the loader** (protocol 012). Marker scoring is string matching, so a wrong marker yields a plausible number with nothing to flag it.
 
-**Run the server in Docker, never on the host.** `docker compose up -d`, not `uvicorn` in a terminal. The reason is containment: a host process has the whole filesystem and network, a container does not. `API_PORT` and `API_BIND` in `.env` set where it listens; the default bind is loopback and should stay that way, because the UI has no authentication and the port binding is the only control. **The image bakes `src/` in with `COPY` and bind-mounts only `./data`, so after any code change you must `docker compose build --no-cache api`** — otherwise the UI serves old code over current data, which is exactly how an 11-day-old image came to render method-2.0.0 results through a five-tier vocabulary that no longer exists.
+**The back-translator panel is fixed, and its members must stay outside the scan set** (S8, doc 03). `gemini-gemini-3-6-flash, deepseek-deepseek-v4-flash`, in that order; the guard drops the engine's whole *family*, not just its id. A model that is both under test and in the panel gets dropped from its own panel and is then measured through a different instrument from every other engine, which invalidates the cross-engine comparison by convention 4. Order is measured, not alphabetical: `route()` takes the first member that qualifies, and gemini-3-6-flash is the stronger reader at the hard end (ug 59.3 vs 40.3, am 62.8 vs 48.5).
 
-**On the scan trigger.** `POST /scans` is bound to loopback (`SCAN_TRIGGER=off|loopback|any`, default `loopback`), because reaching it already implies access to the machine holding the `.env`. Only the socket peer address counts — a forged `X-Forwarded-For` is tested to fail. Docker needs `any`, where the control is the port binding, and compose publishes on `127.0.0.1`. A browser-started scan must name a `max_calls`; the CLI need not. One scan at a time; a second gets `409`. Cancellation is checked between classes, and orphaned `running` jobs are reaped at API startup.
+**Run the server in Docker, never on the host.** `docker compose up -d`, not `uvicorn` in a terminal — containment. `API_PORT` and `API_BIND` in `.env`; the default bind is loopback and should stay that way, because the UI has no authentication and the port binding is the only control. **The image bakes `src/` in with `COPY` and bind-mounts only `./data`, so after any code change you must `docker compose build --no-cache api`** — otherwise the UI serves old code over current data, which is how an 11-day-old image came to render method-2.0.0 results through a five-tier vocabulary that no longer existed.
+
+**On the scan trigger.** `POST /scans` is gated by `SCAN_TRIGGER=off|loopback|any`. Compose defaults to `any`, which is not a loosening: inside a container the peer is always the bridge gateway, so `loopback` can never match and the UI's scan button would 403 for everyone. The control there is the port binding. Only the socket peer address counts — a forged `X-Forwarded-For` is tested to fail. A browser-started scan must name `max_calls`, capped by `SCAN_TRIGGER_MAX_CALLS` (5000; a full 199-class scan costs ~2,400). One scan at a time; a second gets `409`.
 
 ---
 
-## Next step: S8 — README, methodology and limitations
-
-**The breadth run is unblocked**: of the six classes it could not have passed, five are fixed by [protocol 019](../experiments/protocols/019-script-check-completeness.md) and `sat|Olck` now fails for the right reason. Run it before writing S8 — the documentation is better written around a real cross-engine table than ahead of one.
-
-The scale is settled, so S8 is unblocked. It documents a scale that has been measured rather than asserted, and it should **lead with protocol 016's script finding**: an LLM adjudicator, told explicitly to look, flagged 0 of 15 real script mismatches that the local deterministic gate caught. That is the most persuasive result in the repository after the invented-language control in doc 02, and it is the argument for the whole architecture in one number.
-
-**The scale to document** ([protocol 018](../experiments/protocols/018-eligibility-and-adequacy.md), and `probe/score.py` is written to explain itself):
+## Coverage: why 199 and not 602
 
 ```
-eligibility   s_lang >= 0.50 over the items the gate was willing to rule on
-              -> below it: Unusable, and nothing else is measured
-adequacy      s_content, mean fact recall over the items that cleared the
-              filter. Published as a number. This is the measurement.
-tier          Unusable | Assisted (< 0.95) | Proficient (>= 0.95)
+Catmint locale list (languages/, gitignored)   602
+shipped public catalogue                     9,589
+living languages                             8,607
+living WITH a back-translator control          199   <- what is measured
+living WITHOUT a control                     8,408
 ```
 
-| tier | n of 98 calibration languages | mean chrF++ | workflow |
-|---|---|---|---|
-| Unusable | 19 | 29.0 | do not offer |
-| Assisted | 27 | 31.4 | MT-assist only, mandatory human pass |
-| Proficient | 52 | 53.6 | light review |
+**199 is not a choice, it is the control ceiling.** A control is parallel text in the target language whose English meaning we already know; it is how a back-translator is certified before being trusted, because a model that cannot read a language does not refuse — it invents (protocol 005 caught gpt-4o rendering known Chuvash as *"A man is walking. He is wearing a white shirt."*). FLORES-200 supplies ~200 of them; three more are hand-seeded (`cv`, `de`, `ru`).
 
-Monotonic, ρ 0.647 against the continuous score's 0.686. **Three things S8 must not get wrong:**
+Beyond that set nobody can be qualified, so the honest output is `unverified`. **But the deterministic gate needs no control at all**, so negatives stay free and sound at full breadth. The shape is: *we can prove inability without a reader; we cannot prove ability.*
 
-- The number is the result and the tier is shorthand for it. Writing the tiers up as the output is how the last scale survived as long as it did.
-- The eligibility filter is justified by the script audit (31% wrong script in the rejected set against 1% in the kept set), **not** by chrF++, which orders that boundary correctly by only 2.4 points. Say so.
-- The limits are real and belong in the text: one model, one judge, one back-translator panel, four items per language, a translation task standing in for free generation, and chrF++ as the yardstick with protocol 016's caveat that it is an imperfect one.
+## Next step
 
-**Re-running the numbers:** `scripts/regate.py` then `scripts/rescale.py` reproduce every figure above from `data/calibration/study.json`, free and offline. `rescale.py`'s last table calls `probe/score.py` itself, so the documentation and the code cannot drift.
+**1. Scan the Catmint 602 through the gate.** `languages/languages.json` is on disk (gitignored). Every locale outside FLORES still gets a sound `Unusable` or an honest `unverified`, at gate cost only. This tells us how much of the real locale list is a problem *before* anyone commissions control texts. Start with `deepseek-v4-pro`, which came out broadest. Needs nothing from Andrei.
 
-**Then S9**, the public landing page, which is Andrei's portfolio piece and should publish browsable results rather than describe the method.
+**2. S9 — README and methodology.** Worth writing now that there is a four-engine table to write around. Lead with the two strongest results: the invented-language control (doc 02) and 15/15 against 0/15 on script (protocol 016).
 
-**Open, carried forward in doc 03:**
+**3. A protocol on the `Assisted`/`Proficient` cut.** 13% of tiers flip when a qualified reader is swapped, and four `Assisted` languages scored content 0.00 while being routed as "MT-assist, mandatory human pass" — fluent text, no meaning. Protocol 018 measured cuts at 0.50/0.70/0.85 as non-monotonic, so 0.95 was the only monotonic option; the live runs are better evidence than that simulation. This decides whether three tiers are honest or two.
 
-- **`tl` (Tagalog) is convicted for answering in Filipino**, which is its standardised register but a separate ISO code that `accept_lang` does not reach; the scheme may hold other such pairs. And `mag` answered in Bhojpuri is labelled `wrong_language` where `relative_substitution` is the truth — the conviction is right, the label is not. *(The Chinese half of this item was fixed by [protocol 019](../experiments/protocols/019-script-check-completeness.md).)*
-- **22 scripts, 27 tags, cannot be verified by any means available** — Tengwar, Klingon, Indus, Mayan and eighteen others, unencoded or undeciphered. The gate abstains on these rather than convicting, which is correct, but nothing tests it because there is no output to test against.
-- **A local back-translator was designed and never built**, so the GPU is unused and every result so far was back-translated by a remote model. Defensible — the remote panel is qualified per language — but the reason to finish it is **reproducibility**: a vendor endpoint cannot be pinned, and a dataset whose instrument has been retired cannot be re-graded. Detection logic survives behind `hardware.LOCAL_BACKTRANSLATOR`. Decide at S8, not mid-programme: switching instruments would strand every result under convention 4.
-- **One test fails from a clean clone**: `test_shipped_controls_cover_flores_breadth_and_the_hand_seeded_gap` needs `data/controls/flores.json`, untracked as licence-encumbered. Pre-existing since `3032687` and unrelated to recent work; everything passes where the data has been built. `tests/test_pivot.py` handles the same situation by skipping when no reference control is present, and that test should probably do the same.
-- Marker coverage is 2 of 534 variant tags. The method is proven on English — which is also the pivot, and the easiest possible case — and untested where it would be load-bearing (`ar-EG` vs `ar-MA`). Drafting is a model-plus-human-review job, per doc 01.
-- The marker **grammar axis never fires** — 0 hits in 28 generations. Its contexts need rewriting to force *in hospital* / *different to*, or the axis should be dropped rather than left as dead weight.
-- Both shipped marker lists are `reviewed: false`. They are drafted claims about a language, not reviewed ones, and the code says so everywhere it shows them.
-- Back-translator panel order affects qualification cost — a failing candidate costs 4 chrF++ calls before the next is tried.
-- The UI reads the database when it has rows and the evidence files only when it does not, so old file-only results disappear after a user's first scan. Correct precedence, surprising presentation.
-- Resuming a stopped job from the UI is not built. `pending_items()` is the resume set and a stopped job keeps it intact; re-running is currently a fresh scan over the same tags.
-- Whether refusal predicts quality is unanswerable at n=3 (protocol 011). S7's ~200-language run is where to test it, and availability is derived rather than stored precisely so the rule can change.
-- `kk-Latn` deserves a second look with a different model: asked properly, gpt-4o returns Latin script that GlotLID reads as Crimean Tatar and Turkmen. A recent official alphabet with little training text is a plausible genuine gap rather than a gpt-4o quirk.
+**4. S10 — public landing page.** Andrei's portfolio piece; should publish browsable results, not just describe the method.
 
-**The back-translator panel is fixed and must stay outside the scan set** (S8, doc 03). `gemini-gemini-3-6-flash, deepseek-deepseek-v4-flash`, in that order, and the guard drops the engine's whole *family* rather than just its id. Putting a model under test into the panel strands it on a different instrument from every other engine and invalidates the cross-engine comparison by convention 4.
+## Needs Andrei, not the agent
 
-**Remaining stages:** S8 distribution ✅ · S9 README and methodology page · S10 public landing page, which is Andrei's portfolio piece and should publish browsable results, not just describe the method.
+- **Dialects.** Marker sets exist for **2 of 534 variant tags**, both English — which is also the pivot and the easiest possible case — and both `reviewed: false`. The method is untested where it would be load-bearing (`ar-EG` vs `ar-MA`). Drafting is model-plus-human-review, per doc 01. This is the most distinctive claim the tool makes and the least proven.
+- **Control texts** for the Catmint locales FLORES lacks, if step 1 shows the gap is commercially real. Same kind of job.
+- **Whether to build the local GPU back-translator.** Not built; the GPU is unused; `hardware.detect()` now reports `profile: api` with `capable_of: gpu-int8` rather than claiming MADLAD read the text. The argument for finishing it is **reproducibility**, not cost — a vendor endpoint cannot be pinned, and a published dataset whose instrument has been retired cannot be re-graded. Detection logic survives behind `hardware.LOCAL_BACKTRANSLATOR`. Do not switch instruments mid-programme: convention 4 would strand every existing result.
+
+## Open, carried forward
+
+- **The UI shows 335 gpt-4o rows across two readers with no grouping.** The data model is right — two instruments, two rows — but a browser sees `de` twice and reads it as duplication. Add the back-translator as a facet before S10.
+- **`calls_used` stays 0 while a job runs** and only updates at the end, so the programme driver's progress lines were useless. The Jobs tab uses a different source and is fine.
+- **`tl` is convicted for answering in Filipino** — its standardised register, but a separate ISO code `accept_lang` does not reach. The scheme may hold other such pairs. And `mag` answered in Bhojpuri is labelled `wrong_language` where `relative_substitution` is the truth.
+- **22 scripts, 27 tags, cannot be verified by any means** — Tengwar, Klingon, Indus, Mayan and eighteen others. The gate abstains rather than convicting, which is correct, but nothing tests it because there is no output to test against.
+- **One test fails from a clean clone**: `test_shipped_controls_cover_flores_breadth_and_the_hand_seeded_gap` needs `data/controls/flores.json`, which `llmlc bootstrap` now builds. `tests/test_pivot.py` handles the same situation by skipping; that test should too.
+- **The marker grammar axis never fires** — 0 hits in 28 generations. Rewrite its contexts to force *in hospital* / *different to*, or drop the axis rather than leave it as dead weight.
+- **Back-translator panel order affects qualification cost** — a failing candidate costs 4 chrF++ calls before the next is tried.
+- **Resuming a stopped job from the UI is not built.** `pending_items()` is the resume set and a stopped job keeps it intact; re-running is currently a fresh scan over the same tags.
+- **`kk-Latn` deserves a second look with a different model**: asked properly, gpt-4o returns Latin script that GlotLID reads as Crimean Tatar and Turkmen. A recent official alphabet with little training text is a plausible genuine gap.
+
+**Remaining stages:** S9 README and methodology · S10 public landing page.
