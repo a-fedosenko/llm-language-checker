@@ -125,3 +125,31 @@ def test_shipped_controls_cover_flores_breadth_and_the_hand_seeded_gap():
     assert len(c) > 150, "FLORES ingestion should provide broad coverage"
     assert c["cv"]["kind"] == "facts", "Chuvash is absent from FLORES and must fall back"
     assert c["kk"]["kind"] == "reference"
+
+
+# -- a control under a compatible script spelling ------------------------------
+
+def test_a_composite_script_tag_finds_its_hangul_control():
+    """`ko` carries Kore and `ko-Hang` carries Hang. ISO 15924's Kore is Hangul
+    plus Han, so Hangul control text is Korean text for either — but exact-match
+    lookup reported Korean unmeasurable while the main run had measured it."""
+    from llmlc.bt.qualify import _script_sibling
+    controls = {"ko-Hang": {"kind": "reference", "items": [{"text": "안녕", "reference": "hi"}]}}
+    hit = _script_sibling(controls, "ko")
+    assert hit and hit["derived_from"] == "ko-Hang"
+
+
+def test_it_does_not_reach_across_a_different_writing_system():
+    """Sharing a language code is not sharing a script. Qualifying a reader on
+    Cyrillic Serbian would certify it for Latin Serbian, which it has not read."""
+    from llmlc.bt.qualify import _script_sibling
+    controls = {"sr": {"kind": "reference", "items": [{"text": "здраво", "reference": "hi"}]}}
+    assert _script_sibling(controls, "sr-Latn") is None
+    controls = {"uz": {"kind": "reference", "items": [{"text": "salom", "reference": "hi"}]}}
+    assert _script_sibling(controls, "uz-Cyrl") is None
+
+
+def test_it_does_not_reach_across_languages():
+    from llmlc.bt.qualify import _script_sibling
+    controls = {"de": {"kind": "reference", "items": [{"text": "hallo", "reference": "hi"}]}}
+    assert _script_sibling(controls, "nl") is None

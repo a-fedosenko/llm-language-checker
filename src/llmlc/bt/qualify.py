@@ -182,6 +182,53 @@ def _qualify_facts(bt: RemoteBackTranslator, client: OpenAICompatClient, judge_m
                          "meaning — this back-translator cannot read the language")
 
 
+def _script_sibling(controls: dict[str, dict], tag: str) -> dict | None:
+    """A control for the same language under a *compatible* script spelling.
+
+    Narrow on purpose. The catalogue can hold two tags for one language whose
+    script codes differ without the writing system differing: `ko` carries `Kore`
+    and `ko-Hang` carries `Hang`, but ISO 15924's `Kore` is Hangul *plus* Han, so
+    Hangul control text is Korean text for either. Exact-match lookup reported
+    Korean as unmeasurable while the main run had measured it fine as `ko-Hang`.
+
+    It does **not** fall back across genuinely different writing systems, however
+    tempting the shared language code makes it. `sr-Latn` against a Cyrillic
+    control, `uz-Cyrl` against a Latin one, `jv-Java` against a Latin one --
+    those are real gaps, and qualifying a reader on a script it will not meet
+    would certify it for a job it has not been tested on. Four of the five
+    candidates that prompted this function fail here, correctly.
+    """
+    from llmlc.probe.lid import _table
+    from llmlc.scheme import load_scheme
+
+    try:
+        scheme = load_scheme("default")
+    except FileNotFoundError:
+        return None
+    want = scheme.get(tag)
+    if want is None or not want.iso639_3:
+        return None
+
+    composites = _table()["composites"]
+
+    def compatible(a: str | None, b: str | None) -> bool:
+        if a == b:
+            return True
+        if not a or not b:
+            return False
+        # A composite code covers its parts: Hangul text satisfies a Kore tag.
+        return b in composites.get(a, ()) or a in composites.get(b, ())
+
+    for other, entry in controls.items():
+        if other == tag or not entry.get("items"):
+            continue
+        cand = scheme.get(other)
+        if (cand and cand.iso639_3 == want.iso639_3
+                and compatible(want.script, cand.script)):
+            return {**entry, "derived_from": other}
+    return None
+
+
 def qualify(bt: RemoteBackTranslator, client: OpenAICompatClient, judge_model: str,
             tag: str, controls: dict[str, dict] | None = None,
             cache: QualificationCache | None = None) -> Qualification:
@@ -191,7 +238,7 @@ def qualify(bt: RemoteBackTranslator, client: OpenAICompatClient, judge_model: s
             return cached
 
     controls = controls if controls is not None else load_controls()
-    entry = controls.get(tag)
+    entry = controls.get(tag) or _script_sibling(controls, tag)
     if not entry or not entry.get("items"):
         return Qualification(QualStatus.NO_CONTROL, 0.0, bt.id, tag, "",
                              "No control text for this language; quality is not assessable.")
