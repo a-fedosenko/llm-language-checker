@@ -1,0 +1,1670 @@
+{
+ "generated": "2026-10-01",
+ "basis": "jobs 14-17, 154 Catmint locales, 4 engines",
+ "note": "Rank is how many engines wrote something we cannot verify. A locale every engine refused needs no control.",
+ "locales": [
+  {
+   "tag": "bi",
+   "name": "Bislama",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "co",
+   "name": "Corsican",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "fil",
+   "name": "Filipino",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "fy",
+   "name": "Frisian",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "gom",
+   "name": "Konkani, Goan",
+   "script": "Deva",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "gsw",
+   "name": "German, Swiss",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "haw",
+   "name": "Hawaiian",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "hmn",
+   "name": "Hmong",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "ko",
+   "name": "Korean",
+   "script": "Kore",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "kok",
+   "name": "Konkani (macrolanguage)",
+   "script": "Deva",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "mfe",
+   "name": "Morisyen",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "no",
+   "name": "Norwegian",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "ps",
+   "name": "Pushto",
+   "script": "Arab",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "rm",
+   "name": "Romansh",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "sr-Latn",
+   "name": "Serbian",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "uz-Cyrl",
+   "name": "Uzbek",
+   "script": "Cyrl",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "ve",
+   "name": "Venda",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 4,
+   "engines_refused": []
+  },
+  {
+   "tag": "crh",
+   "name": "Crimean Tatar",
+   "script": "Cyrl",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 3,
+   "engines_refused": [
+    "groq-qwen3-8-27b"
+   ]
+  },
+  {
+   "tag": "dv",
+   "name": "Dhivehi",
+   "script": "Thaa",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 3,
+   "engines_refused": [
+    "groq-qwen3-8-27b"
+   ]
+  },
+  {
+   "tag": "kw",
+   "name": "Cornish",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b"
+   ],
+   "n_attempted": 3,
+   "engines_refused": [
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "mww",
+   "name": "Hmong Daw",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 3,
+   "engines_refused": [
+    "groq-qwen3-8-27b"
+   ]
+  },
+  {
+   "tag": "nd",
+   "name": "Ndebele",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 3,
+   "engines_refused": [
+    "groq-qwen3-8-27b"
+   ]
+  },
+  {
+   "tag": "nyn",
+   "name": "Nyankore",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 3,
+   "engines_refused": [
+    "groq-qwen3-8-27b"
+   ]
+  },
+  {
+   "tag": "os",
+   "name": "Ossetic, Iron",
+   "script": "Cyrl",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 3,
+   "engines_refused": [
+    "groq-qwen3-8-27b"
+   ]
+  },
+  {
+   "tag": "qu",
+   "name": "Quechua",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b"
+   ],
+   "n_attempted": 3,
+   "engines_refused": [
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "to",
+   "name": "Tongan",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b"
+   ],
+   "n_attempted": 3,
+   "engines_refused": [
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "wa",
+   "name": "Walloon",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b"
+   ],
+   "n_attempted": 3,
+   "engines_refused": [
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "aa",
+   "name": "Afar",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ab",
+   "name": "Abkhaz",
+   "script": "Cyrl",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "an",
+   "name": "Aragonese",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "arn",
+   "name": "Mapudungun",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "av",
+   "name": "Avar",
+   "script": "Cyrl",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "bas",
+   "name": "Basaa",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "bin",
+   "name": "Edo",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "br",
+   "name": "Breton",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "brx",
+   "name": "Boro",
+   "script": "Deva",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ce",
+   "name": "Chechen",
+   "script": "Cyrl",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ch",
+   "name": "Chamorro",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "chr",
+   "name": "Cherokee",
+   "script": "Cher",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "cr",
+   "name": "Cree",
+   "script": "Cans",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "dav",
+   "name": "Dawida",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "dje",
+   "name": "Zarma",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "doi",
+   "name": "Dogri (macrolanguage)",
+   "script": "Deva",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "dsb",
+   "name": "Sorbian, Lower",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "dyo",
+   "name": "Jola-Fonyi",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ff",
+   "name": "Fulah",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "guz",
+   "name": "Ekegusii",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "gv",
+   "name": "Manx",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ho",
+   "name": "Motu, Hiri",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "hsb",
+   "name": "Sorbian, Upper",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "hz",
+   "name": "Herero",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ik",
+   "name": "Inupiaq",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ikt",
+   "name": "Inuinnaqtun",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "iu",
+   "name": "Inuktitut",
+   "script": "Cans",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "jv-Java",
+   "name": "Javanese",
+   "script": "Java",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "kde",
+   "name": "Makonde",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "khq",
+   "name": "Songhay, Koyra Chiini",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "kj",
+   "name": "Kwanyama",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "kk-Latn",
+   "name": "Kazakh",
+   "script": "Latn",
+   "engines_attempted": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ]
+  },
+  {
+   "tag": "kl",
+   "name": "Greenlandic",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "kln",
+   "name": "Kalenjin",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "kri",
+   "name": "Krio",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ksb",
+   "name": "Shambala",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ksh",
+   "name": "Ripuarian",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "kv",
+   "name": "Komi",
+   "script": "Cyrl",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "lkt",
+   "name": "Lakota",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "luy",
+   "name": "Luyia",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "man",
+   "name": "Mandingo",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "mas",
+   "name": "Maasai",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "mh",
+   "name": "Marshallese",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "mnk",
+   "name": "Mandinka",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "moh",
+   "name": "Mohawk",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "mrj",
+   "name": "Mari, Hill",
+   "script": "Cyrl",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "mzn",
+   "name": "Mazandarani",
+   "script": "Arab",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "naq",
+   "name": "Khoekhoe",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ng",
+   "name": "Ndonga",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "nnh",
+   "name": "Ngiemboon",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "nqo",
+   "name": "N’Ko",
+   "script": "Nkoo",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "nr",
+   "name": "Ndebele",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "nv",
+   "name": "Navajo",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "oj",
+   "name": "Ojibwa",
+   "script": "Cans",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "prg",
+   "name": "Prussian",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "quc",
+   "name": "K’iche’",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "sah",
+   "name": "Yakut",
+   "script": "Cyrl",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "se",
+   "name": "Saami, North",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ses",
+   "name": "Songhay, Koyraboro Senni",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "shi-Latn",
+   "name": "Tachelhit",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "sma",
+   "name": "Saami, South",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "smj",
+   "name": "Saami, Lule",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "smn",
+   "name": "Saami, Inari",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ssy",
+   "name": "Saho",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "syr",
+   "name": "Syriac",
+   "script": "Syrc",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "teo",
+   "name": "Ateso",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "tig",
+   "name": "Tigré",
+   "script": "Ethi",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ty",
+   "name": "Tahitian",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "udm",
+   "name": "Udmurt",
+   "script": "Cyrl",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "yua",
+   "name": "Maya, Yucatec",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "za",
+   "name": "Zhuang",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "zgh",
+   "name": "Tamazight, Standard Moroccan",
+   "script": "Tfng",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro",
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 2,
+   "engines_refused": [
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "agq",
+   "name": "Aghem",
+   "script": "Latn",
+   "engines_attempted": [
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "deepseek-deepseek-v4-pro",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "asa",
+   "name": "Asu",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "bez",
+   "name": "Bena",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "cgg",
+   "name": "Chiga",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ebu",
+   "name": "Kiembu",
+   "script": "Latn",
+   "engines_attempted": [
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "deepseek-deepseek-v4-pro",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ewo",
+   "name": "Ewondo",
+   "script": "Latn",
+   "engines_attempted": [
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "deepseek-deepseek-v4-pro",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "ii",
+   "name": "Nuosu",
+   "script": "Yiii",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "jgo",
+   "name": "Ngomba",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "jmc",
+   "name": "Machame",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "lag",
+   "name": "Rangi",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "lrc",
+   "name": "Luri, Northern",
+   "script": "Arab",
+   "engines_attempted": [
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "deepseek-deepseek-v4-pro",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "lu",
+   "name": "Luba-Katanga",
+   "script": "Latn",
+   "engines_attempted": [
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "deepseek-deepseek-v4-pro",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "mer",
+   "name": "Kimîîru",
+   "script": "Latn",
+   "engines_attempted": [
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "deepseek-deepseek-v4-pro",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "mgo",
+   "name": "Meta’",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "na",
+   "name": "Nauruan",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "otq",
+   "name": "Otomi, Querétaro",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "rof",
+   "name": "Rombo",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "sbp",
+   "name": "Sangu",
+   "script": "Latn",
+   "engines_attempted": [
+    "deepseek-deepseek-v4-pro"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "gemini-gemini-3-8-flash",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "sdh",
+   "name": "Kurdish, Southern",
+   "script": "Arab",
+   "engines_attempted": [
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "deepseek-deepseek-v4-pro",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "seh",
+   "name": "Sena",
+   "script": "Latn",
+   "engines_attempted": [
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "deepseek-deepseek-v4-pro",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  },
+  {
+   "tag": "tzm-Arab",
+   "name": "Tamazight, Central Atlas",
+   "script": "Arab",
+   "engines_attempted": [
+    "gemini-gemini-3-8-flash"
+   ],
+   "n_attempted": 1,
+   "engines_refused": [
+    "deepseek-deepseek-v4-pro",
+    "groq-qwen3-8-27b",
+    "openai-gpt-4o"
+   ]
+  }
+ ]
+}

@@ -40,6 +40,7 @@ schemes/*.json
 data/models/
 data/corpus/
 data/results/
+!data/results/control_gap.json
 
 # Calibration specs and study output. The fact checklists are extracted from
 # FLORES-200 sentences, so CC BY-SA share-alike attaches to them as derived
