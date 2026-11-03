@@ -10,6 +10,14 @@ class Settings(BaseSettings):
     scheme: str = "default"
     hardware_profile: str = "auto"
 
+    #: Path to a JSON file listing models, each with its own endpoint and key.
+    #: The general route, and the only one a public user needs: the models in a
+    #: scan need not share a provider. Takes priority over the aggregator
+    #: settings below wherever both are present -- see client/registry.py.
+    custom_model_list_path: str | None = None
+
+    #: One gateway serving every model id. How this project's own measurements
+    #: were taken, kept working, and the narrower of the two cases.
     aggregator_base_url: str | None = None
     aggregator_admin_api_key: str | None = None
     aggregator_model_list_url: str | None = None

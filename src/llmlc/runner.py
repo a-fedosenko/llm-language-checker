@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 
 from llmlc import hardware
 from llmlc.bt import RemoteBackTranslator
-from llmlc.client import OpenAICompatClient
+from llmlc.client import NotConfigured, build_client, check_models
 from llmlc.config import settings
 from llmlc.db import create_all, session
 from llmlc.db.models import Job, JobItem
@@ -161,12 +161,24 @@ class ScanOutcome:
 
 def prepare(req: ScanRequest):
     """Validate a request without spending anything. Returns (scheme, groups, unknown)."""
-    if not settings.aggregator_base_url or not settings.aggregator_admin_api_key:
-        raise ScanRefused("No endpoint configured. Copy .env.example to .env and fill it in.")
+    try:
+        build_client()
+    except NotConfigured as e:
+        raise ScanRefused(str(e)) from e
     if not req.tags:
         raise ScanRefused("No languages selected.")
     if not req.panel:
         raise ScanRefused("No back-translator left after excluding the model under test.")
+    # Every model this scan will reach, checked before the first paid call. With
+    # a custom model list the defaults -- this project's own judge and panel ids
+    # -- are very unlikely to be in a stranger's file, and finding that out one
+    # language at a time is the expensive way to learn it.
+    missing = check_models([req.engine, req.judge or settings.judge_model, *req.panel])
+    if missing:
+        raise ScanRefused(
+            f"Not in the custom model list: {', '.join(missing)}. Add them to the file "
+            f"named by CUSTOM_MODEL_LIST_PATH, or choose an engine, judge "
+            f"(JUDGE_MODEL) and back-translator panel it does hold.")
     scheme = load_scheme(req.scheme or settings.scheme)
     groups, unknown = plan(scheme, req.tags)
     if not groups:
@@ -204,7 +216,7 @@ def execute(req: ScanRequest, job_id: int, *, on_result=None) -> ScanOutcome:
     """
     scheme, groups, _ = prepare(req)
     profile = hardware.detect(settings.hardware_profile).profile
-    client = OpenAICompatClient(settings.aggregator_base_url, settings.aggregator_admin_api_key)
+    client = build_client()
     bts = [RemoteBackTranslator(client, m, req.pivot) for m in req.panel]
     budget = ScanBudget(max_calls=req.max_calls)
     out = ScanOutcome(job_id=job_id)

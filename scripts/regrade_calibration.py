@@ -16,7 +16,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
-from llmlc.client import OpenAICompatClient  # noqa: E402
+from llmlc.client import NotConfigured, build_client  # noqa: E402
 from llmlc.config import settings  # noqa: E402
 from llmlc.probe.calibrate import (CalibrationItem, CalibrationResult, compare,  # noqa: E402
                                    correlate, load_specs, regrade)
@@ -48,8 +48,10 @@ def main(argv=None) -> int:
     p.add_argument("--out", default="data/calibration/study.hard.json")
     a = p.parse_args(argv)
 
-    if not settings.aggregator_base_url or not settings.aggregator_admin_api_key:
-        print("No endpoint configured.", file=sys.stderr)
+    try:
+        build_client()
+    except NotConfigured as e:
+        print(e, file=sys.stderr)
         return 2
 
     study = json.loads(pathlib.Path(a.study).read_text(encoding="utf-8"))
@@ -58,7 +60,7 @@ def main(argv=None) -> int:
         print(f"No specs at {a.specs}", file=sys.stderr)
         return 2
 
-    client = OpenAICompatClient(settings.aggregator_base_url, settings.aggregator_admin_api_key)
+    client = build_client()
     judge = a.judge or study.get("judge") or settings.judge_model
     print(f"re-grading {len(study['languages'])} language(s) against {len(specs)} "
           f"new checklist(s), judge {judge}", flush=True)

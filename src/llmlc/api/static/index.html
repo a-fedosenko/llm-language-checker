@@ -275,6 +275,7 @@
   <section id="tab-scan" hidden>
     <h2 data-help="block.scan">Run a scan</h2>
     <div class="note" id="trigger-note"></div>
+    <div class="note" id="engine-source" hidden></div>
 
     <div class="grid">
       <div class="field">
@@ -443,7 +444,7 @@ const HELP = {
     '<b>support</b>: the mergeable file, safe to merge into a master locale list. <b>evidence</b>: the full record, one line per result.'],
 
   // scan form
-  'scan.engine': ['Model under test', 'The model being measured. Listed models come from your configured gateway; a name not in the list still works.'],
+  'scan.engine': ['Model under test', 'The model being measured. With a custom model list (CUSTOM_MODEL_LIST_PATH) the list is exhaustive — a model not in it has no endpoint or key, and a scan naming one is refused before it spends anything. With a gateway the list is only advisory, and a name missing from it still works.'],
   'scan.budget': ['Call budget',
     'Hard ceiling on model calls for this run; the scan stops cleanly when it is reached. Required here, because a button should not spend an unstated amount.'],
   'scan.judge': ['Judge',
@@ -834,6 +835,28 @@ async function loadEngines() {
     .map(m => `<option value="${esc(m)}">`).join('');
   $('#s-bt').value = d.backtranslator_panel.join(',');
   $('#s-judge').placeholder = d.judge;
+  // With a closed list, the shipped defaults for judge and panel are this
+  // project's own model ids and will not be in the user's file. Say so here
+  // rather than letting the scan button produce the refusal.
+  const note = $('#engine-source');
+  if (note) {
+    if (d.available_is_exhaustive) {
+      const missing = [d.judge, ...d.backtranslator_panel]
+        .filter(m => m && !d.available.includes(m));
+      note.className = missing.length ? 'note warn' : 'note';
+      note.innerHTML = missing.length
+        ? `<strong>Not in your model list:</strong> <code>${esc(missing.join(', '))}</code>.
+           These are the shipped defaults for the judge and the back-translator panel.
+           Add them to the file named by <code>CUSTOM_MODEL_LIST_PATH</code>, or set the
+           judge and panel below to models it holds — a scan is refused until every one
+           of the three is reachable.`
+        : `Models come from your custom list (<code>CUSTOM_MODEL_LIST_PATH</code>),
+           each with its own endpoint and key.`;
+      note.hidden = false;
+    } else {
+      note.hidden = true;
+    }
+  }
 }
 
 function renderTrigger(t) {
@@ -842,8 +865,11 @@ function renderTrigger(t) {
   const ceiling = `Budget ceiling for a browser-started scan: <b>${t.max_calls}</b> calls.`;
   if (!t.configured) {
     el.className = 'note bad';
-    el.innerHTML = `<strong>No endpoint configured.</strong> Copy <code>.env.example</code> to
-      <code>.env</code> and fill in the aggregator URL and key. Nothing can run until then.`;
+    el.innerHTML = `<strong>No models configured.</strong> Copy <code>.env.example</code> to
+      <code>.env</code>, then either point <code>CUSTOM_MODEL_LIST_PATH</code> at a JSON file
+      listing your models — copy <code>.models.json.example</code> to <code>data/models.json</code>,
+      one entry per model with its own endpoint and key — or fill in the single-gateway
+      <code>AGGREGATOR_BASE_URL</code> and key. Nothing can run until then.`;
     $('#s-start').dataset.blocked = '1';
   } else if (t.mode === 'off') {
     el.className = 'note bad';

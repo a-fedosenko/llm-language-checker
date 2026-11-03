@@ -17,6 +17,9 @@ from llmlc.probe.scan import ScanBudget, ScanResult, scan
 @pytest.fixture(autouse=True)
 def db(tmp_path, monkeypatch):
     reset_for_tests(f"sqlite+pysqlite:///{tmp_path/'t.db'}")
+    # Explicitly the aggregator route: a custom model list in the developer's own
+    # .env would otherwise win here and reject these placeholder model ids.
+    monkeypatch.setattr(settings, "custom_model_list_path", None)
     monkeypatch.setattr(settings, "aggregator_base_url", "https://example.invalid")
     monkeypatch.setattr(settings, "aggregator_admin_api_key", "k")
     yield
@@ -132,3 +135,22 @@ def test_orphaned_jobs_are_reaped_rather_than_blocking_every_future_scan():
         assert "Interrupted" in job.error
         assert len(pending_items(s, job_id)) == 2, "the resume set survives the reap"
     assert runner.running_job_id() is None
+
+
+def test_the_cli_panel_defaults_are_the_one_panel(monkeypatch):
+    """S8 moved the panel off the two models we scan, and the CLI kept its own
+    hardcoded copy of the old one for a while. A second spelling of the default
+    is a second policy, and this is the kind that fails quietly: the scan runs,
+    and only the stored back-translator id says it was not comparable.
+    """
+    from llmlc.cli import build_parser
+
+    import argparse
+
+    subs = [c for a in build_parser()._actions
+            if isinstance(a, argparse._SubParsersAction)
+            for c in a.choices.values()]
+    defaults = {x.default for sp in subs for x in sp._actions
+                if x.dest == "backtranslator"}
+    assert defaults, "no --backtranslator option found; this test has gone blind"
+    assert defaults == {runner.DEFAULT_PANEL}

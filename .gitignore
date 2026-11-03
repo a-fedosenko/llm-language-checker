@@ -1,5 +1,9 @@
 # Secrets — never commit
 .env
+# The custom model list holds a key per model. The .example beside it is the
+# shipped one; anything that looks like the real file stays out.
+.models.json
+models.json
 *.env
 !*.env.example
 *.key

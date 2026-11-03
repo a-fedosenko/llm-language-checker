@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
 from llmlc.bt.qualify import load_controls  # noqa: E402
-from llmlc.client import OpenAICompatClient  # noqa: E402
+from llmlc.client import NotConfigured, build_client  # noqa: E402
 from llmlc.config import settings  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -125,9 +125,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", default=None, help="output path; defaults by profile")
     a = p.parse_args(argv)
 
-    if not settings.aggregator_base_url or not settings.aggregator_admin_api_key:
-        print("No endpoint configured. Copy .env.example to .env and fill it in.",
-              file=sys.stderr)
+    try:
+        build_client()
+    except NotConfigured as e:
+        print(e, file=sys.stderr)
         return 2
 
     controls = load_controls()
@@ -143,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     if OUT.exists() and not a.refresh:
         existing = json.loads(OUT.read_text(encoding="utf-8")).get("specs", {})
 
-    client = OpenAICompatClient(settings.aggregator_base_url, settings.aggregator_admin_api_key)
+    client = build_client()
     model = a.model or settings.judge_model
     out: dict[str, dict] = dict(existing)
     built = skipped = 0

@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from llmlc import __version__, bootstrap, hardware, runner
 from llmlc.api import results as results_store
+from llmlc.client import NotConfigured, custom_models, is_configured
 from llmlc.config import settings
 from llmlc.scheme import Language, Scheme, load_scheme
 
@@ -218,20 +219,51 @@ def variant_coverage(engine: str | None = Query(None)) -> dict:
 def engines() -> dict:
     """Models available to scan, and models already measured.
 
-    `available` comes from the aggregator's model list when one is configured --
-    the UI needs a picker, and typing a model name from memory is how you spend
-    a budget on a typo. It is advisory: the list is the gateway's, not ours, and
-    a name missing from it is still allowed.
+    `available` is the custom model list where one is configured, and the
+    gateway's own list otherwise -- the UI needs a picker, and typing a model
+    name from memory is how you spend a budget on a typo.
+
+    How binding it is depends on which source answered, and the difference is
+    real. A gateway's list is advisory: it is the gateway's opinion, and a name
+    missing from it is still worth trying. A custom list is the configuration
+    itself -- a model absent from it has no endpoint and no key, so a scan
+    naming one is refused before it spends anything.
     """
     measured = sorted(results_store.page(
         results_store.Query(limit=1)).get("summary", {}).get("engines", {}))
+    try:
+        closed = bool(custom_models())
+    except NotConfigured:
+        closed = False
     return {"available": _model_list(), "measured": measured,
             "judge": settings.judge_model,
-            "backtranslator_panel": runner.DEFAULT_PANEL.split(",")}
+            "backtranslator_panel": runner.DEFAULT_PANEL.split(","),
+            # Whether `available` is the whole of what can be scanned, so the UI
+            # can offer a picker rather than a free-text field.
+            "available_is_exhaustive": closed}
+
+
+def _model_list() -> list[str]:
+    """What the engine picker offers. The custom list first, the gateway second.
+
+    The custom list is read every call rather than cached: it is a local file
+    the user edits, and a picker that needs a container restart to notice a new
+    model is the kind of staleness this project has already been bitten by. The
+    network path stays cached -- see `_aggregator_model_list`.
+    """
+    try:
+        entries = custom_models()
+    except NotConfigured:
+        # A broken list is reported where a scan is attempted, with the parse
+        # error. Here it only means the picker has nothing to offer.
+        return []
+    if entries:
+        return sorted(e.model_id for e in entries)
+    return _aggregator_model_list()
 
 
 @lru_cache(maxsize=1)
-def _model_list() -> list[str]:
+def _aggregator_model_list() -> list[str]:
     """Model ids from the aggregator, cached for the process.
 
     Failure is silent and returns nothing: an unreachable gateway must degrade
@@ -345,8 +377,7 @@ class BootstrapRequest(BaseModel):
 def _trigger_state() -> dict:
     return {"mode": settings.scan_trigger,
             "max_calls": settings.scan_trigger_max_calls,
-            "configured": bool(settings.aggregator_base_url
-                               and settings.aggregator_admin_api_key)}
+            "configured": is_configured()}
 
 
 def _check_trigger_allowed(request: Request) -> None:

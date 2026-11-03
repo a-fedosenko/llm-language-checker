@@ -17,6 +17,9 @@ from llmlc.db.models import Job
 @pytest.fixture(autouse=True)
 def db(tmp_path, monkeypatch):
     reset_for_tests(f"sqlite+pysqlite:///{tmp_path/'t.db'}")
+    # Explicitly the aggregator route: a custom model list in the developer's own
+    # .env would otherwise win here and reject these placeholder model ids.
+    monkeypatch.setattr(settings, "custom_model_list_path", None)
     monkeypatch.setattr(settings, "aggregator_base_url", "https://example.invalid")
     monkeypatch.setattr(settings, "aggregator_admin_api_key", "k")
     monkeypatch.setattr(settings, "scan_trigger", "loopback")

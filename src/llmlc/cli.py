@@ -8,7 +8,7 @@ import sys
 
 from llmlc import bootstrap, runner
 from llmlc.bt import QualificationCache, RemoteBackTranslator
-from llmlc.client import OpenAICompatClient
+from llmlc.client import NotConfigured, build_client, check_models
 from llmlc.config import settings
 from llmlc.db import create_all, session
 from llmlc.db.repo import results_for, stale
@@ -38,9 +38,28 @@ def _summarise(results) -> None:
     print(f"\n  real evidence: {real}/{len(results)}   unverified: {unverified}")
 
 
+def _unreachable(models: list[str]) -> int | None:
+    """Print and fail when the custom model list cannot reach a model we need.
+
+    Checked before the first paid call rather than discovered during one. The
+    defaults -- the judge and the back-translator panel -- are this project's own
+    model ids, so a stranger's list will not hold them, and the useful message
+    says which and where to fix it.
+    """
+    missing = check_models(models)
+    if not missing:
+        return None
+    print(f"Not in the custom model list: {', '.join(missing)}.\n"
+          f"  Add them to the file named by CUSTOM_MODEL_LIST_PATH, or pass an "
+          f"--engine / --judge / --backtranslator it does hold.", file=sys.stderr)
+    return 2
+
+
 def cmd_check(a: argparse.Namespace) -> int:
-    if not settings.aggregator_base_url or not settings.aggregator_admin_api_key:
-        print("No endpoint configured. Copy .env.example to .env and fill it in.", file=sys.stderr)
+    try:
+        build_client()
+    except NotConfigured as e:
+        print(e, file=sys.stderr)
         return 2
     panel = [m.strip() for m in a.backtranslator.split(",") if m.strip()]
     family = runner.model_family(a.engine)
@@ -52,10 +71,12 @@ def cmd_check(a: argparse.Namespace) -> int:
     if not panel:
         print("No back-translator left after excluding the model under test.", file=sys.stderr)
         return 2
+    if (rc := _unreachable([a.engine, a.judge or settings.judge_model, *panel])):
+        return rc
 
     scheme = load_scheme(a.scheme or settings.scheme)
     specs = load_specs()[: a.items]
-    client = OpenAICompatClient(settings.aggregator_base_url, settings.aggregator_admin_api_key)
+    client = build_client()
     bts = [RemoteBackTranslator(client, m, a.pivot) for m in panel]
     cache = QualificationCache()
 
@@ -275,9 +296,10 @@ def cmd_calibrate(a: argparse.Namespace) -> int:
     from llmlc.db.qualcache import DbQualificationCache
     from llmlc.probe.calibrate import calibrate_language, correlate, load_specs
 
-    if not settings.aggregator_base_url or not settings.aggregator_admin_api_key:
-        print("No endpoint configured. Copy .env.example to .env and fill it in.",
-              file=sys.stderr)
+    try:
+        build_client()
+    except NotConfigured as e:
+        print(e, file=sys.stderr)
         return 2
 
     specs = load_specs()
@@ -302,8 +324,10 @@ def cmd_calibrate(a: argparse.Namespace) -> int:
     if not panel:
         print("No back-translator left after excluding the model under test.", file=sys.stderr)
         return 2
+    if (rc := _unreachable([a.engine, a.judge or settings.judge_model, *panel])):
+        return rc
 
-    client = OpenAICompatClient(settings.aggregator_base_url, settings.aggregator_admin_api_key)
+    client = build_client()
     bts = [RemoteBackTranslator(client, m, a.pivot) for m in panel]
     judge = a.judge or settings.judge_model
 
@@ -409,7 +433,11 @@ def cmd_languages(a: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The CLI surface. Separate from `main` so a test can read the defaults;
+    one of them is the back-translator panel, which is a policy and not a
+    preference, and which drifted out of step with `runner.DEFAULT_PANEL` once
+    already."""
     p = argparse.ArgumentParser(prog="llmlc",
                                 description="Empirical checks of which languages a model can produce.")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -419,7 +447,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="canonical BCP-47 tag, or a comma-separated list")
     c.add_argument("--engine", required=True, help="model under test")
     c.add_argument("--backtranslator",
-                   default="gemini-gemini-3-8-flash,deepseek-deepseek-v4-pro",
+                   default=runner.DEFAULT_PANEL,
                    help="ordered panel, comma separated; the first that qualifies for the "
                         "language is used. The model under test is excluded automatically.")
     c.add_argument("--judge", default=None)
@@ -444,7 +472,7 @@ def main(argv: list[str] | None = None) -> int:
     bs.set_defaults(func=cmd_bootstrap)
 
     sc.add_argument("--backtranslator",
-                    default="gemini-gemini-3-8-flash,deepseek-deepseek-v4-pro")
+                    default=runner.DEFAULT_PANEL)
     sc.add_argument("--judge", default=None)
     sc.add_argument("--pivot", default="en")
     sc.add_argument("--sweep-all", action="store_true",
@@ -474,7 +502,7 @@ def main(argv: list[str] | None = None) -> int:
     cal.add_argument("--items", type=int, default=None, help="items per language")
     cal.add_argument("--limit", type=int, default=None, help="cap the number of languages")
     cal.add_argument("--backtranslator",
-                     default="gemini-gemini-3-8-flash,deepseek-deepseek-v4-pro")
+                     default=runner.DEFAULT_PANEL)
     cal.add_argument("--judge", default=None)
     cal.add_argument("--pivot", default="en")
     cal.add_argument("--scheme", default=None)
@@ -492,8 +520,11 @@ def main(argv: list[str] | None = None) -> int:
     l.add_argument("--scheme", default=None)
     l.add_argument("--limit", type=int, default=25)
     l.set_defaults(func=cmd_languages)
+    return p
 
-    a = p.parse_args(argv)
+
+def main(argv: list[str] | None = None) -> int:
+    a = build_parser().parse_args(argv)
     return a.func(a)
 
 

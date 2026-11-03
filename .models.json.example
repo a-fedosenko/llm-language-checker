@@ -1,0 +1,46 @@
+{
+  "_comment": [
+    "Copy to data/models.json (gitignored) and edit, then point",
+    "CUSTOM_MODEL_LIST_PATH at it. Under ./data because that is what compose",
+    "mounts into the container; a path elsewhere resolves on the host only.",
+    "Every model carries its own endpoint and its own key, so one scan can reach",
+    "several providers at once. Keys are read from this file and never stored in",
+    "the database, written to a result, or sent anywhere but the endpoint beside them.",
+    "",
+    "model_id    what the provider calls the model. Goes in the request body, names",
+    "            the engine on the command line, and is stored on every result row.",
+    "model_title display only, for the picker in the UI. Safe to rename at any time.",
+    "api_key     the key for THIS endpoint.",
+    "v1_endpoint the OpenAI-compatible base URL. '/v1' is appended if you leave it off.",
+    "",
+    "A scan needs three kinds of model reachable: the engine under test, the judge",
+    "(JUDGE_MODEL in .env), and at least one back-translator from the panel. The",
+    "tool checks all three before spending anything and names whatever is missing."
+  ],
+  "models": [
+    {
+      "model_title": "GPT-4o",
+      "model_id": "gpt-4o",
+      "api_key": "sk-your-openai-key",
+      "v1_endpoint": "https://api.openai.com/v1"
+    },
+    {
+      "model_title": "GPT-4o mini (judge)",
+      "model_id": "gpt-4o-mini",
+      "api_key": "sk-your-openai-key",
+      "v1_endpoint": "https://api.openai.com/v1"
+    },
+    {
+      "model_title": "DeepSeek Chat",
+      "model_id": "deepseek-chat",
+      "api_key": "sk-your-deepseek-key",
+      "v1_endpoint": "https://api.deepseek.com/v1"
+    },
+    {
+      "model_title": "Qwen2.5 72B (local vLLM)",
+      "model_id": "Qwen/Qwen2.5-72B-Instruct",
+      "api_key": "not-needed",
+      "v1_endpoint": "http://localhost:8001/v1"
+    }
+  ]
+}

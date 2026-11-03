@@ -25,7 +25,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
 from llmlc.bt import RemoteBackTranslator, load_controls, qualify  # noqa: E402
-from llmlc.client import OpenAICompatClient  # noqa: E402
+from llmlc.client import NotConfigured, build_client  # noqa: E402
 from llmlc.config import settings  # noqa: E402
 from llmlc.db import create_all  # noqa: E402
 from llmlc.db.qualcache import DbQualificationCache  # noqa: E402
@@ -95,13 +95,15 @@ def main(argv=None) -> int:
     p.add_argument("--out", default="data/calibration/adjudication.json")
     a = p.parse_args(argv)
 
-    if not settings.aggregator_base_url or not settings.aggregator_admin_api_key:
-        print("No endpoint configured.", file=sys.stderr)
+    try:
+        build_client()
+    except NotConfigured as e:
+        print(e, file=sys.stderr)
         return 2
 
     study = json.loads(pathlib.Path(a.study).read_text(encoding="utf-8"))
     scheme = load_scheme(settings.scheme)
-    client = OpenAICompatClient(settings.aggregator_base_url, settings.aggregator_admin_api_key)
+    client = build_client()
     controls = load_controls()
     create_all()
     cache = DbQualificationCache()
