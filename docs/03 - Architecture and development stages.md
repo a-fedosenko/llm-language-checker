@@ -283,12 +283,15 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 | **S5** ✅ | Full UI | **Done 2026-09-17** — pick engine and languages, plan for free, trigger a scan, watch per-class progress, cancel, browse paged results, download artifacts |
 | **S6** ✅ | Dialects: marker files, script-split scoring, `variant_evidence` | **Done 2026-09-18** — `en-AU` and `en-GB` proven from markers; `ru-BY` `not-distinguishable`; `sr-Latn` proven by script; `kk-Latn` exposed as a base-language failure |
 | **S7** ✅ | **Calibration study** — fact-recall vs chrF++ against FLORES+ | **Done 2026-09-23** — 100 languages; ρ 0.647 by language, and recall saturates at 1.0 for 84% of items |
-| **S8** | README, methodology page, limitations | A reader can reproduce a result and knows what it does not mean |
-| **S9** | **Public landing page** | The project is explicable to someone who has never run it |
+| **S8** ✅ | **Distribution** — making "clone and run" true, and the back-translator panel policy | **Done 2026-09-29** — `llmlc bootstrap` fetches both uncommittable assets, the UI says when the instrument is incomplete, and the panel sits outside the scan set |
+| **S9** ✅ | README, **methodology page**, limitations | **Done 2026-11-03** — `docs/04 - Methodology.md`; a reader can reproduce a result and knows what it does not mean |
+| **S10** | **Public landing page** | The project is explicable to someone who has never run it |
+
+The stage numbering shifted at S8: the plan went calibration → README → landing page, and the distribution work between them turned out to be a stage of its own.
 
 S1 remains the stage that matters: a working end-to-end path for a single language de-risks every assumption in doc 01.
 
-## S9 — landing page (planned)
+## S10 — landing page (planned)
 
 A public page describing the project, added once the tool works and its results are proven. Deliberately last: a landing page for software that does not yet run is a liability.
 
@@ -1028,3 +1031,48 @@ What that yields for the four-engine programme:
 **Three of the four land on the same reader**, so most of the matrix is directly comparable. The fourth sits on the weaker reader, which biases *against* gemini rather than for it — a qualified-but-weaker reader loses facts and understates recall. That is the safe direction, and it is stated on every row: the back-translator is part of the uniqueness constraint and is shown in the UI.
 
 **The remaining engines will be scanned through the container, as a new user would**, rather than from the host CLI. If a cloner cannot reproduce what we did, that should surface here and not in a GitHub issue.
+
+## The four-engine programme (2026-09-29/30)
+
+Four engines, 199 languages each, run through the container as a new user would rather than from the host CLI — jobs 10–13, between 2,083 and 2,396 calls per engine. 199 is the full set of living languages for which a back-translator can be certified, so this is the whole measurable surface, not a sample of it.
+
+| engine | Proficient | Assisted | Unusable | unverified | langs w/ refusals | `CANNOT` | reader |
+|---|---|---|---|---|---|---|---|
+| **deepseek-v4-pro** | **130** | 59 | 8 | 2 | **0** | **0** | gemini-3-6-flash |
+| gemini-3-8-flash | 114 | 68 | 2 | 15 | 3 | 3 | deepseek-v4-flash |
+| openai-gpt-4o | 105 | 35 | 58 | 1 | 75 | 200 | gemini-3-6-flash |
+| groq-qwen3-8-27b | 66 | 71 | 62 | 0 | 75 | 187 | gemini-3-6-flash |
+
+`Unusable` is split from `unverified` here, which the UI and `llmlc status` do not do: both store tier `Unusable`, because `no-control` is never a pass, but they are different claims — one is *proven* unusable, the other is *not measurable*. Any table quoting a single Unusable count is conflating them, and gemini's 15 is the figure most distorted by it.
+
+**On the three engines that share `gemini-3-6-flash`:** deepseek is strictly best on 64 languages against gpt-4o's 6; 41 languages only deepseek can write at all; 129 of 199 all three handle; 10 none of them can.
+
+**The dominant effect is willingness.** deepseek refused nothing in 199 languages; gpt-4o answered `CANNOT` 200 times and groq 187. Protocol 011's insistence on keeping availability as a second axis is what makes that readable — collapsed into one scale it would have read as "gpt-4o cannot write these languages", which is not what was measured.
+
+**gemini's row is not directly comparable** with the other three: its own family is excluded from its panel (S8), so it reads through `deepseek-v4-flash`. That is the weaker reader, and its 15 `unverified` — the highest of the four — is the handicap surfacing as "could not measure" rather than as lower tiers. The bias runs against gemini, which is the safe direction.
+
+## The Catmint locale scan, and the control gap (2026-09-30/10-01)
+
+Jobs 14–17: the same four engines over 154 locales from the real TMS locale list that are outside the FLORES set. The question was how much of a commercial locale list is a problem *before* anyone commissions control texts — answerable at gate cost only, because the deterministic gate needs no control.
+
+Every engine returned 151 of 154 as `Unusable`. The gate resolved 318 of those 616 verdicts for free; the rest are `unverified`.
+
+The useful output is not the count but the ranking. `data/results/control_gap.json` lists the **120 locales where at least one engine wrote something unverifiable**, ranked by how many of the four attempted it: a locale every engine refused is already closed and buys nothing, while one all four attempted is four engines' worth of unknown per control text. **The high-value slice is 27, not 120** — 17 attempted by all four, 10 by three.
+
+One real defect fell out of it. Korean came back unmeasurable here while the main run had measured it fine as `ko-Hang`: control lookup was exact-match, and `ko` carries script `Kore` where the control text carries `Hang`. ISO 15924's `Kore` is Hangul plus Han, so Hangul text *is* Korean text for either. `bt/qualify.py` now lets a control answer for a script-compatible spelling — and only that: Cyrillic Serbian text still says nothing about a reader's Latin Serbian.
+
+That last point matters for reading the ranking. Three of the 27 (`ko`, `sr-Latn`, `uz-Cyrl`) were originally noted as coming free from FLORES+, on the grounds that FLORES has the base language. Only `ko` actually does — `sr-Latn` against FLORES's Cyrillic `sr`, and `uz-Cyrl` against its Latin `uz`, are exactly the cross-script case the fix deliberately refuses. The high-value slice is 27 locales needing 26 new control texts, not 24.
+
+## S9 — README and methodology (2026-11-03)
+
+**`docs/04 - Methodology.md`** — the reference page. The pipeline step by step with the protocol that settled each choice, the scoring in three separable parts, availability as a second axis, the coverage ceiling, a worked reproduction of a stored row, and a limitations section written to the same length as the method itself.
+
+The limitations are the point of the stage. The ones that cost something to write down:
+
+- **28% of graded rows in the programme are `borderline`** — 186 of 653. Three items per language is cheap enough to cover 199 languages and not enough to state a tier flatly.
+- **`Assisted` spans fact recall from 0.00 to 0.93**, and five languages scored exactly 0.00 — fluent text in the right language carrying none of the requested meaning, routed identically to a language scoring 0.90. The tier is doing almost no work at the bottom of that band.
+- **A swapped reader moves 13% of tiers** at a mean content delta of 0.000.
+
+README changes: a *What it found* section with the four-engine table, the coverage ceiling, a short *What a result does not mean* list pointing into doc 04, and three corrections — the status block still said the calibration study was to come, `SCAN_TRIGGER` was documented with the library default rather than what compose sets, and `SCAN_TRIGGER_MAX_CALLS` was documented as 2000 against an actual 5000.
+
+**Still unwritten: a protocol for jobs 10–17.** The programme and the Catmint scan are recorded here and in `control_gap.json`, but neither has an entry in `experiments/protocols/`, and by convention 1 they should — written before the run, which is no longer possible for these. Whatever follows them gets one first.

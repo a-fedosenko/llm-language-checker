@@ -11,20 +11,23 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/01 - Initial discussion - stage 1.md` — prior art, methodology, output contract, dialect/macrolanguage logic
 - `docs/02 - Experiment - invented language control.md` — why self-reported language support cannot be trusted
 - `docs/03 - Architecture and development stages.md` — architecture, data model, staging, implementation log. **Read "Services as built" before believing the five-service diagram above it**, which is the S0 plan and was never built
+- `docs/04 - Methodology.md` — the reference page, written at S9: every pipeline step with the protocol that settled it, and a limitations section of the same length
 - `experiments/protocols/README.md` — nineteen protocols. **016 and 018 matter most**; then 019, 017, 005, 012
 
-**State:** S0–S8 complete. 295 tests. Method version **2.0.0**; 932 result rows.
+**State:** S0–S9 complete. 298 tests. Method version **2.0.0**; 1,559 result rows across jobs 1–17.
 
 **Four engines are measured across 199 languages** (2026-09-29/30, jobs 10–13, ~8,900 calls). That is every living language for which a back-translator control exists — see *Coverage* below, because the number is a constraint, not a choice.
 
-| engine | Proficient | Assisted | Unusable | langs w/ refusals | reader |
-|---|---|---|---|---|---|
-| **deepseek-v4-pro** | **130** | 59 | **10** | **0** | gemini-3-6-flash |
-| gemini-3-8-flash | 114 | 68 | 17 | 3 | deepseek-v4-flash* |
-| openai-gpt-4o | 105 | 35 | 59 | 75 | gemini-3-6-flash |
-| groq-qwen3-8-27b | 66 | 71 | 62 | 75 | gemini-3-6-flash |
+| engine | Proficient | Assisted | Unusable | unverified | langs w/ refusals | reader |
+|---|---|---|---|---|---|---|
+| **deepseek-v4-pro** | **130** | 59 | 8 | 2 | **0** | gemini-3-6-flash |
+| gemini-3-8-flash | 114 | 68 | 2 | 15 | 3 | deepseek-v4-flash* |
+| openai-gpt-4o | 105 | 35 | 58 | 1 | 75 | gemini-3-6-flash |
+| groq-qwen3-8-27b | 66 | 71 | 62 | 0 | 75 | gemini-3-6-flash |
 
 *a different reader, so not directly comparable with the other three. It is the weaker one, which biases against gemini — its 15 `unverified`, the highest of the four, is that handicap surfacing as "could not measure" rather than as lower tiers.*
+
+`Unusable` and `unverified` are split here and nowhere else: the DB stores both as tier `Unusable` (because `no-control` is never a pass) and `llmlc status` reports the combined figure. Any table quoting one Unusable count is conflating *proven unusable* with *not measurable*.
 
 On the three that share a reader: **deepseek is strictly best on 64 languages** (gpt-4o on 6), and **41 languages only deepseek can do at all**. 129 of 199 all three handle; 10 none of them can.
 
@@ -85,23 +88,29 @@ living WITHOUT a control                     8,408
 
 Beyond that set nobody can be qualified, so the honest output is `unverified`. **But the deterministic gate needs no control at all**, so negatives stay free and sound at full breadth. The shape is: *we can prove inability without a reader; we cannot prove ability.*
 
+## Done since the last handoff
+
+**The Catmint locale scan** (jobs 14–17, 154 locales × 4 engines) and the control-gap ranking in `data/results/control_gap.json`: the high-value slice is **27 locales, not 120**. Written up in doc 03. It also exposed a control-lookup bug — `ko` carries script `Kore`, the control text carries `Hang` — now fixed so a control answers for a script-*compatible* spelling and only that.
+
+**S9 — README and methodology.** `docs/04 - Methodology.md` is new; the README gained a *What it found* section, the coverage ceiling, a *What a result does not mean* list, and three factual corrections (stale status block, `SCAN_TRIGGER` documented as the library default rather than what compose sets, `SCAN_TRIGGER_MAX_CALLS` as 2000 against an actual 5000).
+
 ## Next step
 
-**1. Scan the Catmint 602 through the gate.** `languages/languages.json` is on disk (gitignored). Every locale outside FLORES still gets a sound `Unusable` or an honest `unverified`, at gate cost only. This tells us how much of the real locale list is a problem *before* anyone commissions control texts. Start with `deepseek-v4-pro`, which came out broadest. Needs nothing from Andrei.
+**1. A protocol on the `Assisted`/`Proficient` cut.** 13% of tiers flip when a qualified reader is swapped, and five `Assisted` languages scored content 0.00 while being routed as "MT-assist, mandatory human pass" — fluent text, no meaning. Protocol 018 measured cuts at 0.50/0.70/0.85 as non-monotonic, so 0.95 was the only monotonic option; the live runs are better evidence than that simulation. This decides whether three tiers are honest or two.
 
-**2. S9 — README and methodology.** Worth writing now that there is a four-engine table to write around. Lead with the two strongest results: the invented-language control (doc 02) and 15/15 against 0/15 on script (protocol 016).
+**2. S10 — public landing page.** Andrei's portfolio piece; should publish browsable results, not just describe the method. Doc 04 is the text it can be built from.
 
-**3. A protocol on the `Assisted`/`Proficient` cut.** 13% of tiers flip when a qualified reader is swapped, and four `Assisted` languages scored content 0.00 while being routed as "MT-assist, mandatory human pass" — fluent text, no meaning. Protocol 018 measured cuts at 0.50/0.70/0.85 as non-monotonic, so 0.95 was the only monotonic option; the live runs are better evidence than that simulation. This decides whether three tiers are honest or two.
-
-**4. S10 — public landing page.** Andrei's portfolio piece; should publish browsable results, not just describe the method.
+**3. Rebuild the image and clear the stale rows.** The running container is from an image four weeks old, so the UI is serving pre-Catmint, pre-`ko`-fix code over current data (`docker compose build --no-cache api`). `llmlc status` also reports 11 rows under an older method, and gpt-4o still carries 11 five-tier rows (`Strong`, `None`) from method 1.x.
 
 ## Needs Andrei, not the agent
 
 - **Dialects.** Marker sets exist for **2 of 534 variant tags**, both English — which is also the pivot and the easiest possible case — and both `reviewed: false`. The method is untested where it would be load-bearing (`ar-EG` vs `ar-MA`). Drafting is model-plus-human-review, per doc 01. This is the most distinctive claim the tool makes and the least proven.
-- **Control texts** for the Catmint locales FLORES lacks, if step 1 shows the gap is commercially real. Same kind of job.
+- **Control texts** for the Catmint locales FLORES lacks. The gap is now ranked rather than guessed: `data/results/control_gap.json` names **27 locales attempted by three or more engines**, of which only `ko` turned out to be free from FLORES — so 26 texts, each buying three or four engines' worth of unknown. Same kind of job as the markers.
 - **Whether to build the local GPU back-translator.** Not built; the GPU is unused; `hardware.detect()` now reports `profile: api` with `capable_of: gpu-int8` rather than claiming MADLAD read the text. The argument for finishing it is **reproducibility**, not cost — a vendor endpoint cannot be pinned, and a published dataset whose instrument has been retired cannot be re-graded. Detection logic survives behind `hardware.LOCAL_BACKTRANSLATOR`. Do not switch instruments mid-programme: convention 4 would strand every existing result.
 
 ## Open, carried forward
+
+- **Jobs 10–17 have no protocol.** The four-engine programme and the Catmint scan are written up in doc 03 and in `control_gap.json`, but neither has an entry in `experiments/protocols/`, and convention 1 says they should. Retroactive is the weak version of that rule; whatever runs next gets its hypothesis written first.
 
 - **The UI shows 335 gpt-4o rows across two readers with no grouping.** The data model is right — two instruments, two rows — but a browser sees `de` twice and reads it as duplication. Add the back-translator as a facet before S10.
 - **`calls_used` stays 0 while a job runs** and only updates at the end, so the programme driver's progress lines were useless. The Jobs tab uses a different source and is fine.
@@ -113,4 +122,4 @@ Beyond that set nobody can be qualified, so the honest output is `unverified`. *
 - **Resuming a stopped job from the UI is not built.** `pending_items()` is the resume set and a stopped job keeps it intact; re-running is currently a fresh scan over the same tags.
 - **`kk-Latn` deserves a second look with a different model**: asked properly, gpt-4o returns Latin script that GlotLID reads as Crimean Tatar and Turkmen. A recent official alphabet with little training text is a plausible genuine gap.
 
-**Remaining stages:** S9 README and methodology · S10 public landing page.
+**Remaining stages:** S10 public landing page.

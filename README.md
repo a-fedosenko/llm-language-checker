@@ -4,7 +4,7 @@
 
 Vendor language lists are marketing. "Supports 100+ languages" has no definition behind it, and for the long tail nobody publishes anything at all. This project measures it instead: you point it at a model, it generates text, checks the text, and reports a graded verdict with its evidence and its uncertainty.
 
-> **Status: early development.** The methodology is documented and partially validated by experiment (see `docs/`). The measurement pipeline, persistence and UI work end to end; dialect-level testing and the calibration study are still to come.
+> **Status: working, and used.** The pipeline, persistence and UI run end to end; the method is validated by nineteen recorded experiments (`experiments/protocols/`); four models have been measured across 199 languages. What remains thin is dialects — the mechanism works, but marker sets exist for 2 of 534 variant tags. **[Read the methodology](docs/04%20-%20Methodology.md)** for how a result is produced and, at equal length, what it does not mean.
 
 ## What it is not
 
@@ -17,6 +17,27 @@ This is **not** a linguistic authority and **not** a benchmark leaderboard. It i
 - The **pivot language** — the language everything is back-translated into for judging — cannot be graded against itself, so it is measured through a fallback pivot and its results carry that pivot in the instrument id.
 
 Anything it reports is evidence, not proof.
+
+## What it found
+
+Four models, 199 languages each, 2026-09-29/30, ~8,900 model calls. 199 is every living language for which a back-translator can be certified — see *Coverage* below, where that number comes from.
+
+| engine | Proficient | Assisted | Unusable | unverified | languages with refusals | read through |
+|---|---|---|---|---|---|---|
+| **deepseek-v4-pro** | **130** | 59 | 8 | 2 | **0** | gemini-3-6-flash |
+| gemini-3-8-flash | 114 | 68 | 2 | 15 | 3 | deepseek-v4-flash\* |
+| openai-gpt-4o | 105 | 35 | 58 | 1 | 75 | gemini-3-6-flash |
+| groq-qwen3-8-27b | 66 | 71 | 62 | 0 | 75 | gemini-3-6-flash |
+
+\*A different reader, so this row is not directly comparable with the other three — results are only comparable within one back-translator. It is also the weaker reader, which biases *against* gemini: its 15 `unverified`, the highest of the four, is that handicap surfacing as "could not measure" rather than as lower tiers.
+
+On the three that share a reader: **deepseek is strictly best on 64 languages** (gpt-4o on 6), **41 languages only deepseek can write at all**, 129 of 199 all three handle, and 10 none of them can.
+
+**The dominant effect is willingness, not ability.** deepseek refused nothing across 199 languages; gpt-4o answered `CANNOT` 200 times. Keeping availability as an axis separate from capability is what makes that readable — on a single scale it would have been reported as "gpt-4o cannot write these languages," which the evidence does not support.
+
+Treat a single row as noisier than the aggregate. The same engine measured through two qualified readers disagreed on tier for 13% of 136 languages, with a mean content delta of 0.000 — unbiased on average, noisy per language.
+
+A second scan put 154 locales from a real TMS locale list through the same pipeline. Every one of the four engines came back with 151 of 154 `Unusable`, and `data/results/control_gap.json` ranks the resulting gap by how much a control text would actually buy: of 120 locales where at least one engine wrote something unverifiable, only **27 were attempted by three or more engines**. A locale every engine refused is already closed and needs no control.
 
 ## Run it yourself
 
@@ -54,7 +75,7 @@ llmlc status                                   # what is measured, what is stale
 llmlc markers                                  # variant coverage, and the remaining gap
 llmlc export --merge-into your-master.json     # mergeable artifact
 llmlc bootstrap --check                        # is the instrument complete?
-pytest
+python -m pytest
 ```
 
 ### Starting a scan from the browser
@@ -64,12 +85,12 @@ A scan spends your API budget, so the endpoint that starts one is gated by `SCAN
 | | |
 |---|---|
 | `off` | no trigger; scans stay a `llmlc scan` action |
-| `loopback` | **default** — only callers on `127.0.0.1` / `::1`. Reaching it already means access to the machine holding your key |
-| `any` | any client that can reach the port. Required in Docker, where the caller is always the bridge gateway — keep `API_BIND` on loopback if you set it |
+| `loopback` | the library default — only callers on `127.0.0.1` / `::1`. Reaching it already means access to the machine holding your key |
+| `any` | **what compose sets** — any client that can reach the port. Required in Docker, where the caller is always the bridge gateway, so `loopback` could never match and the UI's own scan button would 403 for everyone. Not a loosening: the control there is the port binding, published on `127.0.0.1` |
 
 Only the socket's peer address counts; `X-Forwarded-For` is ignored, because a header any client can set is not an access control. Behind a reverse proxy, use `off`.
 
-A browser-started scan must state a call budget, and `SCAN_TRIGGER_MAX_CALLS` (default 2000) caps it. **Plan first** — the plan shows how many classes will actually be probed and costs nothing.
+A browser-started scan must state a call budget, and `SCAN_TRIGGER_MAX_CALLS` (default 5000) caps it; a full 199-language scan costs about 2,400. One scan at a time — a second gets `409`, because SQLite takes one writer and two scans would spend against a budget neither of them set. **Plan first** — the plan shows how many classes will actually be probed and costs nothing.
 
 ## Dialects and variants
 
@@ -113,7 +134,7 @@ Override with `HARDWARE_PROFILE` in `.env`.
 
 ## How it works
 
-Briefly — the full method, its rationale, and the experiments behind it are in `docs/`.
+Briefly. **[docs/04 — Methodology](docs/04%20-%20Methodology.md)** is the full version: every step with the experiment that settled it, and a limitations section of the same length.
 
 1. **Content-controlled generation.** The model is given a *semantic specification* in a pivot language and asked to write in the target language, choosing its own words. Not a sentence to translate (which rewards copying and punishes paraphrase) and not free writing (which lets the model fall back on memorised text).
 2. **Designator selection.** An LLM has no language-code interface — whatever string you pass is just tokens in a prompt. Several candidate designators are tried and the best-performing one is kept, so a negative verdict means "under our best designator," never "under one arbitrary string."
@@ -121,7 +142,31 @@ Briefly — the full method, its rationale, and the experiments behind it are in
 4. **Fact-recall scoring.** Surviving output is back-translated by a fixed, independent back-translator; a blind judge then checks which of the specified facts survived. Grading happens entirely in the pivot language, so **the judge never needs to know the target language.** This number is the measurement, and it is published continuously.
 5. **A routing tier, derived from the number.** `Unusable / Assisted / Proficient` — do not offer, MT-assist behind a mandatory human pass, or light review. Three values because a five-value scale was built, measured, and found not to exist: one of its tiers was never assigned in 40 results and another ranked below the bottom. The tier is a lossy convenience for a TMS that has to route on something; the score is the result. Each carries a confidence interval, an evidence class, and the full configuration that produced it.
 
-The back-translator is validated per language against human reference text before it is trusted, so a failure of the instrument is never reported as a failure of the model.
+The back-translator is validated per language against human reference text before it is trusted, so a failure of the instrument is never reported as a failure of the model. A model that cannot read a language does not refuse — it invents: one handed known Chuvash returned *"A man is walking. He is wearing a white shirt."*
+
+### Coverage: why 199 languages and not 9,589
+
+```
+shipped public catalogue                     9,589 tags
+living languages                             8,607
+living WITH a back-translator control          199   <- what can be graded
+living WITHOUT a control                     8,408
+```
+
+**199 is not a choice, it is the control ceiling.** Grading needs a certified reader; certifying one needs parallel text in that language whose meaning is already known; that text exists for about two hundred languages. Beyond them nobody can be qualified and the honest output is `unverified`.
+
+But **the deterministic gate needs no control at all**, so negatives stay sound at full catalogue breadth. The shape of the method is: *inability can be proven without a reader; ability cannot.*
+
+### What a result does not mean
+
+The short version of [the methodology's limitations section](docs/04%20-%20Methodology.md#8-limitations), which is the part worth reading before quoting a number:
+
+- **Three items per language**, six for borderline ones. 28% of graded rows in the four-engine programme are flagged `borderline` — their interval spans the tier cut.
+- **`Assisted` is a wide band**, spanning fact recall from 0.00 to 0.93. Five languages scored exactly 0.00 — fluent text in the right language carrying none of the requested meaning — and route identically to one scoring 0.90.
+- **Swapping a qualified reader moves 13% of tiers**, at a mean content delta of 0.000. Unbiased on average, noisy per language.
+- **Fact recall saturates**: 84% of items score 1.0, so above the floor it has little resolution.
+- **Dialects are the least proven claim** — marker sets exist for 2 of 534 variant tags, both English, both unreviewed.
+- **Three sentences is the whole sample.** Nothing here speaks to document-length behaviour.
 
 ## Output
 
@@ -143,6 +188,7 @@ The repository carries **code, authored data, and evidence**. Everything a run p
 | `data/specs/specs.json` | ✅ | Content specifications — what the model is asked to describe |
 | `data/controls/controls.json` | ✅ | Hand-written back-translator controls for languages FLORES lacks |
 | `experiments/` | ✅ | Protocols and the raw responses behind them, so claims are checkable |
+| `data/results/control_gap.json` | ✅ | Which locales a new control text would actually buy something for |
 | `data/controls/flores.json` | ✗ | FLORES-derived controls — **CC BY-SA 4.0**, regenerate with `scripts/build_controls.py` |
 | `data/llmlc.db` | ✗ | Your results. `llmlc scan` writes here |
 | `data/results/`, `data/corpus/` | ✗ | Export artifacts and the raw generation corpus |
@@ -158,9 +204,14 @@ A first run downloads FLORES-200 (~25 MB) and, for language identification, the 
 | `docs/01 - Initial discussion - stage 1.md` | Prior art, datasets, full methodology, output contract |
 | `docs/02 - Experiment - invented language control.md` | Experiment: why self-reported language support cannot be trusted |
 | `docs/03 - Architecture and development stages.md` | Architecture, data model, cost model, staging, implementation log |
+| `docs/04 - Methodology.md` | **The reference page** — how a result is produced, what each number means, and what it does not mean |
 | `experiments/protocols/` | One protocol per experiment: hypothesis, method, results, and what it changed |
 
 ## Attribution
+
+Results are derived from:
+
+- **FLORES-200** © Meta AI, CC BY-SA 4.0 — <https://github.com/facebookresearch/flores>. Share-alike attaches to derived text, which is why the controls built from it are not committed.
 
 The shipped language catalogue is derived from:
 
