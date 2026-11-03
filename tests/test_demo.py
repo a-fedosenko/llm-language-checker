@@ -245,3 +245,64 @@ def test_closing_a_session_frees_its_place(client, monkeypatch):
     assert client.post("/demo", json=body()).status_code == 409
     client.delete(f"/demo/{sid}")
     assert client.post("/demo", json=body()).status_code == 201
+
+
+# -- choosing and showing the reader -----------------------------------------
+
+def test_route_records_every_candidate_it_tried():
+    """"Why this reader" should be answerable from the page. Without the
+    attempt list the demo could show the winner and nothing about the one that
+    failed first, which is the interesting half when a panel member is dropped."""
+    from llmlc.bt import Qualification, QualStatus, route
+
+    class Reader:
+        def __init__(self, i): self.id = f"remote:r{i}"
+
+    def fake_qualify(bt, *a, **kw):
+        ok = bt.id.endswith("2")
+        return Qualification(QualStatus.QUALIFIED if ok else QualStatus.FAILED,
+                             80.0 if ok else 12.0, bt.id, "cv", "reference", "")
+
+    import importlib
+
+    # `llmlc.bt` re-exports the function under the submodule's own name, so
+    # `import llmlc.bt.qualify as q` binds the function, not the module.
+    q = importlib.import_module("llmlc.bt.qualify")
+    original, q.qualify = q.qualify, fake_qualify
+    try:
+        tried = []
+        bt, qual = route([Reader(1), Reader(2)], None, "j", "cv", attempts=tried)
+    finally:
+        q.qualify = original
+    assert [a.backtranslator for a in tried] == ["remote:r1", "remote:r2"]
+    assert bt.id == "remote:r2" and qual.trustworthy
+
+
+def test_a_demo_can_name_its_own_panel_and_judge(client):
+    # Distinct vendor prefixes on purpose: `some-engine` and `some-reader` share
+    # the family `some`, and the guard would drop the reader before the test
+    # reached what it meant to check.
+    d = client.post("/demo", json=body(engine="alpha-engine", tag="cv",
+                                       scheme="default",
+                                       backtranslator="beta-reader",
+                                       judge="gamma-judge")).json()
+    assert d["status"] == "running"
+
+
+def test_the_family_guard_still_applies_to_a_named_panel(client):
+    """Naming the panel by hand does not buy past the rule that a model may not
+    grade itself (protocol 005)."""
+    r = client.post("/demo", json=body(engine="gemini-a", backtranslator="gemini-b"))
+    assert r.status_code == 400 and "self-consistency" in r.json()["detail"]
+
+
+def test_the_plan_names_the_panel_and_what_the_family_guard_dropped(client):
+    """By the time the qualification step runs the dropped member is simply
+    absent, and nothing explains why the panel is shorter than the one asked
+    for. Scanning deepseek-v4-pro drops deepseek-v4-flash, which is most of the
+    default panel."""
+    d = client.post("/demo", json=body(engine="alpha-pro", tag="cv", scheme="default",
+                                       backtranslator="alpha-flash,beta-reader")).json()
+    assert d["plan"]["panel"] == ["beta-reader"]
+    assert d["plan"]["panel_dropped"] == ["alpha-flash"]
+    assert d["plan"]["judge"]

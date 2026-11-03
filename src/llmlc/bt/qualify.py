@@ -275,16 +275,35 @@ def qualify(bt: RemoteBackTranslator, client: OpenAICompatClient, judge_model: s
 def route(candidates: list[RemoteBackTranslator], client: OpenAICompatClient,
           judge_model: str, tag: str, controls: dict[str, dict] | None = None,
           cache: QualificationCache | None = None,
-          scheme=None) -> tuple[RemoteBackTranslator, Qualification]:
+          scheme=None,
+          attempts: list | None = None) -> tuple[RemoteBackTranslator, Qualification]:
     """Pick the first back-translator that qualifies for this language.
 
     No single back-translator reads every language -- gpt-4o fabricates Chuvash,
     deepseek reads it correctly -- so the choice is per language, not per run.
     Returns the last attempt when none qualify, so the caller can report why.
+
+    **First to qualify, not best-scoring**, and that is deliberate twice over.
+    Panel order is measured rather than alphabetical -- gemini-3-6-flash is the
+    stronger reader at the hard end, so it goes first and is the one most
+    results use. And ranking candidates by their chrF++ would use that number
+    for the job protocol 016 established it cannot do: it separates fabrication
+    from faithful reading (10.5 against 81.9) and is simply wrong in the middle,
+    where 90% of its disagreements with fact recall were adequate translations.
+    A threshold it can carry; an ordering it cannot.
+
+    Stopping at the first also bounds the cost: a candidate costs about four
+    calls to qualify, and scoring every member to rank them would pay that for
+    readers never used.
+
+    `attempts` collects every Qualification tried, in order, for a caller that
+    needs to show its working rather than only the winner.
     """
     last = None
     for bt in candidates:
         q = qualify(bt, client, judge_model, tag, controls, cache, scheme=scheme)
+        if attempts is not None:
+            attempts.append(q)
         if q.trustworthy:
             return bt, q
         last = (bt, q)

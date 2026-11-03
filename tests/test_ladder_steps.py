@@ -44,10 +44,13 @@ def stub(monkeypatch, *, gate=GateVerdict.PASS, recall=1.0, trustworthy=True):
         return item
 
     def fake_route(cands, client, judge_model, tag, *, controls=None, cache=None,
-                   scheme=None):
+                   scheme=None, attempts=None):
         status = QualStatus.QUALIFIED if trustworthy else QualStatus.NO_CONTROL
-        return Reader(), Qualification(status, 80.0 if trustworthy else 0.0,
-                                       Reader.id, tag, "reference", "")
+        q = Qualification(status, 80.0 if trustworthy else 0.0,
+                          Reader.id, tag, "reference", "")
+        if attempts is not None:
+            attempts.append(q)
+        return Reader(), q
 
     monkeypatch.setattr(L, "generate_and_gate", fake_generate)
     monkeypatch.setattr(L, "judge_item", fake_judge)

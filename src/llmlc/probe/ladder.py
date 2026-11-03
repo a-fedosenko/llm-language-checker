@@ -32,6 +32,7 @@ from typing import Generator, Iterator
 
 from llmlc.bt import (Qualification, QualificationCache, QualStatus,
                       RemoteBackTranslator, route)
+from llmlc.bt.qualify import MIN_CHRF, MIN_RECALL
 from llmlc.probe import pivot as pivot_mod
 from llmlc.client import OpenAICompatClient
 from llmlc.db.models import NO_INSTRUMENT
@@ -438,15 +439,26 @@ def ladder_steps(
     # back-translating English into English grades nothing (see probe/pivot.py).
     backtranslators, pivot, controls = pivot_mod.panel_for(
         scheme, lang, pivot, backtranslators)
+    tried: list = []
     bt, qual = route(backtranslators, client, judge_model, tag,
-                     controls=controls, cache=cache, scheme=scheme)
+                     controls=controls, cache=cache, scheme=scheme,
+                     attempts=tried)
     yield Step("qualification", 2,
                f"{bt.id}: {qual.status.value}"
                + (f" at {qual.score:.1f}" if qual.kind == "reference" else ""),
                {"backtranslator": bt.id, "status": qual.status.value,
                 "score": round(qual.score, 2), "kind": qual.kind,
                 "detail": qual.detail, "pivot": pivot,
-                "trustworthy": qual.trustworthy},
+                "trustworthy": qual.trustworthy,
+                # The panel in the order it was tried, so "why this reader" is
+                # answerable from the page rather than from the source.
+                "panel": [b.id for b in backtranslators],
+                "attempts": [{"backtranslator": q.backtranslator,
+                              "status": q.status.value,
+                              "score": round(q.score, 2), "kind": q.kind,
+                              "detail": q.detail} for q in tried],
+                "threshold": (MIN_CHRF if qual.kind == "reference"
+                              else MIN_RECALL if qual.kind == "facts" else None)},
                calls,
                next_kind="judged" if qual.trustworthy else "unverified",
                tone="ok" if qual.trustworthy else "bad")

@@ -693,8 +693,11 @@ def demo_start(body: DemoStart, request: Request) -> dict:
     except NotConfigured as e:
         raise HTTPException(400, str(e)) from e
 
-    panel = [m.strip() for m in (body.backtranslator or runner.DEFAULT_PANEL).split(",")
-             if m.strip() and runner.model_family(m.strip()) != runner.model_family(body.engine)]
+    asked = [m.strip() for m in (body.backtranslator or runner.DEFAULT_PANEL).split(",")
+             if m.strip()]
+    panel = [m for m in asked
+             if runner.model_family(m) != runner.model_family(body.engine)]
+    dropped = [m for m in asked if m not in panel]
     if not panel:
         raise HTTPException(400, "No back-translator left after excluding the model "
                                  "under test: a model grading itself measures "
@@ -723,6 +726,12 @@ def demo_start(body: DemoStart, request: Request) -> dict:
             cache=DbQualificationCache(), sweep_all=body.sweep_all)
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
+    # Said at start, because by the time the qualification step runs the dropped
+    # member is simply absent and nothing explains why the panel is shorter than
+    # the one that was asked for.
+    session.plan["panel"] = panel
+    session.plan["panel_dropped"] = dropped
+    session.plan["judge"] = judge
     return session.public()
 
 

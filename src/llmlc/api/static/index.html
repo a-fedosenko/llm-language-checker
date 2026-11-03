@@ -401,6 +401,14 @@
         <label class="f" for="d-scheme" data-help="support.scheme">Locale list</label>
         <select id="d-scheme"></select>
       </div>
+      <div class="field">
+        <label class="f" for="d-bt" data-help="demo.bt">Back-translator panel</label>
+        <input id="d-bt" list="model-list" placeholder="(default panel)">
+      </div>
+      <div class="field">
+        <label class="f" for="d-judge" data-help="scan.judge">Judge</label>
+        <input id="d-judge" list="model-list" placeholder="(default)">
+      </div>
     </div>
 
     <details id="d-specs-box">
@@ -527,6 +535,8 @@ const HELP = {
     'The real pipeline over one language, advanced a step at a time. Every step is produced by the same generator a scan drains — there is no demonstration copy of the method that could drift from it. Each step says what it just did, and what the next one will do before you pay for it.'],
   'demo.tag': ['Language tag',
     'A single tag from the chosen locale list. The demo runs one language; a scan runs many, collapsing variants onto one experiment per equivalence class.'],
+  'demo.bt': ['Back-translator panel',
+    'Ordered, comma separated. The first member that qualifies for the language is the one used — not the best-scoring one. Panel order is measured rather than alphabetical, and ranking candidates by their chrF++ would use that number for the job protocol 016 showed it cannot do: it separates fabrication from faithful reading and is unreliable in the middle. Any member sharing the engine\'s family is dropped automatically, because a model grading itself measures self-consistency.'],
   'demo.mode': ['Mode',
     'Interactive advances one step per click and shows what the next step will do first. Automatic runs the whole ladder through. The steps and the result are identical either way — the only difference is who decides when the next call happens.'],
   'demo.specs': ['Content specifications',
@@ -781,6 +791,11 @@ async function loadDemo() {
     demo.specs = structuredClone(demo.shipped);
     renderSpecs();
   }
+  if (!$('#d-bt').value) {
+    const e = await j('/engines');
+    $('#d-bt').value = e.backtranslator_panel.join(',');
+    $('#d-judge').placeholder = e.judge;
+  }
   if (!$('#d-scheme').options.length) {
     const s = await j('/schemes');
     $('#d-scheme').innerHTML = s.schemes.slice().sort((a, b) => a.count - b.count)
@@ -975,6 +990,14 @@ function renderPlan(plan) {
            and the rest inherit, so only one of them is ever asked. The demo probes the tag
            you typed. Closing that gap means splitting equivalence classes by region, which
            is a decision about scan cost.` : '')
+    + (plan.panel
+        ? ` <span class="ev">reader panel: ${plan.panel.map(esc).join(' · ')} —
+           the first that qualifies for this language is used${
+             (plan.panel_dropped || []).length
+               ? `; <b>${esc(plan.panel_dropped.join(', '))}</b> dropped as the same
+                  family as the model under test, which would measure
+                  self-consistency rather than intelligibility` : ''}.
+           Judge: ${esc(plan.judge || '')}.</span>` : '')
     + ` <span class="ev">designators tried, in order:
         ${plan.designators.map(esc).join(' · ')}</span>`;
 }
@@ -1000,6 +1023,8 @@ async function startDemo() {
         tag: $('#d-tag').value.trim(),
         mode: $('#d-mode').value,
         scheme: $('#d-scheme').value,
+        backtranslator: $('#d-bt').value.trim() || null,
+        judge: $('#d-judge').value.trim() || null,
         specs: demo.specs,
       }) });
     demo.id = d.id;
@@ -1070,7 +1095,16 @@ function renderStep(s) {
     `${d.lid.label} (${d.lid.confidence}${d.lid.backend ? ', ' + d.lid.backend : ''})`);
   add('designator', d.designator);
   add('reader', d.backtranslator); add('status', d.status);
-  if (d.score !== undefined && d.kind) add('chrF++', d.score);
+  if (d.score !== undefined && d.kind)
+    add(d.kind === 'facts' ? 'fact recall' : 'chrF++',
+        d.threshold != null ? `${d.score} (needs ${d.threshold})` : d.score);
+  // Which readers were tried, in order, and what each scored. "Why this one"
+  // should be answerable from the page rather than from the source.
+  if (d.attempts && d.attempts.length > 1)
+    add('tried in order', d.attempts.map(a =>
+      `${a.backtranslator} ${a.status}${a.score ? ' ' + a.score : ''}`).join(' → '));
+  else if (d.panel && d.panel.length > 1)
+    add('panel', d.panel.join(', ') + ' — first to qualify is used');
   add('recall', d.recall);
   if (d.verdicts) add('facts', d.verdicts.join(', '));
   if (d.tier) { add('tier', d.tier); add('eligibility', d.s_lang); add('adequacy', d.s_content);
