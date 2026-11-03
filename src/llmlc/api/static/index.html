@@ -801,8 +801,25 @@ async function suggestTags() {
     try {
       const d = await j(`/languages?scheme=${encodeURIComponent(scheme)}&limit=40`
                         + (q ? `&q=${encodeURIComponent(q)}` : ''));
-      $('#tag-list').innerHTML = d.items
-        .map(x => `<option value="${esc(x.tag)}">${esc(x.name || '')}</option>`).join('');
+      // The label has to carry what distinguishes the tags, not just the
+      // language name: a locale list holds nine Serbians, and `value` is only
+      // shown by some browsers. So the canonical spelling goes in the label,
+      // where every browser shows it, and the endonym after it — which is what
+      // actually separates sr-RS-Cyrl (српски) from sr-RS-Latn (srpski).
+      $('#tag-list').innerHTML = d.items.map(x => {
+        // The label leads with the tag that will actually be inserted. A
+        // catalogue files `sr-BA` and resolves it to `sr-Cyrl-BA`; showing the
+        // resolved form and inserting the other is a small lie, so the resolved
+        // form is appended only where it says something the key does not.
+        const same = (a, b) => (a || '').toLowerCase().replace(/-/g, '')
+                            === (b || '').toLowerCase().replace(/-/g, '');
+        const resolved = x.full && !same(x.full, x.tag) ? ` (${x.full})` : '';
+        // The endonym is what separates sr-RS-Cyrl (српски) from sr-RS-Latn
+        // (srpski) — nine locales in a TMS list share the name "Serbian".
+        const endonym = x.local_name && x.local_name !== x.name ? ` · ${x.local_name}` : '';
+        return `<option value="${esc(x.tag)}">`
+             + `${esc(x.tag + resolved + (x.name ? ' — ' + x.name : '') + endonym)}</option>`;
+      }).join('');
       const exact = d.items.some(x => x.tag === q);
       $('#d-tag-note').textContent = !q ? ''
         : exact ? '' : `${d.total} match(es) in ${scheme}; pick one`;
