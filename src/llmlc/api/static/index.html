@@ -79,6 +79,10 @@
      position legible. Muted and narrow so it never reads as part of the data. */
   .rn { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right;
         width: 1%; white-space: nowrap; padding-right: 14px; user-select: none; }
+  /* Borderline, marked on the number without taking width: anything placed
+     beside it un-aligns the column. Two cues rather than one, because colour
+     alone is not a signal for every reader. */
+  .bl { color: var(--warn); border-bottom: 1px dotted currentColor; cursor: help; }
   /* Five statuses, three colours. `unverifiable` and `unchecked` are deliberately
      not red: neither is a verdict about the model, and colouring them like a
      failure is the same error as labelling them one. */
@@ -426,7 +430,7 @@ const HELP = {
   'support.status': ['Status',
     'Five values, and the last two are not verdicts about the model. supported: it wrote the language and a qualified reader confirmed the meaning survived. supported-via-dialect: not probed directly, inheriting its base language — which says nothing about whether the model marks this variant. unsupported: proven locally, the model refused or wrote the wrong language or script. unverifiable: it wrote something, but no back-translator could be qualified for this language, so quality cannot be assessed. unchecked: never probed.'],
   'support.score': ['Score',
-    'Fact recall: the share of specified facts that survived generation and back-translation. This is the measurement. Blank where there is nothing to measure — a proven negative stores zero by construction, and showing it as 0.00 would read as a score.'],
+    'Fact recall: the share of specified facts that survived generation and back-translation. This is the measurement. Blank where there is nothing to measure — a proven negative stores zero by construction, and showing it as 0.00 would read as a score. A number marked in amber with a dotted underline is <em>borderline</em>: its 90% interval straddles the tier cut, so the tier it implies should not be read as a flat statement.'],
   'support.confidence': ['Confidence',
     'How firm the score is, from the width of its 90% bootstrap interval over the items: high ≤ 0.20, medium ≤ 0.40, low above. Separate from the borderline marker, which says something different — that the interval straddles the tier cut.'],
   'block.stats': ['Counts',
@@ -713,9 +717,14 @@ function renderSupport() {
   body.innerHTML = rows.length ? rows.map((r, i) => {
     // No number where nothing was measured: a proven negative stores 0.0 by
     // construction, and rendering it would read as a score of zero.
+    // Borderline marks the number itself rather than sitting beside it: a chip
+    // in the score column pushes the digits out of alignment, and a column of
+    // numbers you cannot scan down is a worse loss than the word is a gain.
     const score = r.score === null || r.score === undefined
       ? '<span class="ev">—</span>'
-      : r.score.toFixed(2) + (r.borderline ? ' <span class="flag warn">borderline</span>' : '');
+      : (r.borderline
+          ? `<span class="bl" title="Borderline: the 90% interval straddles the tier cut, so the tier should not be read as a flat statement.">${r.score.toFixed(2)}</span>`
+          : r.score.toFixed(2));
     const conf = r.confidence
       ? `<span class="flag ${r.confidence === 'high' ? 'ok' : r.confidence === 'low' ? 'bad' : 'warn'}">${esc(r.confidence)}</span>`
       : '';
