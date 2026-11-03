@@ -162,7 +162,9 @@ def item_detail(item: ItemOutcome) -> dict:
         "generation": item.generation,
         "gate": item.gate.verdict.value,
         "gate_detail": item.gate.detail,
-        "lid": ({"label": item.gate.lid.label, "score": round(item.gate.lid.score, 3)}
+        "lid": ({"label": item.gate.lid.label,
+                 "confidence": round(item.gate.lid.confidence, 3),
+                 "backend": item.gate.lid.backend}
                 if item.gate.lid else None),
         "back_translation": item.back_translation,
         "verdicts": ([v.value for v in item.judgement.verdicts]

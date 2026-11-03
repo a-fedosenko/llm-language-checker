@@ -98,6 +98,25 @@
   /* A group chip is a shortcut over the statuses beside it, not a sixth value.
      Set apart so it does not read as one, and separated from the breakdown. */
   .chip.group { border-style: dashed; margin-right: 10px; }
+  /* Demo stand. A step is a card: what happened, then the evidence it produced. */
+  .step { border: 1px solid var(--line); border-left: 3px solid var(--line);
+          background: var(--card); border-radius: 4px; padding: 10px 14px; margin-bottom: 10px; }
+  .step.is-terminal { border-left-color: var(--accent); }
+  .step h4 { margin: 0 0 4px; font-size: 16.2px; }
+  .step .why { color: var(--muted); margin: 0 0 8px; max-width: 80ch; }
+  .step .rung { float: right; font-size: 14px; color: var(--muted); }
+  .step pre { white-space: pre-wrap; word-break: break-word; margin: 6px 0 0;
+              background: var(--bg); border: 1px solid var(--line); border-radius: 3px;
+              padding: 8px 10px; font-size: 15px; }
+  .step dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px;
+             margin: 6px 0 0; font-size: 15.4px; }
+  .step dt { color: var(--muted); }
+  .step dd { margin: 0; }
+  .spec { border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; margin: 8px 0; }
+  .spec textarea { width: 100%; font: inherit; background: var(--bg); color: var(--fg);
+                   border: 1px solid var(--line); border-radius: 3px; padding: 6px; }
+  .spec.edited { border-color: var(--warn); }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
   .chip.group[aria-pressed=true] { border-style: solid; }
   .chip b { font-variant-numeric: tabular-nums; }
   footer { margin-top: 26px; font-size: 15.6px; color: var(--muted); }
@@ -173,6 +192,7 @@
     <button role="tab" data-tab="results" aria-selected="false">Results</button>
     <button role="tab" data-tab="resolution" aria-selected="false">Resolution</button>
     <button role="tab" data-tab="variants" aria-selected="false">Variants</button>
+    <button role="tab" data-tab="demo" aria-selected="false">Demo</button>
     <button role="tab" data-tab="scan" aria-selected="false">Scan</button>
     <button role="tab" data-tab="jobs" aria-selected="false">Jobs</button>
   </nav>
@@ -329,6 +349,61 @@
     </div>
   </section>
 
+  <!-- ── demo stand ─────────────────────────────────────────────────────── -->
+  <section id="tab-demo" hidden>
+    <h2 data-help="block.demo">The method, one step at a time</h2>
+    <p class="lead">One language, the real pipeline, nothing simulated. Every step below is
+      the same code a scan runs — there is no second version of the method for demonstration.
+      <b>It spends your API budget</b>: roughly 9–15 calls for one language.</p>
+
+    <div class="note" id="d-note" hidden></div>
+
+    <div class="grid">
+      <div class="field">
+        <label class="f" for="d-engine" data-help="scan.engine">Model under test</label>
+        <input id="d-engine" list="model-list" placeholder="openai-gpt-4o">
+      </div>
+      <div class="field">
+        <label class="f" for="d-tag" data-help="demo.tag">Language tag</label>
+        <input id="d-tag" list="tag-list" placeholder="start typing a language…" autocomplete="off">
+        <datalist id="tag-list"></datalist>
+        <span class="ev" id="d-tag-note"></span>
+      </div>
+      <div class="field">
+        <label class="f" for="d-mode" data-help="demo.mode">Mode</label>
+        <select id="d-mode">
+          <option value="interactive">Interactive — one step per click</option>
+          <option value="auto">Automatic — run it through</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="f" for="d-scheme" data-help="support.scheme">Locale list</label>
+        <select id="d-scheme"></select>
+      </div>
+    </div>
+
+    <details id="d-specs-box">
+      <summary data-help="demo.specs">Content specifications — what the model is asked to describe</summary>
+      <p class="ev">The model is told <em>what</em> to say and chooses every word; the facts are the
+        grading checklist. Editing either changes the measurement, so an edited run is kept out of
+        the results and marked here — the raw text still goes to the corpus, which is where you read it.</p>
+      <div id="d-specs"></div>
+      <button id="d-specs-reset" class="ghost">Reset to the shipped specifications</button>
+    </details>
+
+    <p>
+      <button id="d-start">Start</button>
+      <button id="d-step" disabled>Run next step</button>
+      <button id="d-auto" disabled>Run to the end</button>
+      <button id="d-close" class="ghost" disabled>Abandon</button>
+      <span class="ev" id="d-cost"></span>
+    </p>
+
+    <div class="note" id="d-next" hidden></div>
+    <div id="d-steps"></div>
+    <div id="d-result"></div>
+  </section>
+
   <!-- ── scan ───────────────────────────────────────────────────────────── -->
   <section id="tab-scan" hidden>
     <h2 data-help="block.scan">Run a scan</h2>
@@ -423,6 +498,14 @@ const HELP = {
     'Heuristic measurements of what a model actually produces when asked to write a language — not what its vendor claims. Every number here is evidence, not proof.'],
   'block.results': ['Results',
     'One row per language per model. Click a row to see its individual items, the gate verdict on each, and the instrument that graded them.'],
+  'block.demo': ['The method, one step at a time',
+    'The real pipeline over one language, advanced a step at a time. Every step is produced by the same generator a scan drains — there is no demonstration copy of the method that could drift from it. Each step says what it just did, and what the next one will do before you pay for it.'],
+  'demo.tag': ['Language tag',
+    'A single tag from the chosen locale list. The demo runs one language; a scan runs many, collapsing variants onto one experiment per equivalence class.'],
+  'demo.mode': ['Mode',
+    'Interactive advances one step per click and shows what the next step will do first. Automatic runs the whole ladder through. The steps and the result are identical either way — the only difference is who decides when the next call happens.'],
+  'demo.specs': ['Content specifications',
+    'The scenario the model is asked to describe, and the facts that scenario commits it to. The model chooses every word; the facts are the grading checklist. Editing either makes the run incomparable to the stored results, so it is not saved — the raw output still goes to the corpus.'],
   'block.support': ['Language support',
     'One model against every locale in the active scheme. The status answers whether the model can be used for that language; the score says how well it carried meaning. Everything about how a verdict was reached — the designator, the gate verdict, the interval, the back-translator — is on the Results tab.'],
   'support.scheme': ['Locale list',
@@ -634,11 +717,251 @@ for (const b of document.querySelectorAll('nav button')) {
       $('#tab-' + o.dataset.tab).hidden = o !== b;
     }
     if (b.dataset.tab === 'support') loadSupport();
+    if (b.dataset.tab === 'demo') loadDemo();
     if (b.dataset.tab === 'resolution') loadResolution();
     if (b.dataset.tab === 'variants') loadVariants();
     if (b.dataset.tab === 'jobs') loadJobs();
   });
 }
+
+// ── demo stand ────────────────────────────────────────────────────────────
+// Holds no copy of the method: it starts a session, asks the server for the
+// next step, and renders whatever comes back. The server is advancing the one
+// generator a scan drains.
+let demo = { id: null, specs: null, shipped: null, running: false, help: null };
+
+async function loadDemo() {
+  if (!demo.help) demo.help = await j('/demo/help');
+  if (!demo.shipped) {
+    demo.shipped = await j('/specs');
+    demo.specs = structuredClone(demo.shipped);
+    renderSpecs();
+  }
+  if (!$('#d-scheme').options.length) {
+    const s = await j('/schemes');
+    $('#d-scheme').innerHTML = s.schemes.slice().sort((a, b) => a.count - b.count)
+      .map(x => `<option value="${esc(x.file)}">${esc(x.name)} (${x.count})</option>`).join('');
+  }
+  renderDemoNote();
+  suggestTags();
+}
+
+function specsEdited() {
+  return JSON.stringify(demo.specs) !== JSON.stringify(demo.shipped);
+}
+
+function renderSpecs() {
+  $('#d-specs').innerHTML = demo.specs.map((s, i) => {
+    const orig = demo.shipped[i];
+    const edited = !orig || orig.scenario !== s.scenario
+                   || JSON.stringify(orig.facts) !== JSON.stringify(s.facts);
+    return `<div class="spec ${edited ? 'edited' : ''}">
+      <div class="ev">${esc(s.id)}${edited ? ' — edited' : ''}</div>
+      <textarea rows="2" data-spec="${i}" data-field="scenario">${esc(s.scenario)}</textarea>
+      <textarea rows="${Math.max(2, s.facts.length)}" data-spec="${i}" data-field="facts"
+        >${esc(s.facts.join('\n'))}</textarea>
+    </div>`;
+  }).join('');
+  renderDemoNote();
+}
+
+function renderDemoNote() {
+  const note = $('#d-note');
+  if (specsEdited()) {
+    note.hidden = false;
+    note.className = 'note warn';
+    note.innerHTML = `<strong>These specifications have been edited.</strong> The run is still
+      real, but it is not comparable to anything measured under the shipped ones — results are
+      comparable only within one method — so it will <b>not</b> be saved to the results. The raw
+      output goes to the corpus either way.`;
+  } else { note.hidden = true; }
+}
+
+$('#d-specs').addEventListener('input', e => {
+  const el = e.target;
+  if (!el.dataset.spec) return;
+  const s = demo.specs[Number(el.dataset.spec)];
+  if (el.dataset.field === 'scenario') s.scenario = el.value;
+  else s.facts = el.value.split('\n').map(x => x.trim()).filter(Boolean);
+  renderDemoNote();
+  for (const box of $('#d-specs').querySelectorAll('.spec')) box.classList.remove('x');
+});
+// Tag suggestions come from the chosen locale list, looked up as you type.
+// A fixed datalist would mean shipping 9,589 options to the browser, and a tag
+// that is right in one list is absent from another — `cv` is Chuvash in the
+// public catalogue and `cv-ru` in the TMS one, which is exactly the mistake
+// this exists to prevent.
+let tagLookup = null;
+async function suggestTags() {
+  clearTimeout(tagLookup);
+  tagLookup = setTimeout(async () => {
+    const q = $('#d-tag').value.trim();
+    const scheme = $('#d-scheme').value;
+    if (!scheme) return;
+    try {
+      const d = await j(`/languages?scheme=${encodeURIComponent(scheme)}&limit=40`
+                        + (q ? `&q=${encodeURIComponent(q)}` : ''));
+      $('#tag-list').innerHTML = d.items
+        .map(x => `<option value="${esc(x.tag)}">${esc(x.name || '')}</option>`).join('');
+      const exact = d.items.some(x => x.tag === q);
+      $('#d-tag-note').textContent = !q ? ''
+        : exact ? '' : `${d.total} match(es) in ${scheme}; pick one`;
+    } catch { /* suggestions are a convenience, never a blocker */ }
+  }, 180);
+}
+$('#d-tag').addEventListener('input', suggestTags);
+$('#d-scheme').addEventListener('change', () => { $('#d-tag-note').textContent = ''; suggestTags(); });
+
+$('#d-specs-reset').addEventListener('click', () => {
+  demo.specs = structuredClone(demo.shipped);
+  renderSpecs();
+});
+
+function demoButtons({ live, busy }) {
+  $('#d-start').disabled = live || busy;
+  $('#d-step').disabled = !live || busy;
+  $('#d-auto').disabled = !live || busy;
+  $('#d-close').disabled = !live || busy;
+}
+
+async function startDemo() {
+  $('#d-steps').innerHTML = '';
+  $('#d-result').innerHTML = '';
+  $('#d-next').hidden = true;
+  demoButtons({ live: false, busy: true });
+  try {
+    const d = await j('/demo', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        engine: $('#d-engine').value.trim(),
+        tag: $('#d-tag').value.trim(),
+        mode: $('#d-mode').value,
+        scheme: $('#d-scheme').value,
+        specs: demo.specs,
+      }) });
+    demo.id = d.id;
+    demoButtons({ live: true, busy: false });
+    $('#d-cost').textContent = 'nothing spent yet';
+    if ($('#d-mode').value === 'auto') await runDemoToEnd();
+    else describeNext({ kind: 'generated' });
+  } catch (e) {
+    demo.id = null;
+    demoButtons({ live: false, busy: false });
+    $('#d-result').innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
+  }
+}
+
+function describeNext(next) {
+  // Interactive mode's whole point: say what the next call does before it is paid for.
+  const box = $('#d-next');
+  if (!next) { box.hidden = true; return; }
+  const help = (demo.help || {})[next.kind] || {};
+  const title = next.title || help.title || next.kind;
+  const why = next.explains || help.explains || '';
+  box.hidden = false;
+  box.className = 'note';
+  box.innerHTML = `<strong>Next: ${esc(title)}.</strong> ${esc(why)}`;
+}
+
+async function stepDemo() {
+  if (!demo.id) return;
+  demoButtons({ live: true, busy: true });
+  try {
+    const d = await j(`/demo/${demo.id}/step`, { method: 'POST' });
+    if (d.step) renderStep(d.step);
+    renderDemoSession(d.session);
+    const live = d.session.status === 'running';
+    demoButtons({ live, busy: false });
+    describeNext(live && d.step ? d.step.next : null);
+    return live;
+  } catch (e) {
+    demoButtons({ live: false, busy: false });
+    $('#d-result').innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
+    return false;
+  }
+}
+
+async function runDemoToEnd() {
+  demo.running = true;
+  $('#d-next').hidden = true;
+  // One request per step even in automatic mode: the server advances the same
+  // generator either way, so the two modes cannot produce different runs.
+  for (let i = 0; i < 200 && demo.running; i++) {
+    if (!(await stepDemo())) break;
+  }
+  demo.running = false;
+}
+
+function renderStep(s) {
+  const d = s.detail || {};
+  const rows = [];
+  const add = (k, v) => { if (v !== null && v !== undefined && v !== '') rows.push([k, v]); };
+  add('gate', d.gate); add('detail', d.gate_detail);
+  if (d.lid) add('identified as', `${d.lid.label} (${d.lid.score})`);
+  add('designator', d.designator);
+  add('reader', d.backtranslator); add('status', d.status);
+  if (d.score !== undefined && d.kind) add('chrF++', d.score);
+  add('recall', d.recall);
+  if (d.verdicts) add('facts', d.verdicts.join(', '));
+  if (d.tier) { add('tier', d.tier); add('eligibility', d.s_lang); add('adequacy', d.s_content);
+                add('interval', d.ci ? `[${d.ci[0]}, ${d.ci[1]}]` : null);
+                add('workflow', d.workflow); }
+  const texts = [];
+  if (d.generation) texts.push(['generated', d.generation]);
+  if (d.back_translation) texts.push(['read back', d.back_translation]);
+  const calls = s.calls || {};
+  const total = Object.values(calls).reduce((a, b) => a + b, 0);
+  $('#d-cost').textContent = `${total} call(s): ` +
+    Object.entries(calls).map(([k, v]) => `${k} ${v}`).join(', ');
+  $('#d-steps').insertAdjacentHTML('beforeend', `
+    <div class="step ${s.terminal ? 'is-terminal' : ''}">
+      <span class="rung">rung ${s.rung}</span>
+      <h4>${esc(s.title)}</h4>
+      <p class="why">${esc(s.explains)}</p>
+      <div><b>${esc(s.summary)}</b></div>
+      ${rows.length ? `<dl>${rows.map(([k, v]) =>
+        `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}
+      ${texts.map(([k, v]) => `<pre><b>${esc(k)}</b>\n${esc(v)}</pre>`).join('')}
+    </div>`);
+  // Optional chaining throughout: scrolling is a nicety, and a host that
+  // does not implement it must not take the step rendering down with it.
+  $('#d-steps').lastElementChild?.scrollIntoView?.({ block: 'nearest' });
+}
+
+function renderDemoSession(sess) {
+  if (sess.status === 'running') return;
+  const r = sess.result;
+  const saved = sess.persisted
+    ? `<span class="flag ok">saved to results</span>`
+    : `<span class="flag warn">not saved${sess.specs_modified
+        ? ': the specifications were edited, so this run is not comparable to the others'
+        : ''}</span>`;
+  $('#d-result').innerHTML = r ? `
+    <div class="note">
+      <strong>${esc(r.score.tier)}</strong> — ${esc(r.workflow)} ${saved}<br>
+      adequacy <b>${num(r.score.s_content)}</b>
+      [${num(r.score.ci[0])}, ${num(r.score.ci[1])}]${r.score.borderline ? ' (borderline)' : ''},
+      eligibility ${num(r.score.s_lang)}, evidence ${esc(r.score.evidence)}<br>
+      <span class="ev">designator ${esc(r.designator)} · reader ${esc(r.backtranslator)} ·
+        judge ${esc(r.judge)} · pivot ${esc(r.pivot)} · rung ${r.rungs_run} ·
+        corpus ${esc(sess.corpus || '')}</span>
+    </div>`
+    : `<div class="note ${sess.status === 'failed' ? 'bad' : ''}">${esc(sess.error || sess.status)}</div>`;
+  demo.id = null;
+  demoButtons({ live: false, busy: false });
+  $('#d-next').hidden = true;
+}
+
+$('#d-start').addEventListener('click', startDemo);
+$('#d-step').addEventListener('click', stepDemo);
+$('#d-auto').addEventListener('click', runDemoToEnd);
+$('#d-close').addEventListener('click', async () => {
+  demo.running = false;
+  if (demo.id) await fetch(`demo/${demo.id}`, { method: 'DELETE' });
+  demo.id = null;
+  demoButtons({ live: false, busy: false });
+  $('#d-next').hidden = true;
+});
 
 // ── support ───────────────────────────────────────────────────────────────
 // The plain answer: one model, every locale, one row. Loaded whole and filtered

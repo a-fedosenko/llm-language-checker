@@ -174,3 +174,22 @@ def test_stopping_early_spends_nothing_further(monkeypatch, kw):
     after_one = dict(calls)
     gen.close()
     assert calls == after_one
+
+
+# -- how the session layer consumes it ---------------------------------------
+
+def test_a_terminal_step_leaves_only_the_return_value(monkeypatch, kw):
+    """The demo collects the verdict in the same request as the terminal step.
+    That is only sound if nothing but the return remains after it -- otherwise
+    the session would skip a step to get there."""
+    stub(monkeypatch)
+    gen = L.ladder_steps(**kw)
+    seen = []
+    while True:
+        step = next(gen)
+        seen.append(step)
+        if step.terminal:
+            break
+    with pytest.raises(StopIteration) as stop:
+        next(gen)
+    assert stop.value.value is not None, "the return value must follow the terminal step"

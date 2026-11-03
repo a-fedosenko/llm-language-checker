@@ -286,7 +286,7 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 | **S8** ✅ | **Distribution** — making "clone and run" true, and the back-translator panel policy | **Done 2026-09-29** — `llmlc bootstrap` fetches both uncommittable assets, the UI says when the instrument is incomplete, and the panel sits outside the scan set |
 | **S9** ✅ | README, **methodology page**, limitations | **Done 2026-11-03** — `docs/04 - Methodology.md`; a reader can reproduce a result and knows what it does not mean |
 | **S10** ✅ | **Support table** — one model, every locale, five statuses | **Done 2026-11-03** — `/support`, a Support tab, and a TMS scheme adapter so it runs down a real 602-locale list |
-| **S11** | **Demo stand** — the method, step by step, in the browser | Someone who has never run the tool can watch a verdict being produced and see why |
+| **S11** ✅ | **Demo stand** — the method, step by step, in the browser | **Done 2026-11-03** — the ladder is a generator, `run_ladder` drains it, and `/demo` steps it; auto and interactive, with editable hints that quarantine the run |
 | **S12** | **Public landing page** | The project is explicable to someone who has never run it |
 | **S13** | **Human-in-the-loop estimation** — a speaker grades a language the instrument cannot | A language the machine cannot verify gets a verdict from someone who reads it, stored as its own evidence class |
 
@@ -1231,3 +1231,40 @@ Each would have attached a locale to the wrong equivalence class and then inheri
 ### Finding: the shipped catalogue has no unqualified Chinese tag
 
 Four of the twelve unresolved locales are Chinese — `zh`, `zh-hans`, `zh-hant`, `cmn-cn` — and they fail for a reason worth fixing rather than working around. The catalogue holds `zh-CN`, `zh-AU`, `zh-Hans-HK`, `zh-Hans-MO`, `zh-Hans-MY` and 32 others, but **no bare `zh` and no plain `zh-Hans`**, so no locale list naming generic Chinese can resolve. The programme measured `zh-CN` and `zh-AU`. This is a defect in `scripts/build_default_scheme.py`'s output, not in the adapter, and it is left for its own change: inventing a `zh` here would put a tag in a user's scheme that the catalogue does not agree exists.
+
+## S11 — the demo stand (2026-11-03)
+
+The real pipeline over one language, advanced a step at a time, in the browser. Auto mode runs it through; interactive mode waits between steps and says what the next one will do *before* the call that does it is paid for.
+
+### The refactor is the stage; the page is the easy half
+
+The obvious way to build a step-by-step page is a second walk of the ladder, and that is the way this project has already been burned — convention 9 exists because an analysis harness re-implemented a production call, got it subtly wrong, and 68 bad verdicts reached a protocol's conclusions. A demo that disagreed with a scan would be a lie told in the project's own voice.
+
+So `ladder_steps()` yields a `Step` after every action and returns the `LadderResult`, and **`run_ladder()` is a drain over it** rather than a second implementation. Every caller outside the demo kept its signature and behaviour; the 362 tests that existed before the refactor are what guarantee it.
+
+Two properties fell out of the shape and are now relied on:
+
+- **Every `yield` sits after the work it reports**, so a consumer that stops early has paid for what it has seen and nothing more. Abandoning a session closes the generator; a test pins that it spends nothing further.
+- **A terminal step leaves only the return value.** The session collects the verdict in the same request as the terminal step, which is only sound because nothing else remains — pinned by a test, because the alternative is a reader clicking once more for a step that does not exist.
+
+The per-step explanations live in `STEP_HELP` beside the code and are served with the step, and by `GET /demo/help` for the first one. In the page they would go stale the first time a threshold moved.
+
+### Sessions
+
+In memory, keyed by id, capped at four, reaped after an idle hour. A generator cannot be pickled and there is no second user to share one with, so that is the whole storage design: they die with the process, which is the right lifetime for something a person is watching. `POST /demo` is gated exactly like `POST /scans` — cheaper than a scan is not the same as free, and one language is 9 to 15 calls against the operator's own key.
+
+### Editing the hints, and what it costs
+
+Interactive mode lets the scenario and its fact checklist be rewritten. That changes the measurement, so **an edited run is kept out of the results** — results are comparable only within one method (convention 4), and a rewrite can quietly lose the property the shipped specs were built for: they are mundane on purpose, because a memorised encyclopedia opening cannot satisfy "an old man bought fish and the price had doubled".
+
+The raw output still goes to the corpus, which is where you read it. Verified end to end: an edited run of `ru` finished `Proficient`, reported `persisted: false`, left the stored row count for `ru` unchanged at 6, and wrote all nine records — prompt, back-translation and judgement — to its corpus file.
+
+`persisted` reports what actually happened rather than what the policy implies. "The specs were not edited" is the rule; a save can still fail, and a page saying "saved" on the strength of the rule is claiming something it did not check.
+
+### Three defects the browser found that the tests did not
+
+1. **`DemoStart` was declared after the route that used it.** With `from __future__ import annotations` FastAPI could not resolve the annotation at decoration time and silently treated the body as a *query* parameter, so every request 422'd on a missing field. Moved below the models.
+2. **`GET /demo/help` was being claimed by `GET /demo/{session_id}`** — FastAPI matches in declaration order, so "help" was read as a session id. The static path is now declared first.
+3. **A free-text tag field with no idea which list it is searching.** `cv` is Chuvash in the public catalogue and `cv-ru` in the TMS one, and the error — correct, and correctly surfaced — was `No tag 'cv' in scheme 'catmint'`. The field now suggests tags from the chosen locale list as you type, against `/languages?scheme=`.
+
+A live run, end to end, in automatic mode: deepseek over `cv`, ten steps across both rungs, **exactly nine calls** — three generations, three back-translations, three judgements — a qualified reader, and `Proficient` at adequacy 1.00. The same session showed the back-translated English beside each generation, which is the thing worth seeing: *"A child finds a lost dog by the river. He brings it home. His parents say it can stay as a guest for one night."*

@@ -22,8 +22,9 @@ from pydantic import BaseModel, Field
 
 from llmlc import __version__, bootstrap, hardware, runner
 from llmlc.api import results as results_store
-from llmlc.client import NotConfigured, custom_models, is_configured
-from llmlc.api import support_table
+from llmlc.client import (NotConfigured, build_client, check_models, custom_models,
+                          is_configured)
+from llmlc.api import demo as demo_sessions, support_table
 from llmlc.support import (GROUP_MEANING as support_group_meaning,
                            GROUPS as support_groups,
                            MEANING as support_meaning, ORDER as support_order)
@@ -133,8 +134,9 @@ def languages(
     type_: str | None = Query(None, alias="type", description="ISO 639-3 type: L, E, H, A, C"),
     limit: int = Query(100, ge=1, le=5000),
     offset: int = Query(0, ge=0),
+    scheme: str | None = Query(None, description="Locale list to search; the active one by default"),
 ) -> dict:
-    items = list(get_scheme(settings.scheme).languages.values())
+    items = list(get_scheme(scheme or settings.scheme).languages.values())
     if scope:
         items = [x for x in items if x.scope == scope]
     if type_:
@@ -449,6 +451,20 @@ class ScanTrigger(BaseModel):
     scheme: str | None = None
 
 
+class DemoStart(BaseModel):
+    engine: str
+    tag: str
+    mode: str = "interactive"          # interactive | auto -- recorded, not enforced
+    judge: str | None = None
+    backtranslator: str | None = None
+    pivot: str = "en"
+    scheme: str | None = None
+    sweep_all: bool = False
+    specs: list[dict] | None = Field(
+        None, description="Rewritten content specifications. Any edit makes the run "
+                          "incomparable to the stored results, and it is not saved.")
+
+
 class BootstrapRequest(BaseModel):
     assets: list[str] | None = Field(None, description="asset keys; omit for all missing")
 
@@ -659,3 +675,136 @@ def export_csv(
     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
                              headers={"Content-Disposition":
                                       'attachment; filename="llmlc-results.csv"'})
+
+
+# -- the demo stand ----------------------------------------------------------
+
+@app.post("/demo", status_code=201)
+def demo_start(body: DemoStart, request: Request) -> dict:
+    """Open a session over one language. Spends nothing until the first step.
+
+    Gated exactly like `POST /scans`: it reaches a model with the user's own key
+    and costs roughly 9 to 15 calls for one language. Cheaper than a scan is not
+    the same as free.
+    """
+    _check_trigger_allowed(request)
+    try:
+        client = build_client()
+    except NotConfigured as e:
+        raise HTTPException(400, str(e)) from e
+
+    panel = [m.strip() for m in (body.backtranslator or runner.DEFAULT_PANEL).split(",")
+             if m.strip() and runner.model_family(m.strip()) != runner.model_family(body.engine)]
+    if not panel:
+        raise HTTPException(400, "No back-translator left after excluding the model "
+                                 "under test: a model grading itself measures "
+                                 "self-consistency, not intelligibility.")
+    judge = body.judge or settings.judge_model
+    if (missing := check_models([body.engine, judge, *panel])):
+        raise HTTPException(400, f"Not in the custom model list: {', '.join(missing)}.")
+
+    scheme = load_scheme(body.scheme or settings.scheme)
+    if scheme.get(body.tag) is None:
+        raise HTTPException(404, f"No tag {body.tag!r} in scheme {scheme.meta.name!r}.")
+
+    specs, modified = demo_sessions.specs_for(body.specs)
+    if not specs:
+        raise HTTPException(400, "No content specifications to run.")
+
+    from llmlc.bt import RemoteBackTranslator
+    from llmlc.db.qualcache import DbQualificationCache
+
+    try:
+        session = demo_sessions.start(
+            engine=body.engine, tag=body.tag, scheme=scheme, client=client,
+            backtranslators=[RemoteBackTranslator(client, m, body.pivot) for m in panel],
+            judge_model=judge, pivot=body.pivot, mode=body.mode,
+            specs=specs, specs_modified=modified,
+            cache=DbQualificationCache(), sweep_all=body.sweep_all)
+    except RuntimeError as e:
+        raise HTTPException(409, str(e)) from e
+    return session.public()
+
+
+@app.get("/demo/help")
+def demo_help() -> dict:
+    """What each kind of step does, from the table beside the code.
+
+    The page needs this before the first step exists, to say what the first call
+    will do before spending it. Served rather than duplicated in the markup for
+    the usual reason: a description that lives in two places stops matching the
+    one that moves.
+    """
+    from llmlc.probe.ladder import STEP_HELP
+
+    return {kind: {"title": title, "explains": explains}
+            for kind, (title, explains) in STEP_HELP.items()}
+
+
+@app.post("/demo/{session_id}/step")
+def demo_step(session_id: str) -> dict:
+    """Advance one step. The call that actually spends money.
+
+    One step per request rather than a stream, because the point of interactive
+    mode is that a person decides whether the next call happens.
+    """
+    session = demo_sessions.get(session_id)
+    if session is None:
+        raise HTTPException(404, "No such demo session. They live in memory and do "
+                                 "not survive a restart.")
+    step = demo_sessions.advance(session, on_result=_save_demo_result)
+    return {"step": step, "session": session.public()}
+
+
+@app.get("/demo/{session_id}")
+def demo_state(session_id: str) -> dict:
+    session = demo_sessions.get(session_id)
+    if session is None:
+        raise HTTPException(404, "No such demo session.")
+    return session.public()
+
+
+@app.delete("/demo/{session_id}")
+def demo_close(session_id: str) -> dict:
+    """Abandon a session. Every yield sits after the work it reports, so closing
+    one mid-run cannot leave a call half-paid-for."""
+    return {"closed": demo_sessions.close(session_id)}
+
+
+@app.get("/specs")
+def specs() -> list[dict]:
+    """The shipped content specifications.
+
+    Served rather than restated in the page because the demo lets them be
+    edited, and the page has to be able to tell an edit from the original — a
+    second copy in the markup would make every run look edited the first time
+    a scenario was reworded here.
+    """
+    from llmlc.probe.specs import load_specs
+
+    return [{"id": s.id, "scenario": s.scenario, "facts": list(s.facts)}
+            for s in load_specs()]
+
+
+@app.get("/demo")
+def demo_list() -> dict:
+    return {"sessions": demo_sessions.listing(),
+            "max_sessions": demo_sessions.MAX_SESSIONS}
+
+
+def _save_demo_result(result) -> None:
+    """Store a finished demo run as a result row.
+
+    Only reached for a run whose specifications were not edited -- `demo.py`
+    enforces that -- so what lands here is the same measurement a scan would
+    have produced, taken through whichever instrument the operator chose. It is
+    keyed by that instrument like every other row (convention 4), so it sits
+    beside a programme result rather than overwriting it.
+    """
+    from llmlc.db import create_all, session as db_session
+    from llmlc.db.store import save as save_result
+
+    create_all()
+    profile = hardware.detect(settings.hardware_profile).profile
+    with db_session() as s:
+        save_result(s, result, job_id=None, hardware_profile=profile)
