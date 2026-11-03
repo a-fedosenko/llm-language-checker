@@ -84,6 +84,12 @@ def load_controls(pivot: str = "en") -> dict[str, dict]:
         data = json.loads(SEED_CONTROLS.read_text(encoding="utf-8"))
         for tag, items in data.get("controls", {}).items():
             out.setdefault(tag, {"kind": "facts", "items": items})
+    # A digraphic language's other alphabet, where the mapping is deterministic.
+    # Serbian ships in Cyrillic only, so `sr-Latn` had no control and every
+    # result came back `unverified` — a statement about the instrument, not the
+    # model. See bt/translit.py for why this is one language and not a loop.
+    from llmlc.bt.translit import derive_controls
+    derive_controls(out)
     if pivot != "en":
         derived = pivot_control(out, pivot)
         if derived:
@@ -182,7 +188,7 @@ def _qualify_facts(bt: RemoteBackTranslator, client: OpenAICompatClient, judge_m
                          "meaning — this back-translator cannot read the language")
 
 
-def _script_sibling(controls: dict[str, dict], tag: str) -> dict | None:
+def _script_sibling(controls: dict[str, dict], tag: str, scheme=None) -> dict | None:
     """A control for the same language under a *compatible* script spelling.
 
     Narrow on purpose. The catalogue can hold two tags for one language whose
@@ -197,15 +203,28 @@ def _script_sibling(controls: dict[str, dict], tag: str) -> dict | None:
     those are real gaps, and qualifying a reader on a script it will not meet
     would certify it for a job it has not been tested on. Four of the five
     candidates that prompted this function fail here, correctly.
+
+    **Two schemes, deliberately.** The tag being measured comes from whichever
+    locale list the run is using, and controls are keyed to the public
+    catalogue. Resolving both against the catalogue meant a user's own tag
+    resolved to nothing and the fallback never ran: `sr-rs-latn` had a usable
+    Latin control sitting in the set and still reported `no-control`, because
+    that spelling is not a tag the catalogue has heard of.
+
+    `scheme` is passed in rather than read from settings. A demo session and an
+    HTTP scan both carry their own scheme per request, and a process-wide
+    setting is a different value — reading it here fixed the CLI and left the
+    container doing exactly what it had been doing.
     """
     from llmlc.probe.lid import _table
     from llmlc.scheme import load_scheme
 
     try:
-        scheme = load_scheme("default")
-    except FileNotFoundError:
+        catalogue = load_scheme("default")
+    except (FileNotFoundError, ValueError):
         return None
-    want = scheme.get(tag)
+    # The tag is the run's; a control tag is always the catalogue's.
+    want = (scheme.get(tag) if scheme is not None else None) or catalogue.get(tag)
     if want is None or not want.iso639_3:
         return None
 
@@ -222,7 +241,7 @@ def _script_sibling(controls: dict[str, dict], tag: str) -> dict | None:
     for other, entry in controls.items():
         if other == tag or not entry.get("items"):
             continue
-        cand = scheme.get(other)
+        cand = catalogue.get(other)
         if (cand and cand.iso639_3 == want.iso639_3
                 and compatible(want.script, cand.script)):
             return {**entry, "derived_from": other}
@@ -231,14 +250,14 @@ def _script_sibling(controls: dict[str, dict], tag: str) -> dict | None:
 
 def qualify(bt: RemoteBackTranslator, client: OpenAICompatClient, judge_model: str,
             tag: str, controls: dict[str, dict] | None = None,
-            cache: QualificationCache | None = None) -> Qualification:
+            cache: QualificationCache | None = None, scheme=None) -> Qualification:
     if cache is not None:
         cached = cache.get(bt.id, tag)
         if cached is not None:
             return cached
 
     controls = controls if controls is not None else load_controls()
-    entry = controls.get(tag) or _script_sibling(controls, tag)
+    entry = controls.get(tag) or _script_sibling(controls, tag, scheme)
     if not entry or not entry.get("items"):
         return Qualification(QualStatus.NO_CONTROL, 0.0, bt.id, tag, "",
                              "No control text for this language; quality is not assessable.")
@@ -255,7 +274,8 @@ def qualify(bt: RemoteBackTranslator, client: OpenAICompatClient, judge_model: s
 
 def route(candidates: list[RemoteBackTranslator], client: OpenAICompatClient,
           judge_model: str, tag: str, controls: dict[str, dict] | None = None,
-          cache: QualificationCache | None = None) -> tuple[RemoteBackTranslator, Qualification]:
+          cache: QualificationCache | None = None,
+          scheme=None) -> tuple[RemoteBackTranslator, Qualification]:
     """Pick the first back-translator that qualifies for this language.
 
     No single back-translator reads every language -- gpt-4o fabricates Chuvash,
@@ -264,7 +284,7 @@ def route(candidates: list[RemoteBackTranslator], client: OpenAICompatClient,
     """
     last = None
     for bt in candidates:
-        q = qualify(bt, client, judge_model, tag, controls, cache)
+        q = qualify(bt, client, judge_model, tag, controls, cache, scheme=scheme)
         if q.trustworthy:
             return bt, q
         last = (bt, q)

@@ -439,7 +439,7 @@ def ladder_steps(
     backtranslators, pivot, controls = pivot_mod.panel_for(
         scheme, lang, pivot, backtranslators)
     bt, qual = route(backtranslators, client, judge_model, tag,
-                     controls=controls, cache=cache)
+                     controls=controls, cache=cache, scheme=scheme)
     yield Step("qualification", 2,
                f"{bt.id}: {qual.status.value}"
                + (f" at {qual.score:.1f}" if qual.kind == "reference" else ""),

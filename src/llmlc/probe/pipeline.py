@@ -122,7 +122,7 @@ def check_language(
     backtranslators, pivot, controls = pivot_mod.panel_for(
         scheme, lang, pivot, backtranslators)
     backtranslator, qual = route(backtranslators, client, judge_model, tag,
-                                 controls=controls, cache=cache)
+                                 controls=controls, cache=cache, scheme=scheme)
     items: list[ItemOutcome] = []
     resolves: dict[str, int] = {}
 

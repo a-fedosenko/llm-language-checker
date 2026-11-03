@@ -43,7 +43,8 @@ def stub(monkeypatch, *, gate=GateVerdict.PASS, recall=1.0, trustworthy=True):
             [FactVerdict.PRESENT] * n + [FactVerdict.MISSING] * (4 - n), "{}")
         return item
 
-    def fake_route(cands, client, judge_model, tag, *, controls=None, cache=None):
+    def fake_route(cands, client, judge_model, tag, *, controls=None, cache=None,
+                   scheme=None):
         status = QualStatus.QUALIFIED if trustworthy else QualStatus.NO_CONTROL
         return Reader(), Qualification(status, 80.0 if trustworthy else 0.0,
                                        Reader.id, tag, "reference", "")

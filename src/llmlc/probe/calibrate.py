@@ -196,7 +196,7 @@ def calibrate_language(
     # unqualified language still contributes a reference score; it simply
     # contributes no pair.
     bt, qual = route(backtranslators, client, judge_model, tag,
-                     controls=controls, cache=cache)
+                     controls=controls, cache=cache, scheme=scheme)
     out = CalibrationResult(tag=tag, engine=engine, backtranslator=bt.id,
                             judge_model=judge_model, pivot=pivot,
                             qualification=qual.as_dict() if qual else {},
