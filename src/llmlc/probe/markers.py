@@ -106,6 +106,12 @@ class MarkerSet(BaseModel):
     markers: list[MarkerAxis] = Field(default_factory=list)
     elicitation: list[str] = Field(default_factory=list)
     note: str | None = None
+    #: Other tags this same set describes. One language, several spellings: the
+    #: public catalogue files Montenegrin Serbian as `sr-Cyrl-ME` and a TMS
+    #: writes `sr-me-cyrl`, and Bosnia's Serbian takes the identical markers
+    #: because the yat reflex is the same. Without this the file would carry
+    #: four copies of one list, which is four things to keep in step.
+    also: list[str] = Field(default_factory=list)
     #: Worked examples the loader checks the markers against. Optional, and the
     #: only practical guard on a stem marker.
     examples: list["MarkerExample"] = Field(default_factory=list)
@@ -321,11 +327,22 @@ def load_markers(directory: str | None = None) -> dict[str, MarkerSet]:
         for tag, body in raw.items():
             if tag.startswith("_"):      # file-level metadata, not a tag
                 continue
+            for alias in body.get("also", []) if isinstance(body, dict) else []:
+                if alias in out:
+                    raise ValueError(
+                        f"marker set for {alias!r} defined twice: "
+                        f"{origin.get(alias)} and {path.name} (as an alias of {tag})")
             if tag in out:
                 raise ValueError(f"marker set for {tag!r} defined twice: "
                                  f"{origin[tag]} and {path.name}")
             out[tag] = MarkerSet.model_validate(body)
             origin[tag] = path.name
+            # Registered under every spelling, as the same object: one language
+            # with several tags is still one claim, and copying it would let the
+            # copies drift.
+            for alias in out[tag].also:
+                out[alias] = out[tag]
+                origin[alias] = path.name
     return out
 
 

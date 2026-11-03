@@ -360,3 +360,66 @@ def test_shipped_contexts_are_clean_of_their_own_markers(shipped):
         for ctx in ms.elicitation:
             assert not score_text(ctx, ms).axes or score_text(ctx, ms).void, \
                 f"{tag}: context leaks a marker"
+
+
+# -- the first non-English marker set ----------------------------------------
+
+def test_serbian_pairs_are_index_aligned():
+    """The file is read as pairs: variant[i] is the ijekavian form of
+    sibling[i]. Unequal lists would also bias scoring — more markers on one
+    side is more chances to be hit."""
+    from llmlc.probe.markers import load_markers
+
+    axis = load_markers()["sr-Cyrl-ME"].markers[0]
+    assert len(axis.variant) == len(axis.sibling)
+
+
+def test_the_serbian_set_serves_every_spelling_of_the_language():
+    """`sr-Cyrl-ME` in the public catalogue, `sr-me-cyrl` in a TMS, and Bosnia
+    and Kosovo take the identical markers because the yat reflex is the same.
+    One claim, one object — copies would drift."""
+    from llmlc.probe.markers import load_markers
+
+    m = load_markers()
+    base = m["sr-Cyrl-ME"]
+    for alias in ("sr-me-cyrl", "sr-BA", "sr-ba-cyrl", "sr-XK", "sr-xk-cyrl"):
+        assert m[alias] is base, alias
+
+
+def test_the_shared_genitive_is_not_a_marker():
+    """вријеме is ijekavian but its genitive времена is shared — the yat is long
+    in the nominative and absent in the genitive. Listing it as a variant marker
+    would have scored ekavian text as ijekavian."""
+    from llmlc.probe.markers import load_markers
+
+    axis = load_markers()["sr-Cyrl-ME"].markers[0]
+    assert "времена" not in axis.variant
+
+
+def test_the_ambiguous_imperative_is_not_a_marker():
+    """реци is the dative of река and the imperative of рећи ("tell"), which is
+    identical in both varieties."""
+    from llmlc.probe.markers import load_markers
+
+    axis = load_markers()["sr-Cyrl-ME"].markers[0]
+    assert "реци" not in axis.sibling
+
+
+def test_the_serbian_examples_discriminate_real_output():
+    """These are real generations. The load-time check already enforces this —
+    this says out loud what it is enforcing, because for a language the author
+    does not read it is the only guard there is."""
+    from llmlc.probe.markers import load_markers, score_text
+
+    ms = load_markers()["sr-Cyrl-ME"]
+    assert len(ms.examples) >= 4
+    for ex in ms.examples:
+        outcome = score_text(ex.text, ms)
+        hits = [m for a in outcome.axes for m in a.variant_hits]
+        misses = [m for a in outcome.axes for m in a.sibling_hits]
+        if ex.expect == "variant":
+            assert hits and not misses, ex.text[:50]
+        elif ex.expect == "sibling":
+            assert misses and not hits, ex.text[:50]
+        else:
+            assert not hits and not misses, ex.text[:50]
