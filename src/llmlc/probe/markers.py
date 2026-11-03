@@ -78,7 +78,12 @@ class MarkerExample(BaseModel):
     """
 
     text: str
-    expect: str = Field(pattern="^(variant|sibling|void)$")
+    #: `mixed` is a real outcome, not a missing case. A model asked for
+    #: Montenegrin returned "Dijete … pored reke. Donelo ga je kući." --
+    #: ijekavian in one word and ekavian in the next two. Scoring that as either
+    #: side would hide the thing worth knowing, which is that the variety was
+    #: not held consistently across one short paragraph.
+    expect: str = Field(pattern="^(variant|sibling|void|mixed)$")
     note: str | None = None
 
 
@@ -159,6 +164,8 @@ class MarkerSet(BaseModel):
                 ok, want = bool(variant) and not sibling, "only variant markers"
             elif ex.expect == "sibling":
                 ok, want = bool(sibling) and not variant, "only sibling markers"
+            elif ex.expect == "mixed":
+                ok, want = bool(variant) and bool(sibling), "markers from both sides"
             else:
                 ok, want = not variant and not sibling, "no markers at all"
             if not ok:

@@ -113,6 +113,8 @@ Beyond that set nobody can be qualified, so the honest output is `unverified`. *
 
 ## Open, carried forward
 
+- **Serbian in Latin script cannot be marker-probed, and the reason is not a bug.** GlotLID reads ijekavian Serbian in Latin as Bosnian or Croatian — correctly, in that the three written standards overlap almost entirely in that script — so the gate returns `relative_substitution` and marker scoring never runs. The Latin marker set exists and validates against its examples; the Cyrillic one works end to end (`proven`, rate 1.00), because `srp_Cyrl` is identified cleanly. Whether `srp`/`bos`/`hrv`/`cnr` should satisfy one another *when the script is Latin* widens what counts as a pass, so it is a protocol and not a wider accept list. Same shape as the carried-forward `mag`-in-Bhojpuri item below.
+
 - **Jobs 10–17 have no protocol.** The four-engine programme and the Catmint scan are written up in doc 03 and in `control_gap.json`, but neither has an entry in `experiments/protocols/`, and convention 1 says they should. Retroactive is the weak version of that rule; whatever runs next gets its hypothesis written first.
 
 - **The UI shows 335 gpt-4o rows across two readers with no grouping.** The data model is right — two instruments, two rows — but a browser sees `de` twice and reads it as duplication. Add the back-translator as a facet before S10.

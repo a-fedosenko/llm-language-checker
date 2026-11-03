@@ -206,8 +206,16 @@ def from_markers(
         shown = f"{system}\n\n--- user ---\n\n{user}"
         corpus.write(Record("variant", engine, lang.tag, "variant", designator, shown,
                             gen.text, gen.error, gen.usage, gen.latency_s))
+        # The same arguments the ladder passes. Without them this call cannot
+        # reach `relative_substitution` or honour a macrolanguage's members, so
+        # the marker probe convicted text the main pipeline would have
+        # classified differently -- two call sites of one function disagreeing
+        # about the same output, which is convention 9's shape.
+        from llmlc.probe.ladder import accepted_codes, relative_codes
         gate = gate_check(gen.text, prompt=shown, expect_lang=lang.iso639_3,
-                          expect_script=lang.script)
+                          expect_script=lang.script,
+                          relatives=relative_codes(scheme, lang),
+                          accept_lang=accepted_codes(lang))
         if not gate.passed:
             # Wrong language entirely is a base-language failure, not a variant
             # one. Scoring its markers would be scoring noise.

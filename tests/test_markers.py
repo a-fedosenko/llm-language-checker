@@ -423,3 +423,19 @@ def test_the_serbian_examples_discriminate_real_output():
             assert misses and not hits, ex.text[:50]
         else:
             assert not hits and not misses, ex.text[:50]
+
+
+def test_the_marker_probe_gates_with_the_same_arguments_as_the_ladder():
+    """It did not, and the two disagreed about the same text. Without
+    `relatives` the gate cannot reach `relative_substitution`, so Latin
+    ijekavian Serbian — which GlotLID reads as Bosnian, because the written
+    standards genuinely overlap — was convicted as `wrong_language`: a harsher
+    and differently-shaped verdict than the main pipeline gives. Two call sites
+    of one function disagreeing is convention 9's shape."""
+    import inspect
+
+    from llmlc.probe import variant
+
+    src = inspect.getsource(variant.from_markers)
+    assert "relatives=relative_codes(scheme, lang)" in src
+    assert "accept_lang=accepted_codes(lang)" in src
