@@ -23,6 +23,10 @@ from pydantic import BaseModel, Field
 from llmlc import __version__, bootstrap, hardware, runner
 from llmlc.api import results as results_store
 from llmlc.client import NotConfigured, custom_models, is_configured
+from llmlc.api import support_table
+from llmlc.support import (GROUP_MEANING as support_group_meaning,
+                           GROUPS as support_groups,
+                           MEANING as support_meaning, ORDER as support_order)
 from llmlc.config import settings
 from llmlc.scheme import Language, Scheme, load_scheme
 
@@ -287,6 +291,77 @@ def _aggregator_model_list() -> list[str]:
     return sorted(str(x) for x in out)
 
 
+@app.get("/support")
+def support(engine: str, scheme: str | None = Query(None)) -> dict:
+    """One model, every locale in a scheme, one row each.
+
+    The plain answer, for a reader who wants to know what a model does with
+    their locale list and not how it was established. Five statuses, an adequacy
+    number where one was measured, and nothing else -- the evidence, the
+    designator, the interval and the gate verdict all live on the Results tab,
+    which is where someone asking *why* should be sent.
+
+    Returned whole rather than paged: a locale list is a few hundred rows, and
+    search and filter over a complete table in the browser beats a round trip
+    per keystroke. The shipped 9,589-tag catalogue is the exception and is
+    capped, because nobody browses nine thousand rows and the response is 2 MB.
+    """
+    data = support_table.build(engine, scheme)
+    rows = data["rows"]
+    if len(rows) > SUPPORT_MAX_ROWS:
+        # Drop `unchecked` rows first, never a flat alphabetical slice. The page
+        # searches and filters client-side, so a slice silently shrinks what the
+        # filters can reach -- the counts said 29 unverifiable and the table
+        # could only ever show the 5 that fell inside the first 2,000 rows.
+        # An unchecked row carries nothing but its tag; a measured one is the
+        # whole point, so measured rows are never the ones cut.
+        measured = [r for r in rows if r["status"] != "unchecked"]
+        unchecked = [r for r in rows if r["status"] == "unchecked"]
+        keep = max(0, SUPPORT_MAX_ROWS - len(measured))
+        data["rows"] = sorted(measured + unchecked[:keep],
+                              key=lambda r: (r["name"] or r["tag"]).lower())
+        data["truncated"] = len(rows)
+        data["unchecked_omitted"] = len(unchecked) - keep
+    return data
+
+
+@app.get("/schemes")
+def schemes() -> dict:
+    """Locale lists on disk, so the support table can offer a picker.
+
+    A user's own list is the point of the page -- the shipped 9,589-tag
+    catalogue is a catalogue, not anyone's locale list -- and requiring an
+    environment variable and a restart to look at it would be the wrong
+    ergonomics for a question asked once a week.
+    """
+    from llmlc.scheme.loader import SCHEMES_DIR
+
+    out = []
+    for f in sorted(SCHEMES_DIR.glob("*.json")):
+        try:
+            s = load_scheme(f.stem)
+        except Exception:  # noqa: BLE001 -- a broken scheme file is not a 500 here
+            continue
+        out.append({"name": s.meta.name, "file": f.stem, "count": len(s.languages),
+                    "description": s.meta.description})
+    return {"schemes": out, "active": settings.scheme}
+
+
+@app.get("/support/statuses")
+def support_statuses() -> dict:
+    """What each status means, served from the one definition rather than
+    restated in the page. A label whose meaning lives in two places drifts."""
+    return {"order": [s.value for s in support_order],
+            "meaning": {s.value: support_meaning[s] for s in support_order},
+            # Unions over the five, so the page does not restate which statuses
+            # a named filter covers. A group that means one thing in the code
+            # and another in the markup is the drift this endpoint exists to
+            # prevent.
+            "groups": {name: [s.value for s in members]
+                       for name, members in support_groups.items()},
+            "group_meaning": dict(support_group_meaning)}
+
+
 @app.get("/", include_in_schema=False)
 def index():
     page = STATIC / "index.html"
@@ -296,6 +371,10 @@ def index():
 
 
 # -- jobs and the scan trigger -----------------------------------------------
+
+#: Rows above which `/support` stops sending the whole table. The shipped
+#: catalogue is 9,589 tags; a user's own locale list is a few hundred.
+SUPPORT_MAX_ROWS = 2000
 
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
 

@@ -74,6 +74,28 @@
   .bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
   .bar.wide { width: 100%; height: 7px; display: block; }
   .empty { padding: 40px; text-align: center; color: var(--muted); }
+  .lead { color: var(--muted); margin: -6px 0 16px; max-width: 70ch; }
+  /* An ordinal, not a value: numbering the filtered view is what makes scroll
+     position legible. Muted and narrow so it never reads as part of the data. */
+  .rn { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right;
+        width: 1%; white-space: nowrap; padding-right: 14px; user-select: none; }
+  /* Five statuses, three colours. `unverifiable` and `unchecked` are deliberately
+     not red: neither is a verdict about the model, and colouring them like a
+     failure is the same error as labelling them one. */
+  .st { font-weight: 600; white-space: nowrap; }
+  .st-supported { color: var(--proficient); }
+  .st-supported-via-dialect { color: var(--assisted); }
+  .st-unsupported { color: var(--unusable); }
+  .st-unverifiable, .st-unchecked { color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+  .chip { border: 1px solid var(--line); background: var(--card); border-radius: 999px;
+          padding: 4px 12px; font-size: 15px; color: var(--muted); cursor: pointer; }
+  .chip[aria-pressed=true] { border-color: var(--accent); color: var(--fg); font-weight: 600; }
+  /* A group chip is a shortcut over the statuses beside it, not a sixth value.
+     Set apart so it does not read as one, and separated from the breakdown. */
+  .chip.group { border-style: dashed; margin-right: 10px; }
+  .chip.group[aria-pressed=true] { border-style: solid; }
+  .chip b { font-variant-numeric: tabular-nums; }
   footer { margin-top: 26px; font-size: 15.6px; color: var(--muted); }
   code { font-family: ui-monospace, monospace; font-size: 15.6px; }
   .pager { display: flex; gap: 10px; align-items: center; margin-top: 12px; font-size: 16.2px; color: var(--muted); }
@@ -143,7 +165,8 @@
   <div class="note bad" id="readiness" hidden></div>
 
   <nav role="tablist">
-    <button role="tab" data-tab="results" aria-selected="true">Results</button>
+    <button role="tab" data-tab="support" aria-selected="true">Support</button>
+    <button role="tab" data-tab="results" aria-selected="false">Results</button>
     <button role="tab" data-tab="resolution" aria-selected="false">Resolution</button>
     <button role="tab" data-tab="variants" aria-selected="false">Variants</button>
     <button role="tab" data-tab="scan" aria-selected="false">Scan</button>
@@ -151,7 +174,38 @@
   </nav>
 
   <!-- ── results ────────────────────────────────────────────────────────── -->
-  <section id="tab-results">
+  <section id="tab-support">
+    <h2 data-help="block.support">Language support</h2>
+    <p class="lead">One model, every locale in your list, one row each. The plain answer —
+      <a href="#" data-goto="results">Results</a> has the evidence behind it.</p>
+
+    <div class="filters">
+      <select id="su-engine"></select>
+      <select id="su-scheme" data-help="support.scheme"></select>
+      <input id="su-q" placeholder="Search tag or language…" size="22">
+      <label class="flag"><input type="checkbox" id="su-hide-unchecked"> Hide unchecked</label>
+      <a id="su-csv" class="flag" href="#" download="support.csv">Download CSV</a>
+    </div>
+
+    <div class="chips" id="su-chips"></div>
+    <div class="note" id="su-note" hidden></div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th class="rn">#</th>
+          <th data-help="tag">Tag</th><th data-help="language">Language</th>
+          <th data-help="support.status">Status</th>
+          <th class="num" data-help="support.score">Score</th>
+          <th data-help="support.confidence">Confidence</th>
+        </tr></thead>
+        <tbody id="su-rows"></tbody>
+      </table>
+    </div>
+    <footer id="su-foot"></footer>
+  </section>
+
+  <section id="tab-results" hidden>
     <h2 data-help="block.results">Results</h2>
     <div class="stats" id="stats" data-help="block.stats"></div>
 
@@ -365,6 +419,16 @@ const HELP = {
     'Heuristic measurements of what a model actually produces when asked to write a language — not what its vendor claims. Every number here is evidence, not proof.'],
   'block.results': ['Results',
     'One row per language per model. Click a row to see its individual items, the gate verdict on each, and the instrument that graded them.'],
+  'block.support': ['Language support',
+    'One model against every locale in the active scheme. The status answers whether the model can be used for that language; the score says how well it carried meaning. Everything about how a verdict was reached — the designator, the gate verdict, the interval, the back-translator — is on the Results tab.'],
+  'support.scheme': ['Locale list',
+    'Which list of languages the table runs down. Your own locale list is the useful one; the shipped 9,589-tag catalogue is a catalogue, not anyone\'s list. Build a scheme from a TMS export with scripts/build_scheme_from_tms.py.'],
+  'support.status': ['Status',
+    'Five values, and the last two are not verdicts about the model. supported: it wrote the language and a qualified reader confirmed the meaning survived. supported-via-dialect: not probed directly, inheriting its base language — which says nothing about whether the model marks this variant. unsupported: proven locally, the model refused or wrote the wrong language or script. unverifiable: it wrote something, but no back-translator could be qualified for this language, so quality cannot be assessed. unchecked: never probed.'],
+  'support.score': ['Score',
+    'Fact recall: the share of specified facts that survived generation and back-translation. This is the measurement. Blank where there is nothing to measure — a proven negative stores zero by construction, and showing it as 0.00 would read as a score.'],
+  'support.confidence': ['Confidence',
+    'How firm the score is, from the width of its 90% bootstrap interval over the items: high ≤ 0.20, medium ≤ 0.40, low above. Separate from the borderline marker, which says something different — that the interval straddles the tier cut.'],
   'block.stats': ['Counts',
     'Counted over every row matching the current filters, not just the page shown below.'],
   'block.filters': ['Filters',
@@ -565,11 +629,168 @@ for (const b of document.querySelectorAll('nav button')) {
       o.setAttribute('aria-selected', String(o === b));
       $('#tab-' + o.dataset.tab).hidden = o !== b;
     }
+    if (b.dataset.tab === 'support') loadSupport();
     if (b.dataset.tab === 'resolution') loadResolution();
     if (b.dataset.tab === 'variants') loadVariants();
     if (b.dataset.tab === 'jobs') loadJobs();
   });
 }
+
+// ── support ───────────────────────────────────────────────────────────────
+// The plain answer: one model, every locale, one row. Loaded whole and filtered
+// in the browser, because a locale list is a few hundred rows and a round trip
+// per keystroke is worse than one 300 KB response.
+let support = { rows: [], statuses: null, active: new Set(), data: null };
+
+async function loadSupport() {
+  if (!support.statuses) {
+    support.statuses = await j('/support/statuses');
+    const s = await j('/schemes');
+    // Smallest list first: a user's own locale list is what the page is for,
+    // and the 9,589-tag catalogue is almost never the thing being asked about.
+    const ordered = s.schemes.slice().sort((a, b) => a.count - b.count);
+    $('#su-scheme').innerHTML = ordered
+      .map(x => `<option value="${esc(x.file)}">${esc(x.name)} (${x.count})</option>`).join('');
+    if (ordered.length) $('#su-scheme').value = ordered[0].file;
+  }
+  const d = await j('/engines');
+  fillOnce('#su-engine', [...new Set([...d.measured, ...d.available])]);
+  if (!$('#su-engine').value) return renderSupport();
+  await fetchSupport();
+}
+
+async function fetchSupport() {
+  const engine = $('#su-engine').value;
+  if (!engine) return;
+  const d = await j('/support?engine=' + encodeURIComponent(engine)
+                    + '&scheme=' + encodeURIComponent($('#su-scheme').value));
+  support.data = d;
+  support.rows = d.rows;
+  renderChips();
+  renderSupport();
+}
+
+function renderChips() {
+  const d = support.data;
+  if (!d) return;
+  const groups = support.statuses.groups || {};
+  // Group chips first: "usable" is the question most people arrive with, and
+  // the five individual statuses are the breakdown behind it.
+  const groupChips = Object.entries(groups).map(([name, members]) => {
+    const n = members.reduce((a, s) => a + (d.counts[s] || 0), 0);
+    const on = members.every(s => support.active.has(s));
+    return `<button class="chip group" data-group="${esc(name)}" aria-pressed="${on}"
+              title="${esc(support.statuses.group_meaning[name] || '')}">${esc(name)} <b>${n}</b></button>`;
+  }).join('');
+  const statusChips = support.statuses.order.map(s => {
+    const n = d.counts[s] || 0;
+    const on = support.active.has(s);
+    return `<button class="chip" data-st="${esc(s)}" aria-pressed="${on}"
+              title="${esc(support.statuses.meaning[s])}">${esc(s)} <b>${n}</b></button>`;
+  }).join('');
+  $('#su-chips').innerHTML = groupChips + statusChips;
+}
+
+function supportFiltered() {
+  const q = $('#su-q').value.trim().toLowerCase();
+  const hide = $('#su-hide-unchecked').checked;
+  return support.rows.filter(r => {
+    if (support.active.size && !support.active.has(r.status)) return false;
+    if (hide && r.status === 'unchecked') return false;
+    if (!q) return true;
+    return (r.tag + ' ' + (r.name || '') + ' ' + (r.local_name || '')).toLowerCase().includes(q);
+  });
+}
+
+function renderSupport() {
+  const rows = supportFiltered();
+  const body = $('#su-rows');
+  if (!support.data) {
+    body.innerHTML = `<tr><td colspan="6" class="empty">Pick a model.</td></tr>`;
+    $('#su-foot').textContent = '';
+    return;
+  }
+  body.innerHTML = rows.length ? rows.map((r, i) => {
+    // No number where nothing was measured: a proven negative stores 0.0 by
+    // construction, and rendering it would read as a score of zero.
+    const score = r.score === null || r.score === undefined
+      ? '<span class="ev">—</span>'
+      : r.score.toFixed(2) + (r.borderline ? ' <span class="flag warn">borderline</span>' : '');
+    const conf = r.confidence
+      ? `<span class="flag ${r.confidence === 'high' ? 'ok' : r.confidence === 'low' ? 'bad' : 'warn'}">${esc(r.confidence)}</span>`
+      : '';
+    const via = r.inherited_from ? ` <span class="ev">via ${esc(r.inherited_from)}</span>` : '';
+    return `<tr>
+      <td class="rn">${i + 1}</td>
+      <td class="tag">${esc(r.tag)}</td>
+      <td>${esc(r.name || '')}${via}</td>
+      <td class="st st-${esc(r.status)}">${esc(r.status)}</td>
+      <td class="num">${score}</td>
+      <td>${conf}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="6" class="empty">Nothing matches.</td></tr>`;
+
+  const d = support.data;
+  $('#su-foot').textContent =
+    `${rows.length} of ${d.total} tag(s) in scheme ${d.scheme}`
+    + (d.unchecked_omitted ? ` · ${d.unchecked_omitted} unchecked not listed` : '')
+    + (d.rows_collapsed ? ` · ${d.rows_collapsed} extra row(s) collapsed: this model has been`
+        + ` measured through more than one back-translator, and each language shows the`
+        + ` best-ranked reader. The Results tab shows them all.` : '');
+
+  const note = $('#su-note');
+  if (d.unchecked_omitted) {
+    note.hidden = false;
+    note.className = 'note';
+    note.innerHTML = `This scheme has <b>${d.truncated}</b> tags, so
+      <b>${d.unchecked_omitted}</b> never-probed ones are not listed. Every language that
+      has been measured is here, and the counts above cover the whole scheme.
+      Point <code>SCHEME</code> at your own locale list to see all of it.`;
+  } else { note.hidden = true; }
+
+  $('#su-csv').href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(supportCsv(rows));
+}
+
+function supportCsv(rows) {
+  const head = 'tag,language,status,score,confidence,borderline,backtranslator\n';
+  const cell = v => {
+    const s = v === null || v === undefined ? '' : String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  return head + rows.map(r => [r.tag, r.name, r.status, r.score, r.confidence,
+                               r.borderline, r.backtranslator].map(cell).join(',')).join('\n');
+}
+
+$('#su-engine').addEventListener('change', fetchSupport);
+$('#su-scheme').addEventListener('change', fetchSupport);
+$('#su-q').addEventListener('input', renderSupport);
+$('#su-hide-unchecked').addEventListener('change', renderSupport);
+$('#su-chips').addEventListener('click', e => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  if (chip.dataset.group) {
+    // A group is a shortcut over the same set, not a mode: it turns its members
+    // on together, and off together only when they are already all on. So
+    // clicking "usable" after picking one of its members completes the pair
+    // rather than clearing it.
+    const members = support.statuses.groups[chip.dataset.group] || [];
+    const all = members.every(s => support.active.has(s));
+    for (const s of members) {
+      if (all) support.active.delete(s); else support.active.add(s);
+    }
+  } else {
+    const s = chip.dataset.st;
+    if (support.active.has(s)) support.active.delete(s); else support.active.add(s);
+  }
+  renderChips();
+  renderSupport();
+});
+document.addEventListener('click', e => {
+  const link = e.target.closest?.('[data-goto]');
+  if (!link) return;
+  e.preventDefault();
+  document.querySelector(`nav button[data-tab=${link.dataset.goto}]`).click();
+});
 
 // ── results ───────────────────────────────────────────────────────────────
 function filters() {
@@ -1042,6 +1263,7 @@ async function showJob(id) {
 }
 
 decorateHelp();
+loadSupport();   // the default tab: the plain answer first
 loadResults();
 loadArtifacts();
 loadEngines();
