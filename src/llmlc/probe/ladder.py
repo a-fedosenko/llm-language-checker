@@ -280,6 +280,23 @@ def relative_codes(scheme: Scheme, lang: Language) -> set[str]:
     return out - accepted_codes(lang)
 
 
+def candidates_for(scheme: Scheme, lang: Language, incumbent: str | None = None):
+    """The designators this language will actually be asked by.
+
+    One definition, because two callers need it and they must not disagree: the
+    ladder spends money on these, and the demo stand's pre-flight tells a reader
+    what is about to be asked. A pre-flight built from a second copy of this
+    logic would describe a run that is not the one about to happen -- the same
+    failure as an analysis harness re-implementing a production call
+    (convention 9).
+    """
+    from llmlc.probe.variant import is_script_variant
+
+    return dsg.candidates(lang, incumbent=incumbent,
+                          region_name=lang.region_name,
+                          qualify_script=is_script_variant(scheme, lang) or None)
+
+
 def run_ladder(**kw) -> LadderResult:
     """Run the ladder to completion. The one-shot path, and what every caller
     outside the demo stand uses.
@@ -322,9 +339,7 @@ def ladder_steps(
 
     accept = accepted_codes(lang)
     relatives = relative_codes(scheme, lang)
-    from llmlc.probe.variant import is_script_variant
-    candidates = dsg.candidates(lang, incumbent=incumbent,
-                                qualify_script=is_script_variant(scheme, lang) or None)
+    candidates = candidates_for(scheme, lang, incumbent)
     calls = {"generation": 0, "backtranslation": 0, "judge": 0}
     resolves: dict[str, int] = {}
 

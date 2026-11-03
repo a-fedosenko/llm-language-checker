@@ -9,6 +9,11 @@ docs/02:
    empty content. `reasoning_effort: "none"` fixes it where supported.
 2. **"OpenAI-compatible" is not uniform.** gpt-4o rejects `reasoning_effort`
    outright. Support is probed per model and cached, never assumed.
+3. **The task goes in a system message, the material in a user message.** A
+   single blob invites a model to continue the text rather than carry out the
+   instruction, and the stable half is what providers cache. `complete()` takes
+   an optional `system`; callers that pass none send exactly what they sent
+   before, so this is additive.
 """
 from __future__ import annotations
 
@@ -52,10 +57,12 @@ class OpenAICompatClient:
         return text.replace(self._key, "[redacted]") if self._key else text
 
     def complete(self, model: str, prompt: str, *, max_tokens: int = 400,
-                 temperature: float = 0.0) -> Completion:
+                 temperature: float = 0.0, system: str | None = None) -> Completion:
         def payload(with_effort: bool) -> bytes:
+            messages = ([{"role": "system", "content": system}] if system else []) + [
+                {"role": "user", "content": prompt}]
             body = {"model": model,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens}
             if with_effort and self.reasoning_effort:

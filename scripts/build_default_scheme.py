@@ -129,6 +129,7 @@ def build() -> dict:
             "iso639_1": meta.get("part1"),
             "script": script,
             "region": region,
+            "region_name": e.get("regionname") or None,
             "name": e.get("name"),
             "local_name": e.get("localname"),
             "scope": scope,

@@ -199,12 +199,13 @@ def from_markers(
                         designator=designator, sibling=markers.sibling)
 
     for context in markers.elicitation[:n_items]:
-        prompt = dsg.generation_prompt(designator, context, 3)
-        gen = client.complete(engine, prompt, max_tokens=400)
+        system, user = dsg.generation_prompt(designator, context, 3)
+        gen = client.complete(engine, user, max_tokens=400, system=system)
         out.calls += 1
-        corpus.write(Record("variant", engine, lang.tag, "variant", designator, prompt,
+        shown = f"{system}\n\n--- user ---\n\n{user}"
+        corpus.write(Record("variant", engine, lang.tag, "variant", designator, shown,
                             gen.text, gen.error, gen.usage, gen.latency_s))
-        gate = gate_check(gen.text, prompt=prompt, expect_lang=lang.iso639_3,
+        gate = gate_check(gen.text, prompt=shown, expect_lang=lang.iso639_3,
                           expect_script=lang.script)
         if not gate.passed:
             # Wrong language entirely is a base-language failure, not a variant

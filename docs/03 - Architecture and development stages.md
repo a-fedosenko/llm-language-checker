@@ -1268,3 +1268,35 @@ The raw output still goes to the corpus, which is where you read it. Verified en
 3. **A free-text tag field with no idea which list it is searching.** `cv` is Chuvash in the public catalogue and `cv-ru` in the TMS one, and the error — correct, and correctly surfaced — was `No tag 'cv' in scheme 'catmint'`. The field now suggests tags from the chosen locale list as you type, against `/languages?scheme=`.
 
 A live run, end to end, in automatic mode: deepseek over `cv`, ten steps across both rungs, **exactly nine calls** — three generations, three back-translations, three judgements — a qualified reader, and `Proficient` at adequacy 1.00. The same session showed the back-translated English beside each generation, which is the thing worth seeing: *"A child finds a lost dog by the river. He brings it home. His parents say it can stay as a guest for one night."*
+
+## Method 3.0.0 — the region in the designator, and a system/user split (2026-11-03)
+
+Running `sr-RS-Cyrl` and `sr-ME-Cyrl` through the demo returned identical verdicts, because both produced the identical prompt. The cause: **`region_name` was a parameter in `designator.py` that no caller had ever passed.**
+
+Three changes, and they are a method change rather than a fix — **every one of the 1,560 stored rows is now stale**, which is convention 4 doing its job rather than a side effect.
+
+**The region reaches the prompt.** Candidate A becomes `Serbian (Montenegro, Cyrillic script)`. `Language` gained `region_name`, filled from langtags' own `regionname` for the public catalogue and from the TMS list's `country` field for a user's own — the prompt needs "Montenegro", and a model has no reason to read `ME` as a place.
+
+**The task and the material are separate messages.** The instruction is a system message and the scenario a user message. Two arguments for it, one of them testable: a single blob invites a model to *continue* the text rather than carry out the task, and the system half is identical for every item in a language's run, so providers that cache will cache it.
+
+**The model is addressed as a speaker of the variety** rather than told to write in a language — *"You are a native speaker of Serbian (Montenegro, Cyrillic script). Your task: … using the grammar, spelling and vocabulary a native speaker of this specific variety would use."*
+
+### Why this is not simply reversing protocol 010
+
+010 decided "do not add country to the default designator", and it was right about what it tested: a bare `name (Country)` designator pulls a model toward that country's dominant language, and it turned Swiss German into Standard German. What is being tested now is a different intervention — the region is named *and* the model is told what to do with it, in a system message that casts it as a speaker of that variety. 010 described itself as "underpowered by design — a screening test, not a measurement" and named the properly powered version as the experiment that would settle it.
+
+That experiment is **protocol 020**, written with its hypotheses before the run, including the prediction that H3 — "naming the region will not reproduce 010's failure" — is the one expected to break, and that `gsw-CH` is where.
+
+### The limit this introduces, stated rather than discovered
+
+**It measures instruction-following as much as dialect competence.** The system message asks for the regional variety explicitly, so a pass means the model *can comply when told* — not that it marks the variant unprompted, which is what the marker mechanism measures and what doc 01 deliberately keeps out of the prompt. Different claims; the result must not be reported as the second.
+
+### And the consequence that is already certain
+
+**Naming the region is inert in a scan as the code stands.** The equivalence class is `iso639_3|script`, so `srp|Cyrl` holds five tags; a scan probes the class once — through bare `sr`, which has no region — and the other four inherit. The region reaches the prompt only for a directly probed tag, which the demo does and a scan does not. The demo's pre-flight now says so against the specific siblings, naming what each of them would be asked instead.
+
+Closing it means splitting equivalence classes by region, and the cost is measurable: on the 602-locale list, 81 classes hold more than one tag and **239 tags currently inherit rather than being probed**. Splitting turns those into probes — roughly 2,150 extra calls per engine on top of about 3,270, a **65% increase per scan**. That is a budget decision, not a methodology one, and it is open.
+
+### Smoke test, n = 1
+
+`deepseek-v4-pro`, one scenario: `sr-rs-cyrl` produced *"Ишла је **пе**шице"* and `sr-me-cyrl` produced *"**Пје**шачила је"* — the ekavian/ijekavian alternation, which is the standard marker between the two varieties rather than an arbitrary difference. One item, one model, no sampling control. It is a reason to run protocol 020, not a result from it.

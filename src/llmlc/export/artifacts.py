@@ -21,7 +21,13 @@ from llmlc.probe.score import Tier
 #: the same thing but a measurement of something else. `llmlc status` reports
 #: every 1.x row as stale, and repo.upsert_result will not let one overwrite a
 #: 2.x row.
-METHOD_VERSION = "2.0.0"
+#: 3.0.0 -- the generation prompt changed, so what is measured changed. The
+#: designator now names the region, the task is a system message and the
+#: scenario a user message, and the model is addressed as a speaker of the
+#: variety rather than told to write in it. Results either side of this line are
+#: not comparable (convention 4), which is why it is a major bump and not a
+#: patch: a 2.x row and a 3.x row answer different questions. Protocol 020.
+METHOD_VERSION = "3.0.0"
 
 #: Tiers that earn a designator in the mergeable file. Presence there reads as
 #: "we will send this locale to this engine".

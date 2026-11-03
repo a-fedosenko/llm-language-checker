@@ -53,14 +53,20 @@ def generate_and_gate(*, client: OpenAICompatClient, engine: str, lang: Language
                       designator: str, spec: Spec, corpus: Corpus,
                       relatives: set[str], accept: set[str],
                       n_sentences: int = 3) -> ItemOutcome:
-    prompt = dsg.generation_prompt(designator, spec.scenario, n_sentences)
-    gen = client.complete(engine, prompt, max_tokens=400)
-    corpus.write(Record("generation", engine, lang.tag, spec.id, designator, prompt,
+    system, user = dsg.generation_prompt(designator, spec.scenario, n_sentences)
+    gen = client.complete(engine, user, max_tokens=400, system=system)
+    # Both halves are recorded. A corpus entry holding only the user message
+    # would make a run look as if the model had been asked almost nothing.
+    shown = f"{system}\n\n--- user ---\n\n{user}"
+    corpus.write(Record("generation", engine, lang.tag, spec.id, designator, shown,
                         gen.text, gen.error, gen.usage, gen.latency_s))
-    gate = gate_check(gen.text, prompt=prompt, expect_lang=lang.iso639_3,
+    # The copy check compares the output against everything the model was shown,
+    # so it has to see both messages: an output echoing the system half is still
+    # an echo, and would otherwise pass as original text.
+    gate = gate_check(gen.text, prompt=shown, expect_lang=lang.iso639_3,
                       expect_script=lang.script, relatives=relatives, accept_lang=accept)
     return ItemOutcome(spec.id, designator, gen.text, gate, error=gen.error,
-                       prompt=prompt)
+                       prompt=shown)
 
 
 def judge_item(item: ItemOutcome, *, client: OpenAICompatClient, judge_model: str,

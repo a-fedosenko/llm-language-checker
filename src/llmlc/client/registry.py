@@ -193,6 +193,8 @@ class RoutingClient:
     def complete(self, model: str, prompt: str, **kw) -> Completion:
         entry = self.entry_for(model)
         # Always send the id, never the title: the title is a label for people.
+        # `**kw` carries `system` through unchanged -- the routing client must
+        # not become a place where a message gets dropped.
         return self.client_for(model).complete(entry.model_id, prompt, **kw)
 
 

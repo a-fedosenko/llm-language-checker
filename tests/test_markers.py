@@ -228,7 +228,11 @@ class _FakeClient:
 
     def complete(self, model, prompt, **kw):
         from llmlc.client import Completion
-        self.prompts.append(prompt)
+        # Both halves. From method 3.0.0 the designator lives in the system
+        # message, so a fake that recorded only the user half would let the
+        # "markers are never named in the prompt" test pass without looking at
+        # the half that names things.
+        self.prompts.append("\n".join(x for x in (kw.get("system"), prompt) if x))
         nxt = self.responses.pop(0) if self.responses else None
         return Completion(nxt, None if nxt is not None else "no response", model=model)
 

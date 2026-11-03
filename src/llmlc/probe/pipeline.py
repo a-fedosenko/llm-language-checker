@@ -127,13 +127,14 @@ def check_language(
     resolves: dict[str, int] = {}
 
     for spec in specs:
-        prompt = dsg.generation_prompt(des.value, spec.scenario, n_sentences)
-        gen = client.complete(engine, prompt, max_tokens=400)
-        corpus.write(Record("generation", engine, tag, spec.id, des.value, prompt,
+        system, user = dsg.generation_prompt(des.value, spec.scenario, n_sentences)
+        gen = client.complete(engine, user, max_tokens=400, system=system)
+        shown = f"{system}\n\n--- user ---\n\n{user}"
+        corpus.write(Record("generation", engine, tag, spec.id, des.value, shown,
                             gen.text, gen.error, gen.usage, gen.latency_s,
                             {"designator_kind": des.kind}))
 
-        gate = gate_check(gen.text, prompt=prompt, expect_lang=lang.iso639_3,
+        gate = gate_check(gen.text, prompt=shown, expect_lang=lang.iso639_3,
                           expect_script=lang.script, relatives=relatives,
                           accept_lang=accept)
         if gate.lid and gate.lid.label:

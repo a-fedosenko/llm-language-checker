@@ -62,7 +62,16 @@ def candidates(lang: Language, *, incumbent: str | None = None,
     out: list[Designator] = []
     name = lang.name or lang.tag
 
-    # A -- English name, qualified by script and region only where they disambiguate.
+    # A -- English name, qualified by script and region.
+    #
+    # The region is named from method 3.0.0. Protocol 010 rejected it at 1.x and
+    # was right about what it tested: a bare `name (Country)` designator pulls a
+    # model toward that country's dominant language, and it turned Swiss German
+    # into Standard German. What is being tested now is different -- the region
+    # is named *and* the model is told what to do with it, in a system message
+    # that casts it as a speaker of that variety. Protocol 020 measures whether
+    # that difference holds. 010 described itself as a screening test, not a
+    # measurement, and named this as the experiment that would settle it.
     qualifiers = []
     if region_name:
         qualifiers.append(region_name)
@@ -103,14 +112,32 @@ def best(lang: Language, **kw) -> Designator:
     return candidates(lang, **kw)[0]
 
 
-GENERATE_PROMPT = """Write {n} sentences in {designator} describing this situation:
+#: The task, as a system message. Split from the material on purpose: a single
+#: blob invites a model to *continue* the text rather than carry out the
+#: instruction, and the half that never changes is the half a provider can
+#: cache. Introduced at method 3.0.0 -- see protocol 020, which measures whether
+#: the split and the role framing change the verdict rather than assuming it.
+SYSTEM_PROMPT = """You are a native speaker of {designator}.
 
-{scenario}
+Your task: write {n} sentences describing the situation the user gives you, \
+using the grammar, spelling and vocabulary a native speaker of this specific \
+variety would use.
 
-Write naturally in {designator} — do not translate word for word, and do not \
-explain or comment. Output only the {designator} text.
+Write naturally — do not translate word for word, and do not explain or \
+comment. Output only the {designator} text and nothing else.
 If you cannot write {designator}, reply with exactly CANNOT and nothing else."""
 
+#: The material. Everything that varies between items lives here, so the system
+#: half stays identical across a language's whole run.
+USER_PROMPT = """{scenario}"""
 
-def generation_prompt(designator: str, scenario: str, n: int = 3) -> str:
-    return GENERATE_PROMPT.format(designator=designator, scenario=scenario, n=n)
+
+def generation_prompt(designator: str, scenario: str, n: int = 3) -> tuple[str, str]:
+    """The (system, user) pair for one item.
+
+    Returns both halves rather than one string because the caller has to send
+    them as separate messages; joining them back together is only done for the
+    gate's copy check, which needs to know everything the model was shown.
+    """
+    return (SYSTEM_PROMPT.format(designator=designator, n=n),
+            USER_PROMPT.format(scenario=scenario))

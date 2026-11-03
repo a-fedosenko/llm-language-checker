@@ -11,6 +11,7 @@ from llmlc.api import results as store
 from llmlc.api.main import app
 from llmlc.db import reset_for_tests, session
 from llmlc.db.repo import upsert_result
+from llmlc.export.artifacts import METHOD_VERSION
 
 client = TestClient(app)
 
@@ -20,7 +21,7 @@ def row(tag, engine="m1", **kw):
                 evidence="fact-recall", s_lang=1.0, s_content=0.98, ci_low=0.95,
                 ci_high=1.0, borderline=False, reliability=1.0, refusals=0,
                 designator=tag, backtranslator="bt:a", judge="j",
-                method_version="2.0.0")
+                method_version=METHOD_VERSION)
     base.update(kw)
     return base
 

@@ -139,6 +139,9 @@ def build(src: pathlib.Path, name: str, reference: str = "default") -> tuple[Sch
             iso639_1=(entry.get("ll") or None),
             script=script,
             region=((entry.get("cc") or "").strip().upper() or None),
+            # The TMS names its own countries; fall back to the catalogue's.
+            region_name=((entry.get("country") or "").strip()
+                         or (match.region_name if match else None) or None),
             name=(entry.get("name") or entry.get("title") or key),
             local_name=(match.local_name if match else None),
             scope=("macrolanguage" if entry.get("inclusive")

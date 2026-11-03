@@ -22,6 +22,10 @@ class Language(BaseModel):
     iso639_1: str | None = None
     script: str | None = None
     region: str | None = None
+    #: The region spelled out -- "Serbia", not "RS". The prompt names it from
+    #: method 3.0.0, and a model asked for "Serbian (Cyrillic script, RS)" is
+    #: being asked in a code it has no reason to read as a place.
+    region_name: str | None = None
     name: str | None = None
     local_name: str | None = None
     scope: Scope = "individual"

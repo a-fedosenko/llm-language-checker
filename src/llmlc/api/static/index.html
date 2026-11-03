@@ -865,19 +865,25 @@ function renderPlan(plan) {
   const warn = unnamed.length || twins.length;
   box.hidden = false;
   box.className = warn ? 'note warn' : 'note';
+  const divergent = plan.divergent_siblings || [];
+  const same = twins.filter(x => !divergent.includes(x));
   box.innerHTML = `This run asks the model for <b>${esc(plan.primary)}</b>.`
     + (unnamed.includes('region') && plan.region
-        ? ` The region <code>${esc(plan.region)}</code> is <b>not named in the prompt</b> —
-           naming the country was measured and rejected, because it pulls a model toward that
-           country's dominant language (protocol 010).` : '')
-    + (twins.length
-        ? ` ${twins.length} other tag${twins.length > 1 ? 's' : ''} in this locale list
-           (<code>${twins.slice(0, 6).map(esc).join('</code>, <code>')}</code>${
-             twins.length > 6 ? ', …' : ''}) share this tag's equivalence class
-           <code>${esc(plan.cls)}</code> and produce the same prompt, so running them
-           is running this experiment again. A scan probes the class once and the rest
-           inherit. Telling the variants apart is the job of marker sets, which exist
-           for 2 of 534 variant tags.` : '')
+        ? ` The region <code>${esc(plan.region)}</code> is <b>not named in the prompt</b>,
+           because this locale list has no name for it.` : '')
+    + (same.length
+        ? ` <code>${same.map(esc).join('</code>, <code>')}</code> produce the same prompt,
+           so running them is running this experiment again.` : '')
+    + (divergent.length
+        ? ` <b>A scan would not ask this.</b> ${divergent.length} tag${
+             divergent.length > 1 ? 's' : ''} in this locale list share this tag's
+           equivalence class <code>${esc(plan.cls)}</code> and would be asked something
+           different (${divergent.slice(0, 4).map(x =>
+             `<code>${esc(x)}</code> → ${esc(plan.sibling_designators[x] || '')}`).join('; ')}${
+             divergent.length > 4 ? '; …' : ''}) — but a scan probes a class <em>once</em>
+           and the rest inherit, so only one of them is ever asked. The demo probes the tag
+           you typed. Closing that gap means splitting equivalence classes by region, which
+           is a decision about scan cost.` : '')
     + ` <span class="ev">designators tried, in order:
         ${plan.designators.map(esc).join(' · ')}</span>`;
 }

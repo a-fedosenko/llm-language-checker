@@ -131,29 +131,52 @@ def plan_for(scheme, tag: str) -> dict:
     534 variant tags), but a design you can only discover by running the same
     thing twice and noticing is not a design anyone can check.
     """
-    from llmlc.probe import designator as dsg
-    from llmlc.probe.variant import is_script_variant
+    from llmlc.probe.ladder import candidates_for
 
     lang = scheme.get(tag)
     if lang is None:
         return {}
-    candidates = dsg.candidates(lang, qualify_script=is_script_variant(scheme, lang) or None)
+    # The same call the ladder makes, not a second copy of the rule.
+    candidates = candidates_for(scheme, lang)
     primary = candidates[0].value if candidates else ""
     siblings = scheme.variants_of(tag)
-    # Subtags the designator does not name. The region is the usual one, and it
-    # is the whole of the difference between Serbian as written in Belgrade and
-    # in Podgorica.
-    unnamed = [part for part, value in (("region", lang.region),)
-               if value and value.lower() not in primary.lower()
-               and (lang.name or "").lower() != primary.lower()]
+    # Named against the designator we are actually about to send, matched on the
+    # region's *name* rather than its code -- "Montenegro" is what reaches the
+    # prompt, "ME" never does.
+    named = bool(lang.region_name and lang.region_name.lower() in primary.lower())
+    unnamed = [] if named or not lang.region else ["region"]
+
+    # The sharp edge of naming the region (method 3.0.0): the equivalence class
+    # is still `iso639_3|script`, so a *scan* probes one tag per class and the
+    # rest inherit -- even though those tags now produce different prompts. For
+    # `srp|Cyrl` the representative is bare `sr`, which has no region, so a scan
+    # asks for plain "Serbian (Cyrillic script)" and four regional variants
+    # inherit an answer that was never asked of them. The demo probes the tag
+    # you typed, so it shows a prompt a scan would not send. Saying so is the
+    # minimum; closing it is a decision about scan cost, not a bug fix.
+    sibling_prompts = {}
+    for other in siblings:
+        other_lang = scheme.get(other)
+        if other_lang is None:
+            continue
+        other_cands = candidates_for(scheme, other_lang)
+        if other_cands:
+            sibling_prompts[other] = other_cands[0].value
+    divergent = sorted(x for x, v in sibling_prompts.items() if v != primary)
+
     return {
         "tag": tag,
         "cls": lang.cls,
         "designators": [c.value for c in candidates],
         "primary": primary,
         "siblings": siblings,
+        "sibling_designators": sibling_prompts,
+        #: Siblings that would now be asked something different but still share
+        #: this tag's class, and so inherit rather than being probed in a scan.
+        "divergent_siblings": divergent,
         "unnamed_subtags": unnamed,
         "region": lang.region,
+        "region_name": lang.region_name,
     }
 
 
