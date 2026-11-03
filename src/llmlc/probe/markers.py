@@ -61,6 +61,27 @@ class MarkerAxis(BaseModel):
         return self
 
 
+class MarkerExample(BaseModel):
+    """A sentence whose correct scoring is known, checked at load time.
+
+    Stem markers are powerful and sharp: `рек-` was reached for as the ekavian
+    stem of *river* and matches `рекли` ("they said") in both varieties, so it
+    would have scored every Montenegrin generation as ekavian. Nothing in the
+    output would have shown it -- the number would simply have been wrong,
+    which is the condition under which this project puts the guard in the
+    loader rather than in a test (protocol 012).
+
+    A general collision detector is not available; a worked example is. An
+    author who cannot read the language can still state what a sentence should
+    score, take the sentences from real output, and have the instrument refuse
+    to load if its own markers disagree.
+    """
+
+    text: str
+    expect: str = Field(pattern="^(variant|sibling|void)$")
+    note: str | None = None
+
+
 class MarkerSet(BaseModel):
     """One variant's entry in a marker file.
 
@@ -85,6 +106,9 @@ class MarkerSet(BaseModel):
     markers: list[MarkerAxis] = Field(default_factory=list)
     elicitation: list[str] = Field(default_factory=list)
     note: str | None = None
+    #: Worked examples the loader checks the markers against. Optional, and the
+    #: only practical guard on a stem marker.
+    examples: list["MarkerExample"] = Field(default_factory=list)
     #: Who wrote it and whether a human has checked it. Marker lists are claims
     #: about a language; an unreviewed one should not be mistaken for a reviewed
     #: one just because it is in the repository.
@@ -115,6 +139,30 @@ class MarkerSet(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def _examples_score_as_declared(self) -> "MarkerSet":
+        """Refuse to load markers that disagree with their own worked examples.
+
+        The message names the marker that fired, because "this example scored
+        the wrong way" is not actionable and "`рек-` matched `рекли`" is.
+        """
+        for ex in self.examples:
+            outcome = score_text(ex.text, self)
+            variant = sorted({m for a in outcome.axes for m in a.variant_hits})
+            sibling = sorted({m for a in outcome.axes for m in a.sibling_hits})
+            if ex.expect == "variant":
+                ok, want = bool(variant) and not sibling, "only variant markers"
+            elif ex.expect == "sibling":
+                ok, want = bool(sibling) and not variant, "only sibling markers"
+            else:
+                ok, want = not variant and not sibling, "no markers at all"
+            if not ok:
+                raise ValueError(
+                    f"example expected {want} but matched "
+                    f"variant={variant} sibling={sibling}: {ex.text[:70]!r}"
+                    + (f" -- {ex.note}" if ex.note else ""))
+        return self
+
+    @model_validator(mode="after")
     def _shape_matches_status(self) -> "MarkerSet":
         if self.status == "markers" and not (self.markers and self.elicitation):
             raise ValueError("status 'markers' needs both markers and elicitation contexts; "
@@ -136,22 +184,41 @@ class MarkerSet(BaseModel):
 #: as void.
 INFLECTIONS = ("s", "es", "ed", "ing", "'s", "\u2019s")
 
+#: Trailing marker meaning "a word beginning with this". The counterpart of
+#: `SUFFIX`, and the only way to write a marker for a language whose nouns
+#: decline -- see `_pattern`.
+STEM = "-"
+
 
 def _pattern(marker: str) -> re.Pattern:
     """Compile one marker to a word-boundary-safe pattern.
 
-    Three cases:
+    Four cases:
 
     - **Suffix** (`-ise`) -- matches a word ending in it, and needs at least one
       preceding letter or `-our` would match the word "our".
+    - **Stem** (`rijek-`) -- matches a word *beginning* with it, and needs at
+      least one following letter so a stem cannot match the bare form twice.
     - **Multi-word** (`car park`, `in hospital`) -- matched exactly. Inflecting a
       phrase is a different problem and these are chosen to be stable.
     - **Single word** -- matched with its regular English inflections, including
       the dropped `e` of *organise -> organising*.
+
+    The stem form exists because the single-word form is English-shaped and
+    silently fails elsewhere. `INFLECTIONS` is `s|es|ed|ing|'s`, which carries
+    English and nothing else: against real Serbian output, the markers `ријека`
+    and `река` *both* missed, because the sentence had the genitive `ријеке`
+    and `реке`. A marker set for any fusional language was therefore unscoreable
+    while looking exactly like a scoreable one -- a plausible number with
+    nothing in the output to flag it, which is the failure protocol 012 put the
+    guard in the loader for.
     """
     if marker.startswith(SUFFIX):
         stem = re.escape(marker[len(SUFFIX):])
         return re.compile(rf"\b\w+{stem}\b", re.IGNORECASE)
+    if marker.endswith(STEM) and len(marker) > len(STEM):
+        stem = re.escape(marker[: -len(STEM)])
+        return re.compile(rf"(?<!\w){stem}\w+", re.IGNORECASE)
     if " " in marker:
         return re.compile(rf"(?<!\w){re.escape(marker)}(?!\w)", re.IGNORECASE)
 

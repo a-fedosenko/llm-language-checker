@@ -205,3 +205,43 @@ def test_the_prompt_is_carried_on_the_item_not_only_in_the_corpus():
     item = ItemOutcome("s1", "Serbian (Cyrillic script)", "текст",
                        GateResult(GateVerdict.PASS), prompt="Write 3 sentences in…")
     assert item_detail(item)["prompt"] == "Write 3 sentences in…"
+
+
+# -- sessions the page has lost ----------------------------------------------
+
+def test_the_listing_is_enough_to_recover_a_lost_session(client):
+    """Reloading mid-run orphans a session: the page forgets the id, the server
+    keeps the run. Four of those filled the limit and locked the tab out for an
+    hour with no way to reach them, so the listing has to carry what the page
+    needs to adopt or close one."""
+    started = client.post("/demo", json=body(tag="cv", scheme="default")).json()
+    listed = client.get("/demo").json()["sessions"]
+    assert [s["id"] for s in listed] == [started["id"]]
+    assert {"id", "engine", "tag", "status", "steps"} <= set(listed[0])
+    assert listed[0]["status"] == "running"
+
+
+def test_a_session_can_be_read_back_whole_after_the_page_forgot_it(client):
+    """Adopting one means re-rendering what it has already done, so the state
+    endpoint has to return the steps and the plan, not just a status."""
+    sid = client.post("/demo", json=body(tag="cv", scheme="default")).json()["id"]
+    d = client.get(f"/demo/{sid}").json()
+    assert d["status"] == "running"
+    assert "steps" in d and d["plan"]["primary"]
+
+
+def test_hitting_the_limit_says_where_to_look(client, monkeypatch):
+    """A dead end is worse than a refusal. The message names the place the
+    sessions can be closed, because there was no way to reach them."""
+    monkeypatch.setattr(demo_sessions, "MAX_SESSIONS", 1)
+    client.post("/demo", json=body())
+    detail = client.post("/demo", json=body()).json()["detail"]
+    assert "listed above" in detail and "reloading" in detail.lower()
+
+
+def test_closing_a_session_frees_its_place(client, monkeypatch):
+    monkeypatch.setattr(demo_sessions, "MAX_SESSIONS", 1)
+    sid = client.post("/demo", json=body()).json()["id"]
+    assert client.post("/demo", json=body()).status_code == 409
+    client.delete(f"/demo/{sid}")
+    assert client.post("/demo", json=body()).status_code == 201

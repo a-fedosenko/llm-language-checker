@@ -189,7 +189,8 @@ def start(*, engine: str, tag: str, scheme, client, backtranslators, judge_model
         if len(live) >= MAX_SESSIONS:
             raise RuntimeError(
                 f"{len(live)} demo session(s) already open, which is the limit. "
-                f"Finish or close one first.")
+                f"They are listed above and can be closed there — reloading the "
+                f"page mid-run leaves one behind, and this is where it turns up.")
         sid = uuid.uuid4().hex[:12]
         corpus = Corpus()
         session = Session(id=sid, engine=engine, tag=tag, mode=mode,

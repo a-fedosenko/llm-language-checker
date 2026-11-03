@@ -374,6 +374,10 @@
       <b>It spends your API budget</b>: roughly 9–15 calls for one language.</p>
 
     <div class="note" id="d-note" hidden></div>
+    <!-- Sessions live on the server and the page can forget them: reloading mid-run
+         used to orphan one, and four reloads locked the tab out for an hour with no
+         way to reach them. -->
+    <div class="note" id="d-open" hidden></div>
 
     <div class="grid">
       <div class="field">
@@ -764,6 +768,14 @@ const rungLabel = n => `rung ${n}${RUNG_NAME[n] ? ' · ' + RUNG_NAME[n] : ''}`;
 
 async function loadDemo() {
   if (!demo.help) demo.help = await j('/demo/help');
+  await refreshSessions();
+  // A reload mid-run should hand the run back, not strand it. sessionStorage
+  // is the right scope: the session lives in the server's memory and dies with
+  // it, so remembering it in a new tab or after a restart would only ever
+  // produce a 404.
+  const saved = sessionStorage.getItem('demoSession');
+  if (saved && !demo.id && !(await adoptSession(saved)))
+    sessionStorage.removeItem('demoSession');
   if (!demo.shipped) {
     demo.shipped = await j('/specs');
     demo.specs = structuredClone(demo.shipped);
@@ -777,6 +789,74 @@ async function loadDemo() {
   renderDemoNote();
   suggestTags();
 }
+
+// A session the server still holds but this page has lost. Reloading mid-run
+// orphans one; four of those used to lock the tab out for an hour with no way
+// to reach them from here, which is the whole reason this strip exists.
+async function refreshSessions() {
+  let d;
+  try { d = await j('/demo'); } catch { return; }
+  const box = $('#d-open');
+  const mine = sessionStorage.getItem('demoSession');
+  const open = d.sessions.filter(s => s.status === 'running');
+  if (!open.length) { box.hidden = true; return; }
+  box.hidden = false;
+  box.className = 'note warn';
+  box.innerHTML = `<strong>${open.length} of ${d.max_sessions} demo session(s) still
+    open on the server.</strong> A reload leaves one behind — it is still holding its
+    place, and nothing was spent on it after you left.
+    <div class="chips" style="margin-top:8px">`
+    + open.map(s => `<span class="chip" style="cursor:default">
+        <code>${esc(s.tag)}</code> · ${esc(s.engine)} · ${s.steps} step(s)
+        <button class="btn ghost" data-resume="${esc(s.id)}">${
+          s.id === mine ? 'resume' : 'open'}</button>
+        <button class="btn ghost" data-drop="${esc(s.id)}">close</button></span>`).join('')
+    + `</div><button class="btn ghost" id="d-drop-all">Close all</button>`;
+}
+
+async function adoptSession(id) {
+  let s;
+  try { s = await j('/demo/' + id); } catch { return false; }
+  demo.id = id;
+  sessionStorage.setItem('demoSession', id);
+  $('#d-steps').innerHTML = '';
+  $('#d-result').innerHTML = '';
+  for (const step of s.steps) renderStep(step);
+  renderPlan(s.plan);
+  if (s.status === 'running') {
+    demoButtons({ live: true, busy: false });
+    const last = s.steps[s.steps.length - 1];
+    describeNext(last ? last.next : { kind: 'generated' });
+  } else {
+    renderDemoSession(s);
+  }
+  await refreshSessions();
+  return true;
+}
+
+$('#d-open').addEventListener('click', async e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  if (btn.id === 'd-drop-all') {
+    const d = await j('/demo');
+    await Promise.all(d.sessions.map(s =>
+      fetch('demo/' + s.id, { method: 'DELETE' })));
+    if (demo.id) { demo.id = null; demoButtons({ live: false, busy: false }); }
+    sessionStorage.removeItem('demoSession');
+    return refreshSessions();
+  }
+  if (btn.dataset.resume) return void adoptSession(btn.dataset.resume);
+  if (btn.dataset.drop) {
+    await fetch('demo/' + btn.dataset.drop, { method: 'DELETE' });
+    if (demo.id === btn.dataset.drop) {
+      demo.id = null;
+      demoButtons({ live: false, busy: false });
+    }
+    if (sessionStorage.getItem('demoSession') === btn.dataset.drop)
+      sessionStorage.removeItem('demoSession');
+    return refreshSessions();
+  }
+});
 
 function specsEdited() {
   return JSON.stringify(demo.specs) !== JSON.stringify(demo.shipped);
@@ -923,15 +1003,20 @@ async function startDemo() {
         specs: demo.specs,
       }) });
     demo.id = d.id;
+    sessionStorage.setItem('demoSession', d.id);
     demoButtons({ live: true, busy: false });
     $('#d-cost').textContent = 'nothing spent yet';
     renderPlan(d.plan);
+    await refreshSessions();
     if ($('#d-mode').value === 'auto') await runDemoToEnd();
     else describeNext({ kind: 'generated' });
   } catch (e) {
     demo.id = null;
     demoButtons({ live: false, busy: false });
     $('#d-result').innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
+    // The commonest cause is sessions this page has lost, and the strip is
+    // where they can be closed — so refresh it rather than leaving a dead end.
+    await refreshSessions();
   }
 }
 
@@ -1042,8 +1127,10 @@ function renderDemoSession(sess) {
     </div>`
     : `<div class="note ${sess.status === 'failed' ? 'bad' : ''}">${esc(sess.error || sess.status)}</div>`;
   demo.id = null;
+  sessionStorage.removeItem('demoSession');
   demoButtons({ live: false, busy: false });
   $('#d-next').hidden = true;
+  refreshSessions();
 }
 
 $('#d-start').addEventListener('click', startDemo);
@@ -1053,8 +1140,10 @@ $('#d-close').addEventListener('click', async () => {
   demo.running = false;
   if (demo.id) await fetch(`demo/${demo.id}`, { method: 'DELETE' });
   demo.id = null;
+  sessionStorage.removeItem('demoSession');
   demoButtons({ live: false, busy: false });
   $('#d-next').hidden = true;
+  refreshSessions();
 });
 
 // ── support ───────────────────────────────────────────────────────────────

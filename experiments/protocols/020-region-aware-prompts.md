@@ -40,7 +40,9 @@ Not "are region-aware prompts better". Three separate questions:
 
 1. **H1.** For each regional pair, run both tags on the same five specifications under 3.0.0. Score chrF++ between the two outputs per scenario. The null is two runs of the *same* tag under 3.0.0 — that is the sampling floor, and the pair has to beat it.
 2. **H2.** Run the 30 no-region languages under 2.0.0 and 3.0.0. Compare `s_content` and `s_lang` per language, paired. A difference in mean adequacy of more than 0.05, or any tier flip in more than 10% of languages, falsifies H2.
-3. **H3.** Over every regional pair plus the `gsw` cases, count gate verdicts of `wrong_language` and `relative_substitution` under each method version. Any increase under 3.0.0 falsifies H3.
+3. **H3.** Over every regional pair plus the `gsw` cases, count gate verdicts of `wrong_language`, `relative_substitution` **and `wrong_script`** under each method version. Any increase under 3.0.0 falsifies H3.
+
+   `wrong_script` was added to this list after the first observation below, which is a change to the method made before the run and recorded as such: for a region whose two alphabets are both in everyday use, the script is where the pull showed up, and counting only language-level verdicts would have missed it.
 
 **Read the raw text before believing any of these numbers.** A chrF++ difference between two regional outputs could be two paraphrases of the same register rather than a dialect difference, and only reading them tells the two apart. Protocol 018's first table had Swahili at 79.8 in the "did not write Swahili" bucket.
 
@@ -73,7 +75,36 @@ The divergence falls on the ekavian/ijekavian alternation — `пешице` aga
 
 **This is n = 1, one scenario, one model, no control for sampling.** Two runs of the *same* tag would also differ, and nothing here establishes by how much; that baseline is the whole point of H1's method and has not been run. It is a reason to run the protocol, not a result from it. The failure mode to guard against is exactly the one 018 fell into: a number that points the right way, believed before the raw text beside it was read.
 
-Nothing has been run for H2 or H3.
+### A second observation, and the first thing that went against H3
+
+A later run of the same tag through the demo produced **Latin script when Cyrillic was asked for**, and the gate convicted it:
+
+```
+'Serbian (Montenegro, Cyrillic script)': wrong_script
+  detail         expected Cyrl, got Latn
+  identified as  bos_Latn (0.474, glotlid)
+  generated      Dijete je pronašlo izgubljenog psa pored rijeke. …
+```
+
+The dialect was right — `Dijete`, `rijeke`, ijekavian, correct for Montenegro — and the **script** was wrong. That is the shape of protocol 010's failure in a dimension 010 did not test: naming a country pulled the model toward that country's *predominant script* rather than its predominant language. Montenegro uses both alphabets and Latin is the more common in practice, so the pull is in exactly the direction the region name would predict.
+
+**How often:** not often. Chased immediately, with the production `generate_and_gate` rather than a reimplementation of it:
+
+| run | tag | items | verdicts |
+|---|---|---|---|
+| three scenarios | `sr`, `sr-Cyrl-ME`, `sr-Latn` | 3 each | 9/9 `pass`, every one in the requested script |
+| the screenshot's scenario, repeated | `sr-Cyrl-ME` | 6 | 6/6 `pass`, Cyrillic, `Дијете … ријеке … Донијело` |
+| the same, control | `sr` | 6 | 6/6 `pass`, Cyrillic, `Дете … реке … Донело` |
+
+So **1 occurrence in 16 generations of this language**, against 0 for the no-region control in 9. One event cannot distinguish a region-induced pull from ordinary variance, and this is nowhere near the power needed to; it is logged because it is the first thing seen that points at H3, and because the convention is to record the inconvenient result rather than the clean one.
+
+It does sharpen what H3's method must count. The original plan counted `wrong_language` and `relative_substitution`. **It must also count `wrong_script`** — on this evidence that is the likelier failure mode for a region whose two alphabets are both in use, and it would have been missed.
+
+### And a measurement caveat worth having in writing
+
+Six identical calls at `temperature: 0.0` produced **two distinct outputs** for `sr` and one for `sr-Cyrl-ME`. Temperature zero is not determinism on a hosted endpoint, which is already what `docs/04` says about reproducing a result — this puts a number on it, and it is the reason the same-tag baseline in H1 is not optional. Two runs of one tag differ; the question is only whether two tags differ by more.
+
+Nothing has been run for H2.
 
 ## Conclusions
 

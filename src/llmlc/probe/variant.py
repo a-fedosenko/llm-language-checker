@@ -199,7 +199,8 @@ def from_markers(
                         designator=designator, sibling=markers.sibling)
 
     for context in markers.elicitation[:n_items]:
-        system, user = dsg.generation_prompt(designator, context, 3)
+        system, user = dsg.generation_prompt(designator, context, 3,
+                                             script_name=dsg.script_name_for(lang.script))
         gen = client.complete(engine, user, max_tokens=400, system=system)
         out.calls += 1
         shown = f"{system}\n\n--- user ---\n\n{user}"

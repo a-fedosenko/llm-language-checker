@@ -53,7 +53,8 @@ def generate_and_gate(*, client: OpenAICompatClient, engine: str, lang: Language
                       designator: str, spec: Spec, corpus: Corpus,
                       relatives: set[str], accept: set[str],
                       n_sentences: int = 3) -> ItemOutcome:
-    system, user = dsg.generation_prompt(designator, spec.scenario, n_sentences)
+    system, user = dsg.generation_prompt(designator, spec.scenario, n_sentences,
+                                         script_name=dsg.script_name_for(lang.script))
     gen = client.complete(engine, user, max_tokens=400, system=system)
     # Both halves are recorded. A corpus entry holding only the user message
     # would make a run look as if the model had been asked almost nothing.

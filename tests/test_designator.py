@@ -52,3 +52,38 @@ def test_the_system_half_casts_the_model_as_a_speaker_of_the_variety():
     assert system.startswith("You are a native speaker of "
                              "Serbian (Cyrillic script, Serbia).")
     assert "this specific variety" in system
+
+
+def test_the_alphabet_is_stated_on_its_own_line():
+    """The designator already names the script and that was not always enough:
+    a model asked for "Serbian (Montenegro, Cyrillic script)" returned fluent,
+    correctly ijekavian Montenegrin in Latin. Naming a region pulls toward that
+    region's script the way protocol 010 found it pulls toward its dominant
+    language, and the gate convicts the whole item on script before anything
+    else about it is looked at."""
+    from llmlc.probe.designator import script_name_for
+
+    system, _ = generation_prompt("Serbian (Montenegro, Cyrillic script)", "x",
+                                  script_name=script_name_for("Cyrl"))
+    assert "Write every word in the Cyrillic alphabet." in system
+    assert "not even for names or single words" in system
+
+
+def test_no_alphabet_rule_where_the_script_has_no_name():
+    """An instruction naming no alphabet is worse than none, and the ISO code
+    is not a name -- "write in the Tfng alphabet" instructs a model in a string
+    it has no reason to read as a writing system."""
+    from llmlc.probe.designator import script_name_for
+
+    assert script_name_for("Zzzz") is None
+    assert script_name_for(None) is None
+    system, _ = generation_prompt("Some language", "x", script_name=script_name_for("Zzzz"))
+    assert "alphabet" not in system
+
+
+def test_the_script_rule_does_not_leak_into_the_user_half():
+    from llmlc.probe.designator import script_name_for
+
+    _, user = generation_prompt("Serbian (Cyrillic script)", "a woman misses her bus",
+                                script_name=script_name_for("Cyrl"))
+    assert user == "a woman misses her bus"

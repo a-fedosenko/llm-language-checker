@@ -122,22 +122,50 @@ SYSTEM_PROMPT = """You are a native speaker of {designator}.
 Your task: write {n} sentences describing the situation the user gives you, \
 using the grammar, spelling and vocabulary a native speaker of this specific \
 variety would use.
-
+{script_rule}
 Write naturally — do not translate word for word, and do not explain or \
 comment. Output only the {designator} text and nothing else.
 If you cannot write {designator}, reply with exactly CANNOT and nothing else."""
+
+#: Said on its own line, and only where the script is known.
+#:
+#: The designator already names the script, and that is not always enough. A
+#: model asked for "Serbian (Montenegro, Cyrillic script)" returned fluent,
+#: correctly ijekavian Montenegrin -- in Latin. Montenegro uses both alphabets
+#: and Latin is the commoner in practice, so naming the region pulls toward the
+#: region's script the way protocol 010 found it pulls toward the region's
+#: dominant language. Observed once in sixteen generations: rare, and fatal
+#: when it happens, because the gate convicts the whole item on script before
+#: anything else about it is looked at.
+SCRIPT_RULE = ("\nWrite every word in the {script_name} alphabet. Do not use "
+               "any other alphabet, not even for names or single words.\n")
 
 #: The material. Everything that varies between items lives here, so the system
 #: half stays identical across a language's whole run.
 USER_PROMPT = """{scenario}"""
 
 
-def generation_prompt(designator: str, scenario: str, n: int = 3) -> tuple[str, str]:
+def generation_prompt(designator: str, scenario: str, n: int = 3,
+                      script_name: str | None = None) -> tuple[str, str]:
     """The (system, user) pair for one item.
 
     Returns both halves rather than one string because the caller has to send
     them as separate messages; joining them back together is only done for the
     gate's copy check, which needs to know everything the model was shown.
+
+    `script_name` adds an explicit alphabet rule. Omitted where the script is
+    unknown, because an instruction naming no alphabet is worse than none.
     """
-    return (SYSTEM_PROMPT.format(designator=designator, n=n),
+    rule = SCRIPT_RULE.format(script_name=script_name) if script_name else ""
+    return (SYSTEM_PROMPT.format(designator=designator, n=n, script_rule=rule),
             USER_PROMPT.format(scenario=scenario))
+
+
+def script_name_for(script: str | None) -> str | None:
+    """The alphabet's English name, or None where we have no name for it.
+
+    Falls back to nothing rather than to the ISO 15924 code: "write every word
+    in the Tfng alphabet" instructs a model in a code it has no reason to read
+    as a writing system, which is the same mistake as putting `ME` in a prompt.
+    """
+    return SCRIPT_NAMES.get(script or "") if script else None

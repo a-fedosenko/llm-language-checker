@@ -127,7 +127,8 @@ def check_language(
     resolves: dict[str, int] = {}
 
     for spec in specs:
-        system, user = dsg.generation_prompt(des.value, spec.scenario, n_sentences)
+        system, user = dsg.generation_prompt(des.value, spec.scenario, n_sentences,
+                                             script_name=dsg.script_name_for(lang.script))
         gen = client.complete(engine, user, max_tokens=400, system=system)
         shown = f"{system}\n\n--- user ---\n\n{user}"
         corpus.write(Record("generation", engine, tag, spec.id, des.value, shown,
