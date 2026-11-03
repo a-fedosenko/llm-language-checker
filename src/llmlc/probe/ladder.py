@@ -12,10 +12,23 @@ for, and only the ambiguous ones are paid for twice.
 The designator sweep lives in rung 1 because an LLM has no language-code
 interface -- a `None` verdict must mean "none under our best designator", never
 "none under one arbitrary string" (docs/02, protocol 001).
+
+**There is one traversal of the ladder, and it is a generator.** `ladder_steps`
+yields a `Step` after every action and returns the result; `run_ladder` drains
+it and is what every existing caller still uses. A step-at-a-time consumer --
+the demo stand -- advances the same generator instead of walking the same
+sequence a second time.
+
+That shape is not a preference. Convention 11 says `runner.py` is the only
+definition of "run a scan", and convention 9 records what breaking it cost: an
+analysis harness re-implemented a production call, got it subtly wrong, and 68
+bad verdicts reached a protocol's conclusions. A second walk of the ladder would
+drift the same way, and the drift arrives looking like a finding.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Generator, Iterator
 
 from llmlc.bt import (Qualification, QualificationCache, QualStatus,
                       RemoteBackTranslator, route)
@@ -37,6 +50,127 @@ RUNG3_ITEMS = 6
 #: not evidence. Memorised boilerplate, text too short to judge, and LID calls too
 #: weak to convict on.
 VOID = {GateVerdict.MEMORISED, GateVerdict.TOO_SHORT, GateVerdict.LOW_CONFIDENCE}
+
+
+#: What each kind of step is for, in the terms the tool reports in. Served to
+#: the demo stand with the step itself rather than restated in the page: text
+#: describing what the code does belongs beside the code, or it goes stale the
+#: first time a threshold moves.
+STEP_HELP: dict[str, tuple[str, str]] = {
+    "generated": (
+        "Generate, then gate",
+        "The model is given a scenario in the pivot language and asked to write "
+        "it in the target language, choosing its own words. The reply goes "
+        "straight into the local gate -- script, then language identification, "
+        "then the degenerate and memorised checks. No paid call yet, which is "
+        "why most negatives cost nothing.",
+    ),
+    "designator-trial": (
+        "Score this designator",
+        "An LLM has no language-code interface, so the name we ask by is a "
+        "prompt parameter to optimise rather than a fact to look up. Each "
+        "candidate is scored on how many of its items cleared the gate.",
+    ),
+    "designator-chosen": (
+        "Keep the best designator",
+        "Everything after this runs under one name, so a negative verdict means "
+        "'none under our best designator' rather than 'none under one arbitrary "
+        "string'.",
+    ),
+    "deterministic-negative": (
+        "Stop: proven locally",
+        "Every candidate failed every item. The verdict does not depend on "
+        "reading the language back, so it needs no back-translator and holds "
+        "against every one of them.",
+    ),
+    "qualification": (
+        "Qualify the reader",
+        "Before any score depends on the back-translator, it is given text in "
+        "this language whose English meaning is already known and scored with "
+        "chrF++ against the reference. A model that cannot read a language does "
+        "not refuse -- it invents (protocol 005).",
+    ),
+    "unverified": (
+        "Stop: cannot be verified",
+        "No back-translator could be qualified for this language, so quality is "
+        "not assessable. `no-control` is never a pass, and this is not a verdict "
+        "about the model.",
+    ),
+    "judged": (
+        "Back-translate, then judge",
+        "The surviving text is read back into the pivot language, and a blind "
+        "judge marks which of the specified facts survived the round trip. The "
+        "judge never sees the target language.",
+    ),
+    "scored": (
+        "Score it",
+        "Eligibility first -- did the model write the language at all -- then "
+        "adequacy over the items that cleared it, with a bootstrap interval. "
+        "The tier is derived from the number and never replaces it.",
+    ),
+    "extra-item": (
+        "Another item: the interval straddles the cut",
+        "The result came back borderline, so more items are run to tighten the "
+        "interval rather than rounding a number that cannot be stated flatly.",
+    ),
+}
+
+
+@dataclass
+class Step:
+    """One action the ladder took, as it happened.
+
+    Carries enough for a page to render it without reaching back into the
+    pipeline, and `next_kind` so an interactive consumer can say what is about
+    to happen *before* spending the call that does it.
+    """
+
+    kind: str
+    rung: int
+    summary: str
+    detail: dict = field(default_factory=dict)
+    calls: dict = field(default_factory=dict)
+    next_kind: str | None = None
+    terminal: bool = False
+
+    @property
+    def title(self) -> str:
+        return STEP_HELP.get(self.kind, (self.kind, ""))[0]
+
+    @property
+    def explains(self) -> str:
+        return STEP_HELP.get(self.kind, ("", ""))[1]
+
+    def as_dict(self) -> dict:
+        nxt = STEP_HELP.get(self.next_kind or "")
+        return {
+            "kind": self.kind, "rung": self.rung, "title": self.title,
+            "summary": self.summary, "explains": self.explains,
+            "detail": self.detail, "calls": dict(self.calls),
+            "terminal": self.terminal,
+            "next": ({"kind": self.next_kind, "title": nxt[0], "explains": nxt[1]}
+                     if nxt else None),
+        }
+
+
+def item_detail(item: ItemOutcome) -> dict:
+    """An item as the demo shows it. Deliberately the whole text: reading the
+    raw output is how nearly every real defect in this project was found."""
+    return {
+        "spec_id": item.spec_id,
+        "designator": item.designator,
+        "generation": item.generation,
+        "gate": item.gate.verdict.value,
+        "gate_detail": item.gate.detail,
+        "lid": ({"label": item.gate.lid.label, "score": round(item.gate.lid.score, 3)}
+                if item.gate.lid else None),
+        "back_translation": item.back_translation,
+        "verdicts": ([v.value for v in item.judgement.verdicts]
+                     if item.judgement and item.judgement.ok else None),
+        "recall": (round(item.judgement.recall, 3)
+                   if item.judgement and item.judgement.ok else None),
+        "error": item.error,
+    }
 
 
 @dataclass
@@ -122,7 +256,23 @@ def relative_codes(scheme: Scheme, lang: Language) -> set[str]:
     return out - accepted_codes(lang)
 
 
-def run_ladder(
+def run_ladder(**kw) -> LadderResult:
+    """Run the ladder to completion. The one-shot path, and what every caller
+    outside the demo stand uses.
+
+    A drain over `ladder_steps`, not a second implementation of it: the result
+    of running every step must be identical to the result of stepping through
+    them, and the only way to guarantee that is for there to be one sequence.
+    """
+    gen = ladder_steps(**kw)
+    while True:
+        try:
+            next(gen)
+        except StopIteration as done:
+            return done.value
+
+
+def ladder_steps(
     *,
     scheme: Scheme,
     tag: str,
@@ -136,7 +286,12 @@ def run_ladder(
     incumbent: str | None = None,
     sweep_all: bool = False,
     cache: QualificationCache | None = None,
-) -> LadderResult:
+) -> Generator[Step, None, LadderResult]:
+    """The ladder, yielding a `Step` after every action and returning the result.
+
+    Every `yield` sits *after* the work it reports, so a consumer that stops
+    early has already paid for what it has seen and nothing more.
+    """
     lang = scheme.get(tag)
     if lang is None:
         raise KeyError(f"Unknown tag {tag!r} in scheme {scheme.meta.name!r}")
@@ -167,6 +322,9 @@ def run_ladder(
             calls["generation"] += 1
             record_lid(item)
             items.append(item)
+            yield Step("generated", 1,
+                       f"{cand.value!r}: {item.gate.verdict.value}",
+                       item_detail(item), calls, next_kind="generated")
 
         trial = DesignatorTrial(cand.kind, cand.value,
                                 sum(i.lang_ok for i in items), len(items),
@@ -175,15 +333,45 @@ def run_ladder(
         if best is None or trial.rate > best.rate:
             best, best_items = trial, items
         # A designator that carries every item is not improved on by trying more.
-        if not sweep_all and trial.rate == 1.0:
+        done = not sweep_all and trial.rate == 1.0
+        yield Step("designator-trial", 1,
+                   f"{cand.value!r} cleared the gate on "
+                   f"{trial.gate_pass} of {trial.attempts}",
+                   {"designator": cand.value, "kinds": list(cand.kinds),
+                    "gate_pass": trial.gate_pass, "attempts": trial.attempts,
+                    "rate": round(trial.rate, 3),
+                    "stopping_early": done,
+                    "candidates_left": 0 if done else
+                                       len(candidates) - len(trials)},
+                   calls,
+                   next_kind="designator-chosen" if done or len(trials) == len(candidates)
+                             else "generated")
+        if done:
             break
 
     assert best is not None
     chosen = next(c for c in candidates if c.value == best.value)
 
+    deterministic = best.rate == 0.0 and all(i.counts_against for i in best_items)
+    yield Step("designator-chosen", 1,
+               f"best designator {best.value!r} at {best.rate:.2f}",
+               {"designator": best.value, "kinds": list(chosen.kinds),
+                "rate": round(best.rate, 3),
+                "trials": [{"designator": x.value, "kinds": list(x.kinds),
+                            "gate_pass": x.gate_pass, "attempts": x.attempts,
+                            "rate": round(x.rate, 3)} for x in trials]},
+               calls,
+               next_kind="deterministic-negative" if deterministic else "qualification")
+
     # Every candidate failed every item: the negative does not depend on reading
     # the language, so it stands regardless of the back-translator.
-    if best.rate == 0.0 and all(i.counts_against for i in best_items):
+    if deterministic:
+        yield Step("deterministic-negative", 1,
+                   f"every candidate failed every item; "
+                   f"{_refused(best_items)} refusal(s)",
+                   {"refusals": _refused(best_items),
+                    "verdicts": [i.gate.verdict.value for i in best_items]},
+                   calls, terminal=True)
         return LadderResult(
             tag=tag, engine=engine, language=lang, designator=best.value,
             designator_kinds=chosen.kinds, trials=trials,
@@ -210,6 +398,15 @@ def run_ladder(
         scheme, lang, pivot, backtranslators)
     bt, qual = route(backtranslators, client, judge_model, tag,
                      controls=controls, cache=cache)
+    yield Step("qualification", 2,
+               f"{bt.id}: {qual.status.value}"
+               + (f" at {qual.score:.1f}" if qual.kind == "reference" else ""),
+               {"backtranslator": bt.id, "status": qual.status.value,
+                "score": round(qual.score, 2), "kind": qual.kind,
+                "detail": qual.detail, "pivot": pivot,
+                "trustworthy": qual.trustworthy},
+               calls,
+               next_kind="judged" if qual.trustworthy else "unverified")
 
     def finish(items: list[ItemOutcome], rungs: int) -> LadderResult:
         contents = [i.content for i in items if i.content is not None]
@@ -239,24 +436,39 @@ def run_ladder(
             qualification=qual, rungs_run=rungs, resolves_to=resolves, calls=calls)
 
     if not qual.trustworthy:
+        yield Step("unverified", 2,
+                   f"no qualified reader for {tag}: {qual.detail or qual.status.value}",
+                   {"backtranslator": qual.backtranslator,
+                    "status": qual.status.value, "detail": qual.detail},
+                   calls, terminal=True)
         return finish(best_items, 2)
 
     # -- rung 2: judge what survived the gate --------------------------------
     by_id = {s.id: s for s in specs}
-    for item in best_items:
-        if item.lang_ok:
-            judge_item(item, client=client, judge_model=judge_model, backtranslator=bt,
-                       spec=by_id[item.spec_id], tag=tag, corpus=corpus)
-            calls["backtranslation"] += 1
-            calls["judge"] += 1
+    gradeable = [i for i in best_items if i.lang_ok]
+    for n, item in enumerate(gradeable, 1):
+        judge_item(item, client=client, judge_model=judge_model, backtranslator=bt,
+                   spec=by_id[item.spec_id], tag=tag, corpus=corpus)
+        calls["backtranslation"] += 1
+        calls["judge"] += 1
+        yield Step("judged", 2,
+                   f"{item.spec_id}: recall "
+                   + (f"{item.judgement.recall:.2f}"
+                      if item.judgement and item.judgement.ok else "unavailable"),
+                   item_detail(item), calls,
+                   next_kind="judged" if n < len(gradeable) else "scored")
 
     result = finish(best_items, 2)
+    yield Step("scored", 2, _score_summary(result.score),
+               _score_detail(result.score), calls,
+               terminal=not result.score.borderline,
+               next_kind="extra-item" if result.score.borderline else None)
     if not result.score.borderline:
         return result
 
     # -- rung 3: borderline only, more items to tighten the interval ---------
     extra = specs[RUNG1_ITEMS: RUNG1_ITEMS + RUNG3_ITEMS]
-    for spec in extra:
+    for n, spec in enumerate(extra, 1):
         item = generate_and_gate(client=client, engine=engine, lang=lang,
                                  designator=best.value, spec=spec, corpus=corpus,
                                  relatives=relatives, accept=accept)
@@ -268,5 +480,28 @@ def run_ladder(
             calls["backtranslation"] += 1
             calls["judge"] += 1
         best_items.append(item)
+        yield Step("extra-item", 3,
+                   f"{spec.id}: {item.gate.verdict.value}"
+                   + (f", recall {item.judgement.recall:.2f}"
+                      if item.judgement and item.judgement.ok else ""),
+                   item_detail(item), calls,
+                   next_kind="extra-item" if n < len(extra) else "scored")
 
-    return finish(best_items, 3)
+    final = finish(best_items, 3)
+    yield Step("scored", 3, _score_summary(final.score), _score_detail(final.score),
+               calls, terminal=True)
+    return final
+
+
+def _score_summary(s: Score) -> str:
+    return (f"{s.tier.value} — eligibility {s.s_lang:.2f}, adequacy {s.s_content:.2f} "
+            f"[{s.ci[0]:.2f}, {s.ci[1]:.2f}]"
+            + (" (borderline)" if s.borderline else ""))
+
+
+def _score_detail(s: Score) -> dict:
+    d = s.as_dict()
+    # The workflow sentence is what a planner actually reads, and it carries the
+    # availability caveat the tier deliberately does not.
+    d["workflow"] = s.workflow
+    return d
