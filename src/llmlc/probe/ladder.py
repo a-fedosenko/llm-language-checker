@@ -180,6 +180,7 @@ def item_detail(item: ItemOutcome) -> dict:
     return {
         "spec_id": item.spec_id,
         "designator": item.designator,
+        "prompt": item.prompt,
         "generation": item.generation,
         "gate": item.gate.verdict.value,
         "gate_detail": item.gate.detail,

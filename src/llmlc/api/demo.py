@@ -53,6 +53,8 @@ class Session:
     persisted: bool = False
     result: dict | None = None
     corpus: Corpus | None = None
+    #: What this run will ask for, worked out before anything is spent.
+    plan: dict = field(default_factory=dict)
     _gen: object = None
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -65,6 +67,7 @@ class Session:
             # scenario was rewritten is not comparable to anything (convention 4),
             # and the page must be able to say so wherever it shows the verdict.
             "persisted": self.persisted,
+            "plan": self.plan,
             "steps": self.steps, "result": self.result,
             "corpus": str(self.corpus.path) if self.corpus else None,
         }
@@ -116,6 +119,44 @@ def specs_for(overrides: list[dict] | None) -> tuple[list[Spec], bool]:
     return (out or shipped), modified
 
 
+def plan_for(scheme, tag: str) -> dict:
+    """What the run will actually ask the model for, before it asks.
+
+    This exists because two tags can be the same experiment and nothing said so.
+    `sr-RS-Cyrl` and `sr-ME-Cyrl` share an equivalence class and produce the
+    identical prompt -- "Serbian (Cyrillic script)" -- so running both looks
+    like two measurements and is one, repeated. That is the documented design
+    (protocol 010 measured country-qualified designators and rejected them; the
+    variant distinction is meant to come from marker sets, which exist for 2 of
+    534 variant tags), but a design you can only discover by running the same
+    thing twice and noticing is not a design anyone can check.
+    """
+    from llmlc.probe import designator as dsg
+    from llmlc.probe.variant import is_script_variant
+
+    lang = scheme.get(tag)
+    if lang is None:
+        return {}
+    candidates = dsg.candidates(lang, qualify_script=is_script_variant(scheme, lang) or None)
+    primary = candidates[0].value if candidates else ""
+    siblings = scheme.variants_of(tag)
+    # Subtags the designator does not name. The region is the usual one, and it
+    # is the whole of the difference between Serbian as written in Belgrade and
+    # in Podgorica.
+    unnamed = [part for part, value in (("region", lang.region),)
+               if value and value.lower() not in primary.lower()
+               and (lang.name or "").lower() != primary.lower()]
+    return {
+        "tag": tag,
+        "cls": lang.cls,
+        "designators": [c.value for c in candidates],
+        "primary": primary,
+        "siblings": siblings,
+        "unnamed_subtags": unnamed,
+        "region": lang.region,
+    }
+
+
 def start(*, engine: str, tag: str, scheme, client, backtranslators, judge_model: str,
           pivot: str, mode: str, specs: list[Spec], specs_modified: bool,
           cache=None, sweep_all: bool = False) -> Session:
@@ -129,7 +170,8 @@ def start(*, engine: str, tag: str, scheme, client, backtranslators, judge_model
         sid = uuid.uuid4().hex[:12]
         corpus = Corpus()
         session = Session(id=sid, engine=engine, tag=tag, mode=mode,
-                          specs_modified=specs_modified, corpus=corpus)
+                          specs_modified=specs_modified, corpus=corpus,
+                          plan=plan_for(scheme, tag))
         session._gen = ladder_steps(
             scheme=scheme, tag=tag, engine=engine, client=client,
             backtranslators=backtranslators, judge_model=judge_model,

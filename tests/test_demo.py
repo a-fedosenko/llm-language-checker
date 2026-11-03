@@ -139,3 +139,52 @@ def test_the_listing_shows_open_sessions(client):
     client.post("/demo", json=body())
     d = client.get("/demo").json()
     assert len(d["sessions"]) == 1 and d["max_sessions"] == demo_sessions.MAX_SESSIONS
+
+
+# -- saying what the run will actually ask for -------------------------------
+
+def test_two_tags_in_one_class_are_declared_as_the_same_experiment():
+    """`sr-RS-Cyrl` and `sr-ME-Cyrl` produce the identical prompt, so running
+    both looks like two measurements and is one, repeated. That is the design
+    (protocol 010 rejected country-qualified designators; the variant
+    distinction belongs to marker sets) — but a design you can only discover by
+    running the same thing twice and noticing is not one anyone can check."""
+    from llmlc.api.demo import plan_for
+    from llmlc.scheme import load_scheme
+
+    scheme = load_scheme("default")
+    a = plan_for(scheme, "sr-Cyrl-ME")      # Serbian as written in Montenegro
+    b = plan_for(scheme, "sr")              # and in Serbia; the catalogue's bare tag
+    assert a["primary"] == b["primary"] == "Serbian (Cyrillic script)", \
+        "the premise of this test has changed: the prompts now differ"
+    assert a["cls"] == b["cls"]
+    assert "sr" in a["siblings"] and "sr-Cyrl-ME" in b["siblings"]
+
+
+def test_a_region_the_prompt_does_not_name_is_reported():
+    from llmlc.api.demo import plan_for
+    from llmlc.scheme import load_scheme
+
+    plan = plan_for(load_scheme("default"), "sr-Cyrl-ME")
+    assert plan["region"] == "ME"
+    assert "region" in plan["unnamed_subtags"]
+    assert "ME" not in plan["primary"]
+
+
+def test_the_plan_reaches_the_session_before_anything_is_spent(client):
+    d = client.post("/demo", json=body(tag="sr", scheme="default")).json()
+    assert d["plan"]["primary"]
+    assert d["steps"] == [] and d["plan"]["designators"]
+
+
+def test_the_prompt_is_carried_on_the_item_not_only_in_the_corpus():
+    """Reading the raw evidence is the convention that has found most of this
+    project's real defects, and the prompt is the half you cannot reconstruct
+    from the answer."""
+    from llmlc.probe.ladder import item_detail
+    from llmlc.probe.gate import GateResult, GateVerdict
+    from llmlc.probe.steps import ItemOutcome
+
+    item = ItemOutcome("s1", "Serbian (Cyrillic script)", "текст",
+                       GateResult(GateVerdict.PASS), prompt="Write 3 sentences in…")
+    assert item_detail(item)["prompt"] == "Write 3 sentences in…"

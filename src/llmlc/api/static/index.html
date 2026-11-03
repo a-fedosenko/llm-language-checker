@@ -408,6 +408,7 @@
       <button id="d-specs-reset" class="btn ghost">Reset to the shipped specifications</button>
     </details>
 
+    <div class="note" id="d-plan" hidden></div>
     <div class="note" id="d-next" hidden></div>
     <div id="d-steps"></div>
     <div id="d-result"></div>
@@ -854,6 +855,33 @@ $('#d-specs-reset').addEventListener('click', () => {
   renderSpecs();
 });
 
+function renderPlan(plan) {
+  // Said before the first call, not discovered by running two tags and noticing
+  // the answers match.
+  const box = $('#d-plan');
+  if (!plan || !plan.primary) { box.hidden = true; return; }
+  const twins = (plan.siblings || []);
+  const unnamed = (plan.unnamed_subtags || []);
+  const warn = unnamed.length || twins.length;
+  box.hidden = false;
+  box.className = warn ? 'note warn' : 'note';
+  box.innerHTML = `This run asks the model for <b>${esc(plan.primary)}</b>.`
+    + (unnamed.includes('region') && plan.region
+        ? ` The region <code>${esc(plan.region)}</code> is <b>not named in the prompt</b> —
+           naming the country was measured and rejected, because it pulls a model toward that
+           country's dominant language (protocol 010).` : '')
+    + (twins.length
+        ? ` ${twins.length} other tag${twins.length > 1 ? 's' : ''} in this locale list
+           (<code>${twins.slice(0, 6).map(esc).join('</code>, <code>')}</code>${
+             twins.length > 6 ? ', …' : ''}) share this tag's equivalence class
+           <code>${esc(plan.cls)}</code> and produce the same prompt, so running them
+           is running this experiment again. A scan probes the class once and the rest
+           inherit. Telling the variants apart is the job of marker sets, which exist
+           for 2 of 534 variant tags.` : '')
+    + ` <span class="ev">designators tried, in order:
+        ${plan.designators.map(esc).join(' · ')}</span>`;
+}
+
 function demoButtons({ live, busy }) {
   $('#d-start').disabled = live || busy;
   $('#d-step').disabled = !live || busy;
@@ -865,6 +893,7 @@ async function startDemo() {
   $('#d-steps').innerHTML = '';
   $('#d-result').innerHTML = '';
   $('#d-next').hidden = true;
+  $('#d-plan').hidden = true;
   demoButtons({ live: false, busy: true });
   try {
     const d = await j('/demo', { method: 'POST',
@@ -879,6 +908,7 @@ async function startDemo() {
     demo.id = d.id;
     demoButtons({ live: true, busy: false });
     $('#d-cost').textContent = 'nothing spent yet';
+    renderPlan(d.plan);
     if ($('#d-mode').value === 'auto') await runDemoToEnd();
     else describeNext({ kind: 'generated' });
   } catch (e) {
@@ -944,6 +974,10 @@ function renderStep(s) {
                 add('interval', d.ci ? `[${d.ci[0]}, ${d.ci[1]}]` : null);
                 add('workflow', d.workflow); }
   const texts = [];
+  // The prompt first, and verbatim. What was asked is the part you cannot
+  // reconstruct from the answer, and it is where a designator that does not
+  // say what you thought it said becomes visible.
+  if (d.prompt) texts.push(['asked', d.prompt]);
   if (d.generation) texts.push(['generated', d.generation]);
   if (d.back_translation) texts.push(['read back', d.back_translation]);
   const calls = s.calls || {};

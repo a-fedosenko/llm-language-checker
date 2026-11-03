@@ -28,6 +28,11 @@ class ItemOutcome:
     back_translation: str | None = None
     judgement: Judgement | None = None
     error: str | None = None
+    #: Exactly what was sent. The corpus has had it all along, but a verdict you
+    #: can only check by opening a JSONL file is a verdict most people take on
+    #: trust -- and "read the raw evidence before believing a number" is the
+    #: convention that has found most of this project's real defects.
+    prompt: str = ""
 
     @property
     def lang_ok(self) -> bool:
@@ -54,7 +59,8 @@ def generate_and_gate(*, client: OpenAICompatClient, engine: str, lang: Language
                         gen.text, gen.error, gen.usage, gen.latency_s))
     gate = gate_check(gen.text, prompt=prompt, expect_lang=lang.iso639_3,
                       expect_script=lang.script, relatives=relatives, accept_lang=accept)
-    return ItemOutcome(spec.id, designator, gen.text, gate, error=gen.error)
+    return ItemOutcome(spec.id, designator, gen.text, gate, error=gen.error,
+                       prompt=prompt)
 
 
 def judge_item(item: ItemOutcome, *, client: OpenAICompatClient, judge_model: str,
