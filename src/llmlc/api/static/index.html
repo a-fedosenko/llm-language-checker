@@ -116,7 +116,24 @@
   .spec textarea { width: 100%; font: inherit; background: var(--bg); color: var(--fg);
                    border: 1px solid var(--line); border-radius: 3px; padding: 6px; }
   .spec.edited { border-color: var(--warn); }
-  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  button.ghost { background: transparent; color: var(--muted); }
+  .actions { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap;
+             align-items: center; gap: 10px; padding: 12px 0 14px; margin-top: 4px;
+             background: linear-gradient(to bottom, transparent, var(--bg) 22%);
+             border-top: 1px solid var(--line); }
+  .actions .btn { padding: 9px 16px; }
+  /* Green, amber, red on the step itself. The stripe carries it at a glance;
+     the heading keeps the colour so it survives a narrow screen. */
+  .step.t-ok   { border-left-color: var(--ok); }
+  .step.t-warn { border-left-color: var(--warn); }
+  .step.t-bad  { border-left-color: var(--bad); }
+  .step.t-ok   h4 { color: var(--ok); }
+  .step.t-warn h4 { color: var(--warn); }
+  .step.t-bad  h4 { color: var(--bad); }
+  .step .verdict { font-weight: 600; }
+  .step.t-ok   .verdict { color: var(--ok); }
+  .step.t-warn .verdict { color: var(--warn); }
+  .step.t-bad  .verdict { color: var(--bad); }
   .chip.group[aria-pressed=true] { border-style: solid; }
   .chip b { font-variant-numeric: tabular-nums; }
   footer { margin-top: 26px; font-size: 15.6px; color: var(--muted); }
@@ -388,20 +405,23 @@
         grading checklist. Editing either changes the measurement, so an edited run is kept out of
         the results and marked here — the raw text still goes to the corpus, which is where you read it.</p>
       <div id="d-specs"></div>
-      <button id="d-specs-reset" class="ghost">Reset to the shipped specifications</button>
+      <button id="d-specs-reset" class="btn ghost">Reset to the shipped specifications</button>
     </details>
-
-    <p>
-      <button id="d-start">Start</button>
-      <button id="d-step" disabled>Run next step</button>
-      <button id="d-auto" disabled>Run to the end</button>
-      <button id="d-close" class="ghost" disabled>Abandon</button>
-      <span class="ev" id="d-cost"></span>
-    </p>
 
     <div class="note" id="d-next" hidden></div>
     <div id="d-steps"></div>
     <div id="d-result"></div>
+
+    <!-- Below the steps, and sticky: the list grows with every step, and
+         controls pinned to the top of the section mean scrolling back up to
+         run the next one. -->
+    <div class="actions" id="d-actions">
+      <button id="d-start" class="btn primary">Start</button>
+      <button id="d-step" class="btn" disabled>Run next step</button>
+      <button id="d-auto" class="btn" disabled>Run to the end</button>
+      <button id="d-close" class="btn ghost" disabled>Abandon</button>
+      <span class="ev" id="d-cost"></span>
+    </div>
   </section>
 
   <!-- ── scan ───────────────────────────────────────────────────────────── -->
@@ -931,18 +951,20 @@ function renderStep(s) {
   $('#d-cost').textContent = `${total} call(s): ` +
     Object.entries(calls).map(([k, v]) => `${k} ${v}`).join(', ');
   $('#d-steps').insertAdjacentHTML('beforeend', `
-    <div class="step ${s.terminal ? 'is-terminal' : ''}">
+    <div class="step t-${esc(s.tone || 'none')} ${s.terminal ? 'is-terminal' : ''}">
       <span class="rung">rung ${s.rung}</span>
       <h4>${esc(s.title)}</h4>
       <p class="why">${esc(s.explains)}</p>
-      <div><b>${esc(s.summary)}</b></div>
+      <div class="verdict">${esc(s.summary)}</div>
       ${rows.length ? `<dl>${rows.map(([k, v]) =>
         `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}
       ${texts.map(([k, v]) => `<pre><b>${esc(k)}</b>\n${esc(v)}</pre>`).join('')}
     </div>`);
-  // Optional chaining throughout: scrolling is a nicety, and a host that
-  // does not implement it must not take the step rendering down with it.
-  $('#d-steps').lastElementChild?.scrollIntoView?.({ block: 'nearest' });
+  // Scroll to the controls, not to the step: the next thing the reader wants
+  // is the button, and the step sits directly above it. Optional chaining
+  // because scrolling is a nicety, and a host that does not implement it must
+  // not take the step rendering down with it.
+  $('#d-actions')?.scrollIntoView?.({ block: 'end', behavior: 'smooth' });
 }
 
 function renderDemoSession(sess) {

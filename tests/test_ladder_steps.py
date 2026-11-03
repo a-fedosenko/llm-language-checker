@@ -193,3 +193,49 @@ def test_a_terminal_step_leaves_only_the_return_value(monkeypatch, kw):
     with pytest.raises(StopIteration) as stop:
         next(gen)
     assert stop.value.value is not None, "the return value must follow the terminal step"
+
+
+# -- how a step reads at a glance --------------------------------------------
+
+def test_every_step_carries_a_tone(monkeypatch, kw):
+    stub(monkeypatch)
+    steps, _ = drain(L.ladder_steps(**kw))
+    assert all(s.tone in ("ok", "warn", "bad") for s in steps), \
+        [(s.kind, s.tone) for s in steps if s.tone not in ("ok", "warn", "bad")]
+
+
+def test_a_void_gate_verdict_is_not_coloured_like_a_failure():
+    """Memorised text, too-short output and a weak language-ID call are neither
+    a pass nor evidence against the model -- the arithmetic drops them from the
+    denominator, and the colour has to say the same thing (protocol 018)."""
+    for verdict in L.VOID:
+        assert L.gate_tone(verdict) == "warn", verdict
+    assert L.gate_tone(GateVerdict.PASS) == "ok"
+    for verdict in (GateVerdict.WRONG_SCRIPT, GateVerdict.WRONG_LANGUAGE,
+                    GateVerdict.REFUSED, GateVerdict.COPY):
+        assert L.gate_tone(verdict) == "bad", verdict
+
+
+def test_an_unverifiable_stop_is_not_red(monkeypatch, kw):
+    """No reader could be qualified. That is a statement about the instrument,
+    and colouring it like a model failure is the error protocol 005 exists to
+    prevent -- in a colour instead of a word."""
+    stub(monkeypatch, trustworthy=False)
+    steps, _ = drain(L.ladder_steps(**kw))
+    stop = steps[-1]
+    assert stop.kind == "unverified" and stop.tone == "warn"
+
+
+def test_a_deterministic_negative_is_red(monkeypatch, kw):
+    stub(monkeypatch, gate=GateVerdict.WRONG_SCRIPT)
+    steps, _ = drain(L.ladder_steps(**kw))
+    assert steps[-1].kind == "deterministic-negative" and steps[-1].tone == "bad"
+
+
+@pytest.mark.parametrize("recall,expected", [(1.0, "ok"), (0.5, "warn")])
+def test_the_verdict_colour_follows_the_tier(monkeypatch, kw, recall, expected):
+    stub(monkeypatch, recall=recall)
+    steps, result = drain(L.ladder_steps(**kw))
+    scored = [s for s in steps if s.kind == "scored"][-1]
+    assert scored.tone == expected
+    assert (result.score.tier.value == "Proficient") == (expected == "ok")

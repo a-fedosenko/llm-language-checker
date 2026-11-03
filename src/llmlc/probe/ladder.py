@@ -116,6 +116,22 @@ STEP_HELP: dict[str, tuple[str, str]] = {
 }
 
 
+def gate_tone(verdict: GateVerdict) -> str:
+    """How a gate verdict should read at a glance.
+
+    Three states, because the gate has three kinds of outcome and only two of
+    them are about the model. `VOID` verdicts -- memorised text, too short, a
+    language-ID call too weak to commit -- are neither a pass nor evidence
+    against it, and colouring them like a failure would say the opposite of what
+    the arithmetic does with them (protocol 018).
+    """
+    if verdict is GateVerdict.PASS:
+        return "ok"
+    if verdict in VOID:
+        return "warn"
+    return "bad"
+
+
 @dataclass
 class Step:
     """One action the ladder took, as it happened.
@@ -132,6 +148,11 @@ class Step:
     calls: dict = field(default_factory=dict)
     next_kind: str | None = None
     terminal: bool = False
+    #: "ok" | "warn" | "bad" | "" -- how this step reads at a glance. Decided
+    #: here rather than in the page: whether a gate verdict is a failure or an
+    #: abstention is a fact about the method, and a page re-deriving it would be
+    #: a second opinion on the one question the gate exists to answer.
+    tone: str = ""
 
     @property
     def title(self) -> str:
@@ -147,7 +168,7 @@ class Step:
             "kind": self.kind, "rung": self.rung, "title": self.title,
             "summary": self.summary, "explains": self.explains,
             "detail": self.detail, "calls": dict(self.calls),
-            "terminal": self.terminal,
+            "terminal": self.terminal, "tone": self.tone,
             "next": ({"kind": self.next_kind, "title": nxt[0], "explains": nxt[1]}
                      if nxt else None),
         }
@@ -326,7 +347,8 @@ def ladder_steps(
             items.append(item)
             yield Step("generated", 1,
                        f"{cand.value!r}: {item.gate.verdict.value}",
-                       item_detail(item), calls, next_kind="generated")
+                       item_detail(item), calls, next_kind="generated",
+                       tone=gate_tone(item.gate.verdict))
 
         trial = DesignatorTrial(cand.kind, cand.value,
                                 sum(i.lang_ok for i in items), len(items),
@@ -347,7 +369,8 @@ def ladder_steps(
                                        len(candidates) - len(trials)},
                    calls,
                    next_kind="designator-chosen" if done or len(trials) == len(candidates)
-                             else "generated")
+                             else "generated",
+                   tone="ok" if trial.rate == 1.0 else "warn" if trial.rate else "bad")
         if done:
             break
 
@@ -363,7 +386,8 @@ def ladder_steps(
                             "gate_pass": x.gate_pass, "attempts": x.attempts,
                             "rate": round(x.rate, 3)} for x in trials]},
                calls,
-               next_kind="deterministic-negative" if deterministic else "qualification")
+               next_kind="deterministic-negative" if deterministic else "qualification",
+               tone="ok" if best.rate == 1.0 else "warn" if best.rate else "bad")
 
     # Every candidate failed every item: the negative does not depend on reading
     # the language, so it stands regardless of the back-translator.
@@ -373,7 +397,7 @@ def ladder_steps(
                    f"{_refused(best_items)} refusal(s)",
                    {"refusals": _refused(best_items),
                     "verdicts": [i.gate.verdict.value for i in best_items]},
-                   calls, terminal=True)
+                   calls, terminal=True, tone="bad")
         return LadderResult(
             tag=tag, engine=engine, language=lang, designator=best.value,
             designator_kinds=chosen.kinds, trials=trials,
@@ -408,7 +432,8 @@ def ladder_steps(
                 "detail": qual.detail, "pivot": pivot,
                 "trustworthy": qual.trustworthy},
                calls,
-               next_kind="judged" if qual.trustworthy else "unverified")
+               next_kind="judged" if qual.trustworthy else "unverified",
+               tone="ok" if qual.trustworthy else "bad")
 
     def finish(items: list[ItemOutcome], rungs: int) -> LadderResult:
         contents = [i.content for i in items if i.content is not None]
@@ -442,7 +467,9 @@ def ladder_steps(
                    f"no qualified reader for {tag}: {qual.detail or qual.status.value}",
                    {"backtranslator": qual.backtranslator,
                     "status": qual.status.value, "detail": qual.detail},
-                   calls, terminal=True)
+                   # Not red: no reader could be qualified, which is a statement
+                   # about the instrument and not a verdict about the model.
+                   calls, terminal=True, tone="warn")
         return finish(best_items, 2)
 
     # -- rung 2: judge what survived the gate --------------------------------
@@ -458,13 +485,15 @@ def ladder_steps(
                    + (f"{item.judgement.recall:.2f}"
                       if item.judgement and item.judgement.ok else "unavailable"),
                    item_detail(item), calls,
-                   next_kind="judged" if n < len(gradeable) else "scored")
+                   next_kind="judged" if n < len(gradeable) else "scored",
+                   tone=_recall_tone(item))
 
     result = finish(best_items, 2)
     yield Step("scored", 2, _score_summary(result.score),
                _score_detail(result.score), calls,
                terminal=not result.score.borderline,
-               next_kind="extra-item" if result.score.borderline else None)
+               next_kind="extra-item" if result.score.borderline else None,
+               tone=_tier_tone(result.score))
     if not result.score.borderline:
         return result
 
@@ -487,12 +516,36 @@ def ladder_steps(
                    + (f", recall {item.judgement.recall:.2f}"
                       if item.judgement and item.judgement.ok else ""),
                    item_detail(item), calls,
-                   next_kind="extra-item" if n < len(extra) else "scored")
+                   next_kind="extra-item" if n < len(extra) else "scored",
+                   tone=gate_tone(item.gate.verdict) if not item.lang_ok
+                        else _recall_tone(item))
 
     final = finish(best_items, 3)
     yield Step("scored", 3, _score_summary(final.score), _score_detail(final.score),
-               calls, terminal=True)
+               calls, terminal=True, tone=_tier_tone(final.score))
     return final
+
+
+def _recall_tone(item: ItemOutcome) -> str:
+    """An item that was judged, by how much of the meaning came back.
+
+    The cut is the adequacy cut, so a green item is one that would carry a
+    `Proficient` verdict on its own -- the colour and the tier agree rather than
+    being two separate opinions about the same number.
+    """
+    from llmlc.probe.score import PROFICIENT_MIN_CONTENT
+
+    if item.judgement is None or not item.judgement.ok:
+        return "warn"
+    if item.judgement.recall >= PROFICIENT_MIN_CONTENT:
+        return "ok"
+    return "warn" if item.judgement.recall else "bad"
+
+
+def _tier_tone(s: Score) -> str:
+    from llmlc.probe.score import Tier
+
+    return {Tier.PROFICIENT: "ok", Tier.ASSISTED: "warn", Tier.UNUSABLE: "bad"}[s.tier]
 
 
 def _score_summary(s: Score) -> str:
