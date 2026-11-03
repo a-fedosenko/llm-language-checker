@@ -35,7 +35,10 @@ On the three that share a reader: **deepseek is strictly best on 64 languages** 
 
 **Run it:**
 ```bash
-cp .env.example .env               # aggregator endpoint + key; gitignored
+cp .env.example .env               # settings; gitignored
+cp .models.json.example data/models.json   # per-model endpoint + key; gitignored
+                                   # (AGGREGATOR_BASE_URL still works and is what
+                                   #  jobs 1-17 were measured through)
 docker compose up -d               # UI at http://localhost:${API_PORT:-8000}   (8089 on Andrei's machine)
 llmlc bootstrap --check            # is the instrument complete? (GlotLID + FLORES controls)
 llmlc status                       # what is measured, what is stale
@@ -122,4 +125,6 @@ Beyond that set nobody can be qualified, so the honest output is `unverified`. *
 - **Resuming a stopped job from the UI is not built.** `pending_items()` is the resume set and a stopped job keeps it intact; re-running is currently a fresh scan over the same tags.
 - **`kk-Latn` deserves a second look with a different model**: asked properly, gpt-4o returns Latin script that GlotLID reads as Crimean Tatar and Turkmen. A recent official alphabet with little training text is a plausible genuine gap.
 
-**Remaining stages:** S10 public landing page.
+**S10 is done.** The **Support** tab is the default view: pick a model and a locale list, get one row per language with a five-value status (`supported` / `supported-via-dialect` / `unsupported` / `unverifiable` / `unchecked`), the adequacy number, and a confidence badge from the interval width. `llmlc/support.py` is the only definition of status; `api/support_table.py` owns the canonical-reader rule that collapses gpt-4o's five back-translators to one row per language, and says how many it collapsed. `scripts/build_scheme_from_tms.py` maps the 602-locale TMS list onto canonical tags (590 resolve) so the table runs down the real list — for deepseek that is 70 measured directly, 194 inherited, 46 unsupported, 132 unverifiable, 160 unchecked.
+
+**Remaining stages:** S10 support table · S11 demo stand · S12 public landing page · S13 contribution. Planned together at the end of doc 03 — read that before starting any of them: S10 and S11 share two prerequisites (a canonical reader per engine, and one definition of the five statuses), S11 is a ladder refactor before it is a page, and S13 is the only one that ends the single-user, no-authentication architecture.

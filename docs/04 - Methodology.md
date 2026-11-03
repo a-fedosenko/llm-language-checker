@@ -219,7 +219,8 @@ Every result stores the whole configuration that produced it, which is what make
 ```bash
 git clone https://github.com/a-fedosenko/llm-language-checker
 cd llm-language-checker
-cp .env.example .env            # your OpenAI-compatible endpoint and key
+cp .env.example .env                        # settings
+cp .models.json.example data/models.json    # your models: id, endpoint, key
 docker compose up -d
 llmlc bootstrap                 # GlotLID + FLORES controls; neither can be committed
 llmlc bootstrap --check         # confirm the instrument is complete before trusting a scan

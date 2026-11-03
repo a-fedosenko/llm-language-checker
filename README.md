@@ -41,16 +41,44 @@ A second scan put 154 locales from a real TMS locale list through the same pipel
 
 ## Run it yourself
 
-There is no hosted service and no public deployment. **You run it locally or in your own cloud**, with your own API keys in your own `.env`. Nothing is sent anywhere except to the model endpoints you configure, and no key is ever stored by the application or entered through a web form.
+There is no hosted service and no public deployment. **You run it locally or in your own cloud**, with your own API keys in your own files. Nothing is sent anywhere except to the model endpoints you configure, and no key is ever stored by the application, written to a result, or entered through a web form.
 
 ```bash
 git clone https://github.com/a-fedosenko/llm-language-checker
 cd llm-language-checker
-cp .env.example .env      # add your OpenAI-compatible endpoint + key
+cp .env.example .env                        # settings
+cp .models.json.example data/models.json    # your models, endpoints and keys
 docker compose up -d
 ```
 
-- UI: <http://localhost:8000> — browse results, plan and start a scan, watch it run
+### Telling it about your models
+
+Each model gets its own endpoint and its own key, so a single scan can reach OpenAI, a hosted gateway and a local vLLM at once:
+
+```json
+{
+  "models": [
+    { "model_title": "GPT-4o",        "model_id": "gpt-4o",
+      "api_key": "sk-...",            "v1_endpoint": "https://api.openai.com/v1" },
+    { "model_title": "Local Qwen",    "model_id": "Qwen/Qwen2.5-72B-Instruct",
+      "api_key": "not-needed",        "v1_endpoint": "http://localhost:8001/v1" }
+  ]
+}
+```
+
+`CUSTOM_MODEL_LIST_PATH` in `.env` points at that file. Keep it under `./data` — that is the directory compose mounts into the container, so a path anywhere else resolves on the host and vanishes in Docker.
+
+`model_id` is the identity: it goes in the request body, names `--engine`, and is stored on every result row. `model_title` is display only and safe to rename.
+
+A scan needs three models reachable — **the engine under test, the judge, and at least one back-translator from the panel** — and the shipped defaults for the last two are this project's own ids, which will not be in your file. Add them or point `JUDGE_MODEL` and `--backtranslator` at models you have; either way the tool checks all three and names what is missing *before* it spends anything.
+
+<details><summary>The older single-gateway route still works</summary>
+
+Set `AGGREGATOR_BASE_URL` and `AGGREGATOR_ADMIN_API_KEY` instead, and every model id is requested from that one endpoint with that one key. This is how the measurements in *What it found* were taken. Where both are configured, the JSON file wins.
+
+</details>
+
+- UI: <http://localhost:8000> — **Support** (one model, every locale, five statuses), plus results, variants, and planning and running a scan
 - API and interactive docs: <http://localhost:8000/docs>
 
 **Before your first scan, fetch the two files the repository cannot ship.** The UI says so on arrival and offers a button; `llmlc bootstrap` does the same from a terminal, and `AUTO_BOOTSTRAP=1` does it at startup.
@@ -63,6 +91,8 @@ docker compose up -d
 Browsing existing results needs neither. Scanning needs both, and the tool will tell you rather than quietly measuring less than it reports.
 
 The published port is bound to `127.0.0.1`. There is no authentication, because there is no second user; widening `API_BIND` puts an unguarded tool on your network.
+
+**This is a single-operator tool and is not built to be exposed publicly.** There are no accounts, no per-caller quotas and no abuse handling, and the endpoints that spend your API budget are guarded by the port binding alone. If you want to put it on the internet — to collect contributions from speakers, say — that is a fork with its own SSO, rate limiting and moderation, not a setting.
 
 The language catalogue ships in the repo, so browsing needs no network fetch. Scanning needs the two assets above.
 
@@ -112,7 +142,8 @@ This measures **variant marking**, which is a proxy for dialectal competence and
 The core speaks canonical **BCP-47** (`kk`, `kk-Latn`, `sr-Cyrl-RS`). Any other tag convention — including orders that put the script last — reaches it through a **scheme adapter**, so no organisation's locale list is baked into the tool.
 
 - `schemes/default.json` ships with the project: **9,589 tags** built from ISO 639-3 code tables, the official ISO 639-3 macrolanguage mapping, and SIL langtags. It carries macrolanguage/member relations, default script and region, and endonyms.
-- Drop your own list in `schemes/<name>.json` and set `SCHEME=<name>`. Your list is gitignored; results come back keyed to your tags.
+- Drop your own list in `schemes/<name>.json` and set `SCHEME=<name>`, or pick it from the Support tab. Your list is gitignored; results come back keyed to your tags.
+- Exporting from a TMS whose tags are not canonical? `python scripts/build_scheme_from_tms.py <export.json> --name mine` maps them. On a real 602-locale list it resolves 590 — by tag, then through the ISO 639-3 macrolanguage mapping — and **names the ones it could not**, rather than guessing. A locale it leaves unresolved is still scannable; one it resolved wrongly would be a false claim, which is why the looser rules it tried first were removed (they put Standard Malay under Malay Braille).
 - Regenerate the shipped catalogue with `python scripts/build_default_scheme.py --refresh`.
 
 ### Hardware
@@ -189,6 +220,8 @@ The repository carries **code, authored data, and evidence**. Everything a run p
 | `data/controls/controls.json` | ✅ | Hand-written back-translator controls for languages FLORES lacks |
 | `experiments/` | ✅ | Protocols and the raw responses behind them, so claims are checkable |
 | `data/results/control_gap.json` | ✅ | Which locales a new control text would actually buy something for |
+| `.models.json.example` | ✅ | The shape of the model list — copy it, do not edit it in place |
+| `data/models.json` | ✗ | **Your models, endpoints and keys.** Gitignored, like `.env` |
 | `data/controls/flores.json` | ✗ | FLORES-derived controls — **CC BY-SA 4.0**, regenerate with `scripts/build_controls.py` |
 | `data/llmlc.db` | ✗ | Your results. `llmlc scan` writes here |
 | `data/results/`, `data/corpus/` | ✗ | Export artifacts and the raw generation corpus |

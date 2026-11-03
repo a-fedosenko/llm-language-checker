@@ -285,7 +285,10 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 | **S7** ✅ | **Calibration study** — fact-recall vs chrF++ against FLORES+ | **Done 2026-09-23** — 100 languages; ρ 0.647 by language, and recall saturates at 1.0 for 84% of items |
 | **S8** ✅ | **Distribution** — making "clone and run" true, and the back-translator panel policy | **Done 2026-09-29** — `llmlc bootstrap` fetches both uncommittable assets, the UI says when the instrument is incomplete, and the panel sits outside the scan set |
 | **S9** ✅ | README, **methodology page**, limitations | **Done 2026-11-03** — `docs/04 - Methodology.md`; a reader can reproduce a result and knows what it does not mean |
-| **S10** | **Public landing page** | The project is explicable to someone who has never run it |
+| **S10** ✅ | **Support table** — one model, every locale, five statuses | **Done 2026-11-03** — `/support`, a Support tab, and a TMS scheme adapter so it runs down a real 602-locale list |
+| **S11** | **Demo stand** — the method, step by step, in the browser | Someone who has never run the tool can watch a verdict being produced and see why |
+| **S12** | **Public landing page** | The project is explicable to someone who has never run it |
+| **S13** | **Human-in-the-loop estimation** — a speaker grades a language the instrument cannot | A language the machine cannot verify gets a verdict from someone who reads it, stored as its own evidence class |
 
 The stage numbering shifted at S8: the plan went calibration → README → landing page, and the distribution work between them turned out to be a stage of its own.
 
@@ -1076,3 +1079,155 @@ The limitations are the point of the stage. The ones that cost something to writ
 README changes: a *What it found* section with the four-engine table, the coverage ceiling, a short *What a result does not mean* list pointing into doc 04, and three corrections — the status block still said the calibration study was to come, `SCAN_TRIGGER` was documented with the library default rather than what compose sets, and `SCAN_TRIGGER_MAX_CALLS` was documented as 2000 against an actual 5000.
 
 **Still unwritten: a protocol for jobs 10–17.** The programme and the Catmint scan are recorded here and in `control_gap.json`, but neither has an entry in `experiments/protocols/`, and by convention 1 they should — written before the run, which is no longer possible for these. Whatever follows them gets one first.
+
+## Bring your own models (2026-11-03)
+
+Until now a run needed `AGGREGATOR_BASE_URL` plus one admin key: **one endpoint serving every model id**. That is how this project's own measurements were taken and it is a fine arrangement when you have such a gateway, but it is the narrow case, and it is not a shape a public cloner can reproduce. They have an OpenAI key, maybe a DeepSeek key, maybe something running on localhost — three endpoints and three keys, not one of each.
+
+**`CUSTOM_MODEL_LIST_PATH`** names a JSON file listing models one at a time, each with `model_title`, `model_id`, `api_key` and `v1_endpoint`. Resolution order is: the custom list, then the aggregator settings, then a refusal that names both routes. The JSON wins wherever both are present.
+
+### Why it is a routing client and not a parameter
+
+The pipeline takes one `client` and calls `complete(model, ...)` on it with three different models — the engine under test, the judge, and whichever back-translator qualified. Threading per-model credentials through `scan`, the ladder, `steps`, `judge` and `bt` would have touched every one of those signatures to carry something none of them has an opinion about.
+
+`RoutingClient` has the same shape as `OpenAICompatClient` and hands each model id its own underlying client. Nothing downstream changed. Per-model state stays attached to the model it was learned about, which matters for one thing in particular: which models reject `reasoning_effort` is discovered at runtime and cached per client, and a shared client would have mixed those observations across providers.
+
+### Failing before spending, not during
+
+Two guards, both before the first paid call:
+
+- **Nothing configured** is a named refusal carrying both routes, not a confusing failure further down. Same rule as the bootstrap check (convention 10).
+- **A model the list cannot reach** is refused with the list's contents named. This matters more than it first looks: a scan needs three models reachable, and two of them default to *this project's own ids* — `openai-gpt-4o-mini` as judge and the `gemini-3-6-flash, deepseek-v4-flash` panel. No stranger's file will hold those. Discovering that one language at a time, after paying for the first, is the bad version; `check_models()` reports all three at once with the fix.
+
+A *set but broken* list is an error and never degrades to "not configured" — that would send the reader to the wrong problem. Every parse failure names the file and the offending entry, because the thing failing is a person editing JSON by hand: missing field, blank placeholder, duplicate `model_id`, missing `models` key. The engine picker is the one place a broken list is swallowed, so a browse-only visitor still gets a page.
+
+`model_id` is the identity — request body, `--engine`, and the engine column on every result row — and `model_title` is display only, so renaming a title cannot strand a measurement. A title also resolves, so pasting the name shown in the UI gets a scan rather than a lecture about identifiers.
+
+### Two things that fell out of it
+
+**The file has to live under `./data`.** Compose mounts `./schemes` and `./data` and nothing else, so a list at the repository root is visible on the host and absent in the container — and the container is the documented way to run. The default is `data/models.json`, and the file-not-found message says why.
+
+**The CLI's back-translator default was the pre-S8 panel.** `runner.DEFAULT_PANEL` was updated when S8 moved the panel off the two models we scan; the three `--backtranslator` arguments in `cli.py` kept their own hardcoded copy of the old one, `gemini-3-8-flash,deepseek-v4-pro`. A CLI scan was therefore reading through models that are themselves under test — exactly what S8's policy exists to prevent, and invisible in the output except as the back-translator id stored on the row. Now all three take `runner.DEFAULT_PANEL`, `main()` is split so the parser can be inspected, and a test asserts there is only one spelling of the default. This is convention 15 again: a defect with no visible symptom needs a guard somewhere other than the output.
+
+---
+
+# S10–S13 — the public surface (planned 2026-11-03)
+
+Four stages, decided together because they share two pieces of machinery and one risk. The order is **support table → demo stand → landing → contribution**, and the landing deliberately sits third: it is the portfolio piece and it only needs the first two to exist, while contribution is the one stage that changes what kind of system this is.
+
+## The shared prerequisites
+
+Both P1 and P2 are needed by S10 and reused by everything after it. Neither is new functionality; both are definitions that currently exist in more than one place or in none.
+
+**P1 — a canonical reader per engine.** `gpt-4o` currently holds 500 result rows across **five** back-translators, so a table promising one row per language would show `de` five times. The data model is right (two instruments, two rows — convention 4), but a reader needs one answer. The rule: for an (engine, tag) pair, prefer the highest-priority panel member that qualified, then any other qualified reader, then `NO_INSTRUMENT` for deterministic negatives, and expose the rest behind a back-translator facet rather than hiding them. This is the open item the handoff has been carrying since the four-engine programme.
+
+**P2 — one definition of "status".** Five values, derived in a single function used by the API, the UI, the export adapters and the contribution flow. Not four:
+
+| status | derived from | why it is not one of the others |
+|---|---|---|
+| `supported` | eligible, graded by fact recall | |
+| `supported-via-dialect` | `inherited_from` is set | the tier is inherited as a placeholder; the variant itself was never probed (S6, convention 12) |
+| `unsupported` | `deterministic-negative` | *proven* — the gate convicted it locally, and needs no control |
+| `unverifiable` | `unverified` | the model wrote something and no reader could be qualified. **Not** a model failure, and reporting it as one is the error protocol 005 exists to prevent |
+| `unchecked` | no row | never probed |
+
+`unverifiable` earns its own label on the numbers alone: in the 602-locale scan it is 115–118 rows per engine, the largest bucket, and it is exactly the set S13 exists to drain.
+
+Status follows **eligibility**, not the tier: `Proficient` and `Assisted` both read as `supported`, and the adequacy number carries the quality. That is the existing architecture rather than a simplification of it — eligibility decides membership, adequacy is the measurement (protocol 018). The pending protocol on the `Assisted`/`Proficient` cut may yet split this into a third positive label; the function is the one place that would change.
+
+**On the "confidence score".** There isn't one, and inventing one would be the wrong answer. What exists per row is `s_content` (the measurement), a 90% bootstrap interval over its items, and a `borderline` flag. The table shows the number plus a three-state badge derived from interval width and `borderline`. Rows with status `unsupported` show **no number**: their `s_content` is 0.0 by construction, not by measurement, and rendering "0.00" invites reading a convention as a result.
+
+## S10 — the support table
+
+One model, every locale in the active scheme, five statuses, a number, and nothing else. Searchable by tag, name and endonym; filterable by status; counts per status; the current view exportable.
+
+Scheme-driven rather than hardcoded to 602: the page is the user's own locale list left-joined onto results, which is what `schemes/` has always been for. One caveat to handle — the 602-tag list fits in a single response and can be filtered client-side, the 9,589-tag public catalogue cannot, so breadth above a threshold paginates.
+
+## S11 — the demo stand
+
+The page is the easy half. `probe/steps.py` already splits the pipeline into exactly the primitives worth stepping through — `generate_and_gate`, then `judge_item` — and qualification is separable too.
+
+**The hard half is not writing a second pipeline.** Convention 11 says `runner.py` is the only definition of "run a scan", and convention 9 records what breaking it cost: an analysis harness re-implemented a production call, got it subtly wrong, and 68 bad verdicts reached a protocol's conclusions. A step-by-step page is a second traversal of the ladder and will drift the same way.
+
+So S11 begins as a refactor: **the ladder becomes a generator** that yields a typed event per step — designator trial, generation and gate verdict, qualification attempt, back-translation, judgement, final scoring. `runner` drains it in one go and behaves exactly as now, with the existing tests as the guard; the demo steps it one click at a time. Auto mode drains; interactive mode waits between events and shows what happens next.
+
+The explanatory text for each step ships **with the event, from the server**, beside the code it describes. Keeping it in the page is how it goes stale the first time a threshold moves.
+
+**Edited hints are a method change, and are quarantined.** A run whose spec the user rewrote is not comparable to anything (convention 4). Demo sessions write to the corpus so the output can be inspected, and write a `result` row only when the specs are untouched.
+
+## S13 — contribution, inverted
+
+The obvious design is to let a speaker run a test and record their verdict. **Decided against**, on the project's own evidence: a native speaker saying "this looks like good Venda" is self-report, and doc 02 exists because self-report about language support cannot be trusted. Admin moderation does not fix the evidence class, and it does not scale — the admin does not speak Venda either.
+
+**What a speaker has that nothing else does is the ability to write their language.** So the ask is four parallel sentences, not a verdict. That creates a *control*; a control qualifies a back-translator; a qualified reader lets the **machine** grade that language — for every engine, now and for every model measured later. A verdict is worth one cell. A control is worth the row, permanently.
+
+The flow:
+
+1. The estimator picks a row the table shows as `unverifiable` or `unchecked`. The list is pre-ranked: `data/results/control_gap.json` already says which locales buy the most per control text — 27 attempted by three or more engines, of which 26 still need text.
+2. They write the target-language side of four sentences whose English meaning is fixed. Free, no API call.
+3. **Mechanical validation**, in cost order: the local gate first (script, then GlotLID — is this that language at all?), then an attempt to qualify a panel member against it by chrF++.
+4. If a reader qualifies, the real measurement runs for that language, and the row flips from `unverifiable` to a graded status — *measured*, not attested.
+
+Contributed controls stay a distinct provenance from FLORES and from the hand-seeded three, and a result graded through one says so.
+
+**S13 must be preceded by a protocol**, per convention 1, and the hypothesis is testable before any contributor is involved: hold out FLORES text for a language, submit it through the contribution path as if a stranger had typed it, and measure whether four contributed sentences qualify a reader as reliably as the shipped control does. If they do not, the pipeline is not ready for strangers.
+
+### Scope, decided 2026-11-03: the estimator is the owner
+
+The first draft of this stage assumed strangers on the public internet, and therefore identity, per-session quotas, a revisited scan trigger and abuse handling for a published free-text field. **That is out of scope and deliberately so.** The estimator is the person running the tool — someone who speaks the language, or who has access to someone who does. There are no sessions, no accounts and no shared budget, because there is still no second user.
+
+What this buys is that **S13 no longer changes what kind of system this is.** It runs on the same single-user, loopback-bound deployment as S10 through S12, and the architecture written into the README and the port binding survives intact. Anyone who wants to expose this publicly forks it and brings their own SSO, rate limiting and abuse handling; the README should say so plainly rather than implying the tool is ready for it.
+
+Two things survive the simplification because they are not about access control:
+
+- **A licence grant on contributed text.** Still needed the moment a contributed control is published alongside the FLORES-derived ones, which are CC BY-SA. Provenance stays per entry regardless of who typed it.
+- **A protocol before the pipeline is trusted**, below. Being your own contributor does not make the question "does four sentences of hand-written text qualify a reader as well as FLORES does" any less empirical.
+
+**Open, for when S13 starts:** whether the estimator supplies *control text* (four sentences, unlocking machine grading of that language for every engine, permanently) or a *verdict* (reading the model's output and grading it directly, which is faster and works for any language but is human-attested rather than measured). Both are defensible now that the moderation and scale objections are gone, and they are complementary rather than exclusive. A verdict needs its own `Evidence` value, must never mix into `s_content`, and must render differently everywhere it appears. S10's status function is built to take that extra branch without being rewritten.
+
+## S12 — the landing page
+
+Three doors, matching the three things a visitor can want: **see the results** (S10), **watch the method work** (S11), **contribute** (S13). Plus the two exhibits that make the method credible rather than merely plausible — the invented-language control (doc 02) and 15 of 15 against 0 of 15 on script (protocol 016) — and the limitations, prominently, from `docs/04`.
+
+Placed after S11 and before S13 because it needs the first two to have anything to point at, and because a read-only landing costs nothing in exposure while contribution costs a great deal.
+
+## S10 — the support table (2026-11-03)
+
+One model, every locale in a scheme, one row each, five statuses and a number. The page a non-specialist reads; the Results tab is where someone asking *why* is sent.
+
+### The two prerequisites, as planned
+
+**`llmlc/support.py` — one definition of status.** Five values. `unverifiable` is its own, and the measurements say why: against the 602-locale list, deepseek returns 132 of them. Folded into `unsupported` that would be a model failure reported where there was an instrument failure; folded into `unchecked` it would claim nobody looked.
+
+Status follows **eligibility**, not the tier: `Proficient` and `Assisted` both read as `supported`, and the adequacy number carries the quality. Two orderings matter and are tested. Evidence is consulted before inheritance, so a variant of a language the model cannot write is `unsupported` rather than `supported-via-dialect`; and a `fact-recall` row that still came out `Unusable` is a proven negative however it got there.
+
+Confidence is derived from the interval width alone (high ≤ 0.20, medium ≤ 0.40), and `borderline` is published **beside** it rather than blended in, because they say different things — the same reasoning that keeps tier and availability apart (protocol 011). A row with no measurement shows no number at all: a deterministic negative stores `s_content` 0.0 by construction, and rendering it invites reading a convention as a result.
+
+**`api/support_table.py` — a canonical reader per engine.** gpt-4o holds 500 rows across five back-translators. The table prefers the highest-ranked panel member, then `NO_INSTRUMENT` (a deterministic negative is comparable against every reader, convention 14), then anything; ties break towards the most recent. Matching sees through the pivot suffix, so `remote:model@de` still counts as its panel member. What was collapsed is **counted and stated** in the footer rather than quietly dropped — showing one of five readers silently is how a reader comes to believe there was only ever one.
+
+### Capping, and a bug the browser found
+
+The page loads the whole table and filters client-side, which is right for a few hundred rows. The first version capped a large scheme with a flat alphabetical slice, and driving the page in a headless DOM caught what that does: **the counts said 29 `unverifiable` and the table could only ever show the 5 that fell inside the first 2,000 rows**, while a search for "swahili" found *Cutchi-Swahili* and not Swahili. Filters that silently cannot reach their own counts are worse than no filters.
+
+The cap now drops `unchecked` rows first and never a measured one. An unchecked row carries nothing but its tag; a measured one is the point.
+
+## The TMS scheme adapter, and two findings
+
+`scripts/build_scheme_from_tms.py` turns a TMS locale list into a scheme. The core speaks canonical BCP-47 (`ace-Arab`); this TMS writes `ace-id-arab` — lowercase, region before script — which is exactly what `scheme.loader.SchemeAdapter` anticipated. A build step rather than a runtime translation, so the mapping is a file a person can read and correct.
+
+**590 of 602 resolve**: 567 on the tag itself, 23 through the ISO 639-3 macrolanguage mapping. The scheme is keyed by the **TMS tag**, so all 602 locales appear as 602 rows rather than collapsing onto the ~200 canonical tags behind them, and `cls` comes from the canonical language so the ladder still probes eleven Arabic locales once.
+
+A result found under a scheme's canonical alias is labelled `supported-via-dialect`, not `supported`. `ar-eg` showing what was measured for `ar` is a weaker claim than a measurement of `ar-eg`, and conflating them would have reported 264 supported locales for deepseek where the honest split is **70 measured directly and 194 inherited**.
+
+### Resolving on the ISO code alone is unsafe, twice over
+
+Two attempts at a looser fallback are recorded in the script because both produced confident nonsense:
+
+1. **Shortest matching tag.** `cmn-cn` resolved to Chinese **Braille**, `arb-latn` to Arabic in **Hebrew** script, `khk-mn` to Mongolian in **Phags-pa**.
+2. **Only where the code is unambiguous.** Still wrong: the catalogue's only `zsm` tag *is* the Braille one, so Standard Malay resolved to Malay Braille.
+
+Each would have attached a locale to the wrong equivalence class and then inherited a measurement from it — a wrong answer wearing the clothes of a right one, invisible in the output. The macrolanguage mapping replaced both because it is data rather than a guess. **An unresolved locale is still scannable; a misresolved one is a false claim.** Same rule as protocol 019: abstain rather than convict.
+
+### Finding: the shipped catalogue has no unqualified Chinese tag
+
+Four of the twelve unresolved locales are Chinese — `zh`, `zh-hans`, `zh-hant`, `cmn-cn` — and they fail for a reason worth fixing rather than working around. The catalogue holds `zh-CN`, `zh-AU`, `zh-Hans-HK`, `zh-Hans-MO`, `zh-Hans-MY` and 32 others, but **no bare `zh` and no plain `zh-Hans`**, so no locale list naming generic Chinese can resolve. The programme measured `zh-CN` and `zh-AU`. This is a defect in `scripts/build_default_scheme.py`'s output, not in the adapter, and it is left for its own change: inventing a `zh` here would put a tag in a user's scheme that the catalogue does not agree exists.
