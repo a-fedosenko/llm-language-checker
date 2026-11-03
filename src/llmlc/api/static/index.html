@@ -103,8 +103,8 @@
           background: var(--card); border-radius: 4px; padding: 10px 14px; margin-bottom: 10px; }
   .step.is-terminal { border-left-color: var(--accent); }
   .step h4 { margin: 0 0 4px; font-size: 16.2px; }
-  .step .why { color: var(--muted); margin: 0 0 8px; max-width: 80ch; }
-  .step .rung { float: right; font-size: 14px; color: var(--muted); }
+  .step .rung { float: right; font-size: 14px; color: var(--muted); cursor: help;
+               border-bottom: 1px dotted var(--line); }
   .step pre { white-space: pre-wrap; word-break: break-word; margin: 6px 0 0;
               background: var(--bg); border: 1px solid var(--line); border-radius: 3px;
               padding: 8px 10px; font-size: 15px; }
@@ -751,6 +751,17 @@ for (const b of document.querySelectorAll('nav button')) {
 // generator a scan drains.
 let demo = { id: null, specs: null, shipped: null, running: false, help: null };
 
+// The ladder's three rungs, named. "Rung" is the project's own word for them --
+// it is the column on every stored result -- but a number on its own tells a
+// first-time reader nothing, and this page exists for first-time readers.
+const RUNG_NAME = { 1: 'designator sweep', 2: 'judging', 3: 'tie-break' };
+const RUNG_HELP = {
+  1: 'Rung 1: try each candidate name for the language, scored by the local gate alone. No paid grading yet, which is why most negatives cost nothing.',
+  2: 'Rung 2: qualify a reader, then back-translate and judge what cleared the gate. A clear result stops here.',
+  3: 'Rung 3: the interval straddled the tier cut, so more items are run to tighten it rather than rounding a number that cannot be stated flatly.',
+};
+const rungLabel = n => `rung ${n}${RUNG_NAME[n] ? ' · ' + RUNG_NAME[n] : ''}`;
+
 async function loadDemo() {
   if (!demo.help) demo.help = await j('/demo/help');
   if (!demo.shipped) {
@@ -970,7 +981,8 @@ function renderStep(s) {
   const rows = [];
   const add = (k, v) => { if (v !== null && v !== undefined && v !== '') rows.push([k, v]); };
   add('gate', d.gate); add('detail', d.gate_detail);
-  if (d.lid) add('identified as', `${d.lid.label} (${d.lid.score})`);
+  if (d.lid) add('identified as',
+    `${d.lid.label} (${d.lid.confidence}${d.lid.backend ? ', ' + d.lid.backend : ''})`);
   add('designator', d.designator);
   add('reader', d.backtranslator); add('status', d.status);
   if (d.score !== undefined && d.kind) add('chrF++', d.score);
@@ -981,8 +993,9 @@ function renderStep(s) {
                 add('workflow', d.workflow); }
   const texts = [];
   // The prompt first, and verbatim. What was asked is the part you cannot
-  // reconstruct from the answer, and it is where a designator that does not
-  // say what you thought it said becomes visible.
+  // reconstruct from the answer, and it is where a designator that does not say
+  // what you thought it said becomes visible — which is how `sr-RS` and `sr-ME`
+  // were found to be the same experiment.
   if (d.prompt) texts.push(['asked', d.prompt]);
   if (d.generation) texts.push(['generated', d.generation]);
   if (d.back_translation) texts.push(['read back', d.back_translation]);
@@ -990,11 +1003,13 @@ function renderStep(s) {
   const total = Object.values(calls).reduce((a, b) => a + b, 0);
   $('#d-cost').textContent = `${total} call(s): ` +
     Object.entries(calls).map(([k, v]) => `${k} ${v}`).join(', ');
+  // No `explains` here. The Next box has just said it, word for word, and a
+  // paragraph repeated on every card pushes the thing you came to read -- the
+  // prompt and the answer -- below the fold.
   $('#d-steps').insertAdjacentHTML('beforeend', `
     <div class="step t-${esc(s.tone || 'none')} ${s.terminal ? 'is-terminal' : ''}">
-      <span class="rung">rung ${s.rung}</span>
+      <span class="rung" title="${esc(RUNG_HELP[s.rung] || '')}">${esc(rungLabel(s.rung))}</span>
       <h4>${esc(s.title)}</h4>
-      <p class="why">${esc(s.explains)}</p>
       <div class="verdict">${esc(s.summary)}</div>
       ${rows.length ? `<dl>${rows.map(([k, v]) =>
         `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}

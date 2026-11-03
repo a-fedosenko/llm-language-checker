@@ -143,32 +143,49 @@ def test_the_listing_shows_open_sessions(client):
 
 # -- saying what the run will actually ask for -------------------------------
 
-def test_two_tags_in_one_class_are_declared_as_the_same_experiment():
-    """`sr-RS-Cyrl` and `sr-ME-Cyrl` produce the identical prompt, so running
-    both looks like two measurements and is one, repeated. That is the design
-    (protocol 010 rejected country-qualified designators; the variant
-    distinction belongs to marker sets) — but a design you can only discover by
-    running the same thing twice and noticing is not one anyone can check."""
-    from llmlc.api.demo import plan_for
-    from llmlc.scheme import load_scheme
-
-    scheme = load_scheme("default")
-    a = plan_for(scheme, "sr-Cyrl-ME")      # Serbian as written in Montenegro
-    b = plan_for(scheme, "sr")              # and in Serbia; the catalogue's bare tag
-    assert a["primary"] == b["primary"] == "Serbian (Cyrillic script)", \
-        "the premise of this test has changed: the prompts now differ"
-    assert a["cls"] == b["cls"]
-    assert "sr" in a["siblings"] and "sr-Cyrl-ME" in b["siblings"]
-
-
-def test_a_region_the_prompt_does_not_name_is_reported():
+def test_the_region_reaches_the_prompt_by_name_not_by_code():
+    """Method 3.0.0. A model has no reason to read `ME` as a place, so the
+    designator carries "Montenegro"."""
     from llmlc.api.demo import plan_for
     from llmlc.scheme import load_scheme
 
     plan = plan_for(load_scheme("default"), "sr-Cyrl-ME")
-    assert plan["region"] == "ME"
-    assert "region" in plan["unnamed_subtags"]
-    assert "ME" not in plan["primary"]
+    assert plan["region"] == "ME" and plan["region_name"] == "Montenegro"
+    assert plan["primary"] == "Serbian (Montenegro, Cyrillic script)"
+    assert plan["unnamed_subtags"] == []
+
+
+def test_a_region_with_no_name_is_reported_as_unnamed():
+    """The catalogue names 9,490 of 9,589 regions. For the rest the prompt
+    cannot say where, and the page has to say that rather than imply it did."""
+    from llmlc.api.demo import plan_for
+    from llmlc.scheme import load_scheme
+
+    scheme = load_scheme("default")
+    nameless = next((t for t, l in scheme.languages.items()
+                     if l.region and not l.region_name), None)
+    if nameless is None:
+        import pytest
+        pytest.skip("this catalogue names every region it carries")
+    plan = plan_for(scheme, nameless)
+    assert plan["unnamed_subtags"] == ["region"]
+
+
+def test_siblings_that_now_diverge_are_flagged_as_inheriting_anyway():
+    """The sharp edge of naming the region. `sr-Cyrl-ME` and `sr` are asked
+    different things now, but they still share the class `srp|Cyrl` — and a
+    scan probes a class once and the rest inherit. So the demo shows a prompt a
+    scan would never send, and has to say so."""
+    from llmlc.api.demo import plan_for
+    from llmlc.scheme import load_scheme
+
+    scheme = load_scheme("default")
+    a = plan_for(scheme, "sr-Cyrl-ME")
+    b = plan_for(scheme, "sr")
+    assert a["cls"] == b["cls"], "the premise has changed: classes now differ"
+    assert a["primary"] != b["primary"], "the region is no longer reaching the prompt"
+    assert "sr" in a["divergent_siblings"]
+    assert a["sibling_designators"]["sr"] == b["primary"]
 
 
 def test_the_plan_reaches_the_session_before_anything_is_spent(client):
