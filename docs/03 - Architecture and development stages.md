@@ -1300,3 +1300,29 @@ Closing it means splitting equivalence classes by region, and the cost is measur
 ### Smoke test, n = 1
 
 `deepseek-v4-pro`, one scenario: `sr-rs-cyrl` produced *"Ишла је **пе**шице"* and `sr-me-cyrl` produced *"**Пје**шачила је"* — the ekavian/ijekavian alternation, which is the standard marker between the two varieties rather than an arbitrary difference. One item, one model, no sampling control. It is a reason to run protocol 020, not a result from it.
+
+## After S11 — what the demo stand exposed (2026-11-03/04)
+
+Driving the pipeline one step at a time, over languages someone actually reads, surfaced more defects in two days than the test suite had in a month. None of them were in the code the demo added; all were in code the demo made visible.
+
+**The region never reached the prompt.** `region_name` was a parameter in `designator.py` that no caller had ever passed, so `sr-RS-Cyrl` and `sr-ME-Cyrl` produced the identical prompt and the identical verdict. Method 3.0.0, above.
+
+**The shipped catalogue carried no region names.** The builder was taught to read langtags' `regionname` and the committed `schemes/default.json` was never regenerated — so 3.0.0's headline change was dead for everyone using the shipped list. 9,490 of 9,589 tags now carry one.
+
+**`sr-Latn` had no control, and then had one that could not be found.** FLORES ships Serbian in Cyrillic only. `bt/translit.py` derives the Latin control by transliteration — legitimate here, and only here, because Serbian is digraphic with a deterministic mapping; it is forward-only and refuses rather than half-converting. Then the lookup still failed, because it resolved the tag against the public catalogue while the run was using a TMS list. Fixing that by reading `settings.scheme` fixed the CLI and left the container untouched, since a request carries its own scheme: the scheme is now threaded through `route` → `qualify` → `_script_sibling`, with a test asserting the parameter exists.
+
+**The marker instrument was English-shaped.** `INFLECTIONS` is `s|es|ed|ing|'s`, so against real Serbian the markers `ријека` and `река` *both* missed — the sentence had the genitive. Any marker set for a fusional language was unscoreable while looking scoreable. Three additions: **stem markers** (`пјешач-`), **worked examples verified at load time**, and **`also`** so one set serves every spelling of a language.
+
+**The marker probe called the gate with different arguments from the ladder** — no `relatives`, no `accept_lang` — so it could not reach `relative_substitution` and convicted Latin Serbian as `wrong_language`. Two call sites of one function disagreeing about the same text.
+
+**A page reload stranded a demo session.** Four of them filled the cap and locked the tab out for an hour with no way to reach them. The id now survives in `sessionStorage`, orphans are listed with resume and close, and the refusal names where to look.
+
+### The one that is not a defect
+
+**Serbian in Latin script cannot be marker-probed**, and should not be forced. GlotLID reads ijekavian Serbian in Latin as Bosnian or Croatian, correctly — the three written standards overlap almost entirely in that script. Making it work means adding `bos`/`hrv`/`cnr` to Serbian's accept list, which **widens what counts as a pass**. That is a methodology change needing a protocol, not a config edit made because it unblocks the work in hand. Recorded in `markers/serbian.json` and carried forward.
+
+## The dialect question, reopened (2026-11-04)
+
+The owner's assessment after using the demo: the scan method "is not precise at all as it ignores regional differences." Correct, and the cause is the equivalence class `iso639_3|script` — a scan probes one tag per class and the rest inherit, so five Serbian locales are measured once, through bare `sr`, which has no region. The collapse is what makes 602 locales cost 363 experiments, and it is also what makes the scan dialect-blind.
+
+The numbers, the reframe worth testing first (ladder per class plus a 4-call marker probe per variant, against 9–15 calls per extra class), the counter-case that would decide it (does *base capability* differ by region, which markers cannot see), and the two decisions it blocks are all at the top of `docs/HANDOFF.md`, because that is where the next session starts. **A new session is being opened specifically for this**; nothing should be re-run until it concludes.

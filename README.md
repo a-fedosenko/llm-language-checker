@@ -4,7 +4,7 @@
 
 Vendor language lists are marketing. "Supports 100+ languages" has no definition behind it, and for the long tail nobody publishes anything at all. This project measures it instead: you point it at a model, it generates text, checks the text, and reports a graded verdict with its evidence and its uncertainty.
 
-> **Status: working, and used.** The pipeline, persistence and UI run end to end; the method is validated by nineteen recorded experiments (`experiments/protocols/`); four models have been measured across 199 languages. What remains thin is dialects — the mechanism works, but marker sets exist for 2 of 534 variant tags. **[Read the methodology](docs/04%20-%20Methodology.md)** for how a result is produced and, at equal length, what it does not mean.
+> **Status: working, and used.** The pipeline, persistence and UI run end to end; the method is validated by nineteen recorded experiments (`experiments/protocols/`); four models have been measured across 199 languages. What remains thin is dialects — marker sets exist for 7 of 534 variant tags, and whether the measurement is even shaped right for regional variants is an open question (`docs/HANDOFF.md`). **The published figures are method 2.0.0**; 3.0.0 changed the generation prompt and nothing has been re-measured under it yet. **[Read the methodology](docs/04%20-%20Methodology.md)** for how a result is produced and, at equal length, what it does not mean.
 
 ## What it is not
 
@@ -196,7 +196,7 @@ The short version of [the methodology's limitations section](docs/04%20-%20Metho
 - **`Assisted` is a wide band**, spanning fact recall from 0.00 to 0.93. Five languages scored exactly 0.00 — fluent text in the right language carrying none of the requested meaning — and route identically to one scoring 0.90.
 - **Swapping a qualified reader moves 13% of tiers**, at a mean content delta of 0.000. Unbiased on average, noisy per language.
 - **Fact recall saturates**: 84% of items score 1.0, so above the floor it has little resolution.
-- **Dialects are the least proven claim** — marker sets exist for 2 of 534 variant tags, both English, both unreviewed.
+- **Dialects are the least proven claim** — marker sets exist for 7 of 534 variant tags, all unreviewed, and a scan still probes one tag per `language|script` class, so regional variants inherit rather than being measured.
 - **Three sentences is the whole sample.** Nothing here speaks to document-length behaviour.
 
 ## Watching it work

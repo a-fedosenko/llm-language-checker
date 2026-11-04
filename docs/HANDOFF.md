@@ -12,9 +12,57 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/02 - Experiment - invented language control.md` — why self-reported language support cannot be trusted
 - `docs/03 - Architecture and development stages.md` — architecture, data model, staging, implementation log. **Read "Services as built" before believing the five-service diagram above it**, which is the S0 plan and was never built
 - `docs/04 - Methodology.md` — the reference page, written at S9: every pipeline step with the protocol that settled it, and a limitations section of the same length
-- `experiments/protocols/README.md` — nineteen protocols. **016 and 018 matter most**; then 019, 017, 005, 012
+- `experiments/protocols/README.md` — twenty protocols. **016 and 018 matter most**; then 019, 017, 005, 012. **020 is written but not run**, and gates the programme re-run
 
-**State:** S0–S9 complete. 298 tests. Method version **2.0.0**; 1,559 result rows across jobs 1–17.
+**State:** S0–S11 complete. 436 tests. Method version **3.0.0** — and **every one of the 1,564 stored rows is stale**, because 3.0.0 changed the generation prompt. Nothing in the UI reflects the current method. Re-running the four-engine programme is ~14,200 calls, and two decisions below should be settled first.
+
+---
+
+# Next session: the dialect problem
+
+This is what the session is for. Everything else below is background.
+
+**The complaint, in the owner's words:** the scan method "is not precise at all as it ignores regional differences."
+
+That is correct as stated, and the cause is one line of the data model: the equivalence class is **`iso639_3|script`**. A scan probes one tag per class and the rest inherit, so `srp|Cyrl` holds `sr`, `sr-BA`, `sr-Cyrl-ME`, `sr-XK` and is probed **once — through bare `sr`, which carries no region**. The class collapse is what makes 602 locales cost 363 experiments; it is also what makes the scan dialect-blind. The thing that makes it affordable is the thing that makes it imprecise.
+
+## The numbers to think with
+
+| | |
+|---|---|
+| TMS list | 602 tags, 363 classes, **239 inherit** rather than being probed — **227 of those differ only by region** |
+| public catalogue | 9,589 tags, 9,055 classes, 534 inherit, all 534 by region |
+| marker sets authored | **7 of 534** variant tags — en-AU, en-GB, and the Serbian sets (ru-BY is a declared non-difference) |
+| full ladder run | ~9–15 calls per class |
+| marker probe | **4 calls** per variant tag |
+
+## The reframe worth testing before redesigning anything
+
+S6 already split this into **two measurements**, and they are not the same question:
+
+- the **ladder**, per class — *can the model write this language at all*
+- the **marker probe**, per variant tag — *does it mark this region*
+
+So "measure every region" need not mean running the ladder 227 more times (~2,050 calls/engine). It can mean ladder-per-class plus a 4-call marker probe per variant (~910 calls/engine), which is less than half the cost **and measures the right thing** — re-running the ladder for `sr-ME` would mostly re-measure whether the model writes Serbian, which is already known.
+
+On that reading the architecture is right and the gap is **authoring throughput**: 7 marker sets exist because each one needs somebody who reads the language. Serbian took an afternoon and is still `reviewed: false`.
+
+**The counter-case, which may be decisive.** A model's *base capability* could differ by region — fluent `ar-EG`, poor `ar-MA` — and no marker set would catch that, because markers measure marking, not adequacy. If that happens, the class collapse really is wrong and the 65% is justified. **It is cheap to test on one language before deciding for all of them**: run the ladder directly on two regional tags of one macrolanguage and compare adequacy, not markers.
+
+## What is already built that bears on it
+
+- **Method 3.0.0 puts the region in the prompt** — `Serbian (Montenegro, Cyrillic script)`, in a system message casting the model as a speaker of that variety. Verified to change the output: `дете` against `дијете`. **But it is inert in a scan**, because the class representative has no region. It only fires where a tag is probed directly, which is what the demo stand does.
+- **`variant_evidence` has four states** (proven / proven-failed / not-distinguishable / untested) so the remaining work stays countable.
+- **The marker instrument grew three things** while authoring Serbian, all in `probe/markers.py`: **stem markers** (`пјешач-`) because the inflection list was English-only and any Slavic set silently scored near zero; **worked examples checked at load time**, which is the only guard available to an author who cannot read the language, and which caught a real error on the first draft; and **`also`**, so one set serves every spelling of a language.
+- **`markers/serbian.json`** — 58 index-aligned pairs on the yat reflex, Cyrillic and Latin. Cyrillic works end to end (`proven`, rate 1.00). **Latin cannot be probed**: see the carried-forward item below.
+
+## The two decisions this blocks
+
+1. **Split equivalence classes by region?** +239 probes on the TMS list, ~+2,150 calls per engine, **~65% more per scan**. Do not re-run the programme before settling it, or it gets run twice.
+2. **Protocol 020** (`experiments/protocols/020-region-aware-prompts.md`) — hypotheses recorded, **not run**. It tests whether naming the region works and whether it reintroduces protocol 010's failure. ~400 calls, against a 14,200-call re-run. Its H1 would be a much better experiment with the Serbian marker set as the metric rather than chrF++ between two generations.
+
+---
+
 
 **Four engines are measured across 199 languages** (2026-09-29/30, jobs 10–13, ~8,900 calls). That is every living language for which a back-translator control exists — see *Coverage* below, because the number is a constraint, not a choice.
 
@@ -47,7 +95,7 @@ python -m pytest -q                # note: bare `pytest` misses the rootdir
 python scripts/run_programme.py --base http://localhost:8089   # the cross-engine programme, over HTTP
 ```
 
-The UI has five tabs: **Results** (paged, faceted, a row expands to its items and evidence), **Resolution** (what each tag actually got you), **Variants** (dialect evidence and the marker gap), **Scan** (plan for free, then start one), **Jobs** (per-class progress, cancel, history). Every block title and column heading carries an info icon defining the term; those definitions live in a single `HELP` dictionary in `index.html`.
+The UI has seven tabs: **Support** (the default: one model, every locale, five statuses), **Demo** (the pipeline over one language, step by step), **Results** (paged, faceted, a row expands to its items and evidence), **Resolution** (what each tag actually got you), **Variants** (dialect evidence and the marker gap), **Scan** (plan for free, then start one), **Jobs** (per-class progress, cancel, history). Every block title and column heading carries an info icon defining the term; those definitions live in a single `HELP` dictionary in `index.html`.
 
 Schema changes are Alembic's. A database made by `create_all()` has no version row, so migrating one for the first time needs `alembic stamp fb431915efe4 && alembic upgrade head`.
 
@@ -107,7 +155,7 @@ Beyond that set nobody can be qualified, so the honest output is `unverified`. *
 
 ## Needs Andrei, not the agent
 
-- **Dialects.** Marker sets exist for **2 of 534 variant tags**, both English — which is also the pivot and the easiest possible case — and both `reviewed: false`. The method is untested where it would be load-bearing (`ar-EG` vs `ar-MA`). Drafting is model-plus-human-review, per doc 01. This is the most distinctive claim the tool makes and the least proven.
+- **Dialects — now the live question; see the section at the top.** Marker sets exist for **7 of 534 variant tags**: en-AU, en-GB, and Serbian ijekavian in both scripts. All `reviewed: false`, and **the Serbian ones want a speaker's eye** — they were drafted by someone who does not read the language, which is why the loader checks them against worked examples. The method is still untested where it would be most load-bearing (`ar-EG` against `ar-MA`), and whether marker probing is even the right instrument there is the open question.
 - **Control texts** for the Catmint locales FLORES lacks. The gap is now ranked rather than guessed: `data/results/control_gap.json` names **27 locales attempted by three or more engines**, of which only `ko` turned out to be free from FLORES — so 26 texts, each buying three or four engines' worth of unknown. Same kind of job as the markers.
 - **Whether to build the local GPU back-translator.** Not built; the GPU is unused; `hardware.detect()` now reports `profile: api` with `capable_of: gpu-int8` rather than claiming MADLAD read the text. The argument for finishing it is **reproducibility**, not cost — a vendor endpoint cannot be pinned, and a published dataset whose instrument has been retired cannot be re-graded. Detection logic survives behind `hardware.LOCAL_BACKTRANSLATOR`. Do not switch instruments mid-programme: convention 4 would strand every existing result.
 
@@ -129,6 +177,8 @@ Beyond that set nobody can be qualified, so the honest output is `unverified`. *
 
 **S10 is done.** The **Support** tab is the default view: pick a model and a locale list, get one row per language with a five-value status (`supported` / `supported-via-dialect` / `unsupported` / `unverifiable` / `unchecked`), the adequacy number, and a confidence badge from the interval width. `llmlc/support.py` is the only definition of status; `api/support_table.py` owns the canonical-reader rule that collapses gpt-4o's five back-translators to one row per language, and says how many it collapsed. `scripts/build_scheme_from_tms.py` maps the 602-locale TMS list onto canonical tags (590 resolve) so the table runs down the real list — for deepseek that is 70 measured directly, 194 inherited, 46 unsupported, 132 unverifiable, 160 unchecked.
 
+**Since S11, and not yet written up as a stage:** method 3.0.0 (region in the designator, system/user split, alphabet rule — see doc 03); a derived Latin control for Serbian via `bt/translit.py`, which closed `sr-Latn` and fixed a lookup that resolved a user's own tag against the wrong scheme; the marker-instrument additions (stem markers, load-time examples, `also`); the Serbian marker sets; demo session recovery after a page reload; and a back-translator panel chooser that shows every qualification attempt. All in the git log with reasoning.
+
 **S11 is done.** The **Demo** tab runs the real pipeline over one language, step by step. The stage was a refactor before it was a page: `ladder_steps()` yields a `Step` after every action and returns the result, and `run_ladder()` is a *drain* over it — there is one traversal of the ladder, and `tests/test_ladder_steps.py` pins that stepping and draining reach the same score, designator, rung count, reader and call counts across five control-flow cases. Sessions live in memory (`api/demo.py`), capped at four, gated like `POST /scans`. Editing the hints marks the run `specs_modified` and keeps it out of `result` while still writing the corpus — verified live: an edited `ru` run finished Proficient, persisted nothing, and left all nine records on disk.
 
-**Remaining stages:** S12 public landing page · S13 human-in-the-loop estimation. Planned together at the end of doc 03 — read that before starting either. S12 needs only what S10 and S11 already built; S13 was rescoped to a single operator (no sessions, no quotas, no auth) and its open question is whether the estimator supplies control text or a verdict.
+**Remaining stages:** S12 public landing page · S13 human-in-the-loop estimation. Both are behind the dialect question and the programme re-run. Planned together at the end of doc 03 — read that before starting either. S12 needs only what S10 and S11 already built; S13 was rescoped to a single operator (no sessions, no quotas, no auth) and its open question is whether the estimator supplies control text or a verdict.

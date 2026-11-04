@@ -4,7 +4,9 @@ How llm-language-checker decides that a model can or cannot write a language, wh
 
 This is the reference page. `docs/01` holds the original design discussion and the reasoning behind choices that were made before anything was built; `docs/03` holds the architecture and the implementation log; `experiments/protocols/` holds the nineteen experiments that settled the open questions. This page is what you need to read a result and to reproduce one.
 
-**Method version 2.0.0.** Every stored result carries it, because the scale changed at 2.0.0 and rows either side of that line are not on the same scale.
+**Method version 3.0.0.** Every stored result carries it, and rows either side of a major bump are not comparable (§9).
+
+**No measurement has been taken under 3.0.0 yet.** It changed the generation prompt, so all 1,564 stored rows are from 2.0.0 and are marked stale. The four-engine figures quoted throughout this page are 2.0.0 results: they are the best evidence the project has and they describe a prompt the tool no longer sends. Re-running is ~14,200 calls and is deliberately on hold — see `docs/HANDOFF.md`.
 
 ---
 
@@ -62,6 +64,24 @@ This sits deliberately between the two obvious designs. *Translate this sentence
 
 Five specs ship in `data/specs/specs.json`. They are deliberately mundane and non-encyclopedic: a memorised Wikipedia opening cannot satisfy "an old man bought fish and the price had doubled."
 
+**The task and the material are separate messages** (3.0.0). The instruction is a system message and the scenario a user message. Two reasons, one of them testable: a single blob invites a model to *continue* the text rather than carry out the task, and the system half is identical for every item in a language's run, so a provider that caches will cache it.
+
+The system half also casts the model as a speaker of the variety rather than telling it to write in a language, and states the alphabet on its own line:
+
+```
+You are a native speaker of Serbian (Montenegro, Cyrillic script).
+
+Your task: write 3 sentences describing the situation the user gives you,
+using the grammar, spelling and vocabulary a native speaker of this specific
+variety would use.
+
+Write every word in the Cyrillic alphabet. Do not use any other alphabet,
+not even for names or single words.
+...
+```
+
+The alphabet line is not redundant with the designator. Asked for *Serbian (Montenegro, Cyrillic script)*, a model returned fluent, correctly ijekavian Montenegrin — in Latin. Montenegro uses both alphabets and Latin is commoner in practice, so naming the region pulls toward the region's script the way protocol 010 found it pulls toward the region's dominant language. Seen once in sixteen generations: rare, and fatal when it happens, because the gate convicts on script before anything else is looked at.
+
 The prompt also supplies the refusal channel: *If you cannot write X, reply with exactly CANNOT*. This matters — see §4.
 
 ### 3.2 Designator selection
@@ -82,7 +102,11 @@ Duplicate strings collapse but keep every candidate kind that proposed them, so 
 
 Script qualification is not cosmetic. The original rule was "name the script unless it is Latin", which is right for most languages and exactly wrong for the ones that matter: Kazakh's *marked* script is Latin, so `kk-Latn` was being asked for as plain "Kazakh", answered — correctly — in Cyrillic, and recorded as a failure to produce Latin Kazakh. It was the right answer to the question actually asked.
 
-Naming the country does not help and was dropped (protocol 010): it produced no gain and produced the single wrong-language output in that run.
+**The region is named, from 3.0.0** — `Serbian (Montenegro, Cyrillic script)`, spelled out rather than coded, because a model has no reason to read `ME` as a place.
+
+This reverses protocol 010's decision without contradicting its finding. 010 tested a bare `name (Country)` designator and found it pulls a model toward that country's dominant language — Swiss German became Standard German — and described itself as "underpowered by design: a screening test, not a measurement". What 3.0.0 does is a different intervention: the region is named *and* the model is told what to do with it, in a system message casting it as a speaker of that variety. Whether that difference holds is **protocol 020**, written with its hypotheses before the run and not yet run.
+
+Two things are already known regardless of how 020 turns out. It **measures instruction-following as much as dialect competence** — a pass means the model can comply when told, not that it marks the variant unprompted, which is what the marker mechanism measures and what doc 01 keeps out of the prompt on purpose. And it is **inert in a scan**: the equivalence class is `iso639_3|script`, so a scan probes `srp|Cyrl` once through bare `sr`, which has no region, and four regional variants inherit. The region reaches the prompt only for a directly probed tag.
 
 ### 3.3 The deterministic gate
 
@@ -238,7 +262,7 @@ calls         generation 3, backtranslation 3, judge 3
 backtranslator  remote:gemini-gemini-3-6-flash
   qualification  qualified, score 1.0, kind "facts"
 judge         openai-gpt-4o-mini              pivot       en
-method_version  2.0.0
+method_version  2.0.0   ← a stored row; no 3.0.0 measurement exists yet
 ```
 
 Read it as: under the designator *Chuvash (Cyrillic script)*, three generations were produced, all three were Chuvash in Cyrillic, all three were read back by a reader certified for Chuvash, and every specified fact survived the round trip.
