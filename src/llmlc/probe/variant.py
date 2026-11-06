@@ -259,3 +259,48 @@ def declared(tag: str, markers: MarkerSet) -> VariantResult:
 
 def untested(tag: str, reason: str) -> VariantResult:
     return VariantResult(tag, VariantEvidence.UNTESTED, "none", note=reason)
+
+
+class DialectVerdict(str, Enum):
+    """What a battery of attestation probes concluded about one variety.
+
+    A graded profile rather than a boolean, because the competences dissociate
+    and a single yes/no would hide which one was found. Each level names what
+    was *observed*, so a verdict explains itself without a reader having to
+    consult the probe definitions.
+
+    This sits alongside `VariantEvidence` rather than replacing it. The marker
+    states still describe how a variant was established where a marker set
+    exists -- the seven authored ones remain valid -- and these describe what
+    attestation found. Merging them would make `proven` mean two different
+    things depending on which instrument ran.
+    """
+
+    #: Nothing distinguished this variety from its neighbours. The honest
+    #: negative, and -- outside the calibration families -- the *weak* one: see
+    #: `NO_EVIDENCE` in the note below.
+    NO_EVIDENCE = "no-evidence"
+    #: The model can tell the variety apart but does not write it distinctly.
+    RECOGNITION_ONLY = "recognition-only"
+    #: The model writes it distinctly, confirmed blind by a qualified attestor.
+    PRODUCTION = "production"
+    #: Production, plus conversion on demand, plus doing it the same way twice.
+    FULL_COMMAND = "full-command"
+    #: No competent attestor was available, so nothing was measured.
+    #:
+    #: **A result, not a failure, and never folded into a negative.** "Nobody
+    #: could check" is a statement about our instrument; "the model cannot do
+    #: it" is a statement about the model. Reporting the first as the second is
+    #: the error protocol 005 exists to prevent, and it is the error that would
+    #: be easiest to make here, because for a rare dialect it is the common case.
+    INDETERMINATE = "indeterminate"
+
+
+#: Verdicts that assert the model can do something.
+POSITIVE = {DialectVerdict.PRODUCTION, DialectVerdict.FULL_COMMAND}
+
+#: Verdicts that assert nothing about the model, in either direction. Counted
+#: separately wherever a figure is quoted, for the same reason `Unusable` and
+#: `unverified` are: conflating "proven absent" with "not measurable" is how a
+#: limit of the instrument comes to be published as a property of the model.
+NOT_A_CLAIM = {DialectVerdict.INDETERMINATE}

@@ -191,3 +191,62 @@ class Qualification(Base):
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     method_version: Mapped[str] = mapped_column(String(32))
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Capability(Base):
+    """What one model can do with one variety, in one role.
+
+    Mirrors `Qualification`, which is already a per-(instrument, language)
+    competence cache keyed by method version, and for the same reason: measuring
+    one engine puts every panel member through controls for the same family, so
+    the finding is reusable and paying for it twice is waste.
+
+    **Unique on (model, tag, role, method_version, script.)** Role is in the key
+    because the three competences dissociate -- a model can tell ijekavian from
+    ekavian and still mistranslate it -- and a row qualified for discrimination
+    says nothing about generation. Tag is in the key because judge competence is
+    per dialect, not per model: a strong engine can be a weak attestor for one
+    variety, and the record has to be able to say so.
+
+    The model id is the whole identity, by decision rather than oversight. A
+    vendor endpoint changes silently under a fixed id and we cannot pin what we
+    cannot verify, so `measured_at` carries the age and the honest reading of a
+    row is "this was true of whatever answered to that id on that date".
+
+    **This table routes; it never vouches.** It decides who is asked first.
+    Controls in the live run decide whether an answer is believed, and they run
+    every time regardless of what is stored here -- see `probe/panel.py`, where
+    the in-memory record deliberately exposes no method that would answer "is
+    this attestor trustworthy". A stale row costs wasted routing, never a wrong
+    verdict. Nothing may read this table to skip a control.
+    """
+
+    __tablename__ = "capability"
+    __table_args__ = (
+        UniqueConstraint("model", "tag", "role", "method_version", "script",
+                         name="uq_capability_identity"),
+        Index("ix_capability_tag_role", "tag", "role"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    model: Mapped[str] = mapped_column(String(128), index=True)
+    tag: Mapped[str] = mapped_column(String(64), index=True)
+    #: generation | discrimination | comprehension
+    role: Mapped[str] = mapped_column(String(32), index=True)
+    #: Part of the identity because one variety can be written in two scripts
+    #: and they are not the same measurement -- `sr-me-cyrl` is identified
+    #: cleanly where `sr-me-latn` is not distinguishable from Bosnian at all.
+    script: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
+    qualified: Mapped[bool] = mapped_column(default=False)
+    confidence: Mapped[str] = mapped_column(String(16), default="medium")
+    #: Which probes produced this, so a row can be read against the method that
+    #: made it rather than taken on trust.
+    probes: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Pointer into the corpus: the evidence a reader audits.
+    evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    method_version: Mapped[str] = mapped_column(String(32), index=True)
+    measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),
+                                                  default=utcnow, index=True)

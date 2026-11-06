@@ -218,3 +218,43 @@ def test_a_stale_rerun_still_cannot_clobber_a_fresher_row():
     assert status == "kept"
     with session() as s:
         assert [r.tier for r in results_for(s) if r.tag == "kk-Latn"] == ["Proficient"]
+
+
+def test_the_capability_migration_matches_the_model(tmp_path):
+    """A hand-written migration and a declarative model are two statements of
+    one schema, and they drift silently: the model is what tests exercise, the
+    migration is what a real database gets. A column present in one and not the
+    other shows up as an error only on somebody else's machine.
+    """
+    import sqlalchemy as sa
+
+    from llmlc.db.models import Base, Capability
+
+    url = f"sqlite+pysqlite:///{tmp_path/'mig.db'}"
+    engine = sa.create_engine(url)
+
+    import pathlib
+
+    from alembic import command
+    from alembic.config import Config
+
+    from llmlc.config import settings
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(root / "alembic"))
+
+    # `alembic/env.py` overrides `sqlalchemy.url` with `session.url()`, so
+    # setting it on the config is not enough -- without this the test migrates
+    # the *real* database, which already has its tables and fails with "table
+    # job already exists". Found exactly that way.
+    before = settings.database_url
+    settings.database_url = url
+    try:
+        command.upgrade(cfg, "head")
+    finally:
+        settings.database_url = before
+
+    migrated = {c["name"] for c in sa.inspect(engine).get_columns("capability")}
+    declared = {c.name for c in Capability.__table__.columns}
+    assert migrated == declared, f"drifted: {migrated ^ declared}"

@@ -165,3 +165,45 @@ def pending_items(s: Session, job_id: int) -> list[JobItem]:
     return list(s.scalars(select(JobItem).where(
         JobItem.job_id == job_id, JobItem.status.in_(("pending", "running")))
         .order_by(JobItem.id)))
+
+
+def get_capability(s: Session, model: str, tag: str, role: str,
+                   method_version: str, script: str | None = None):
+    from llmlc.db.models import Capability
+
+    return s.scalar(select(Capability).where(
+        Capability.model == model, Capability.tag == tag, Capability.role == role,
+        Capability.method_version == method_version, Capability.script.is_(script)
+        if script is None else Capability.script == script))
+
+
+def put_capability(s: Session, row: dict):
+    from llmlc.db.models import Capability
+
+    existing = get_capability(s, row["model"], row["tag"], row["role"],
+                              row["method_version"], row.get("script"))
+    if existing:
+        for k, v in row.items():
+            setattr(existing, k, v)
+        return existing
+    obj = Capability(**row)
+    s.add(obj)
+    return obj
+
+
+def capabilities_for(s: Session, tag: str, role: str, method_version: str,
+                     script: str | None = None) -> list:
+    """Every model's record for one variety and role.
+
+    The routing query, and the shape the record is published in: "which model
+    handles which dialect in which role" is plausibly more useful to a reader
+    than any single model's verdict.
+    """
+    from llmlc.db.models import Capability
+
+    stmt = select(Capability).where(
+        Capability.tag == tag, Capability.role == role,
+        Capability.method_version == method_version)
+    stmt = stmt.where(Capability.script.is_(None) if script is None
+                      else Capability.script == script)
+    return list(s.scalars(stmt))

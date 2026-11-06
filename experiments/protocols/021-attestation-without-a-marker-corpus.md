@@ -104,7 +104,19 @@ That invariant is **structural rather than documented**: `CapabilityRecord` expo
 
 Negatives are recorded alongside positives. A record holding only successes would read as a list of models that work while silently dropping the evidence that the others do not.
 
-**Verdict ladder**, extending `VariantEvidence`: `no-evidence` / `recognition-only` / `production` / `full-command` / `indeterminate`. `indeterminate` means no competent attestor was available and **is a result, reported as such** — never folded into a negative. The same vocabulary serves capability records and published verdicts.
+**Verdict ladder:** `no-evidence` / `recognition-only` / `production` / `full-command` / `indeterminate`. It sits **beside** `VariantEvidence` rather than extending it — the four marker states describe how a variant was established where a marker set exists, and the seven authored ones remain valid; merging the two would make `proven` mean different things depending on which instrument ran.
+
+Aggregation is a transparent function of the per-probe outcomes: no weights, no tuned coefficients, no number that cannot be traced to an observation. The order of the checks is the whole of the logic:
+
+1. **No competent attestor → `indeterminate`**, checked first, because every check below it would otherwise read an absent measurement as a negative. For a rare dialect this is the common case and the easiest error to make.
+2. **An attestor that fabricated its evidence → `indeterminate`.** A verdict propped up by invented quotations was not read off the text, so the panel measured nothing however confident it sounded.
+3. **Blind identification confirmed → `production`**, or `full-command` with conversion on demand *and* the same conversion twice. Writing a variety when free and rewriting on request are different competences, and only the second earns the top of the ladder.
+4. **Separation without identification → `recognition-only`.**
+5. **Otherwise `no-evidence`** — which, outside the calibration families, is the weak negative described above.
+
+`indeterminate` **is a result, reported as such** and never folded into a negative: it is in `NOT_A_CLAIM`, counted separately wherever a figure is quoted, for the same reason the project already splits `Unusable` from `unverified`. Confidence is `low` for a single qualified attestor however clean its answer, and `low` for a split panel, because the disagreement is the finding.
+
+Records are persisted in a `capability` table (Alembic `c3f8a1e5d904`), unique on *(model, tag, role, method_version, script)*. Script is in the key because one variety written in two scripts is two measurements — `sr-me-cyrl` is identified cleanly where `sr-me-latn` cannot be told from Bosnian at all. The persistent record is required to expose the same surface as the in-memory one, pinned by a test, so the "routes but never vouches" rule survives persistence rather than surviving only as a comment.
 
 ## Known limits, stated in advance
 

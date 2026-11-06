@@ -454,3 +454,131 @@ def grounding(results) -> Grounding:
         out.cited += len(inner.markers)
         out.fabricated += len(inner.fabricated)
     return out
+
+
+# -- the verdict, aggregated from what the probes found -----------------------
+
+@dataclass
+class DialectResult:
+    """One variety, one producer: every probe's outcome and what they add up to.
+
+    Aggregation is a transparent function of the per-probe outcomes and nothing
+    else — no weights, no tuned coefficients, no number that cannot be traced
+    back to an observation. A reader who distrusts the verdict can read the
+    probes; a reader who distrusts the probes can read the raw texts the corpus
+    kept. That chain is the deliverable, more than the verdict is.
+    """
+
+    tag: str
+    engine: str
+    designator: str | None = None
+    conversions: "Consistency | None" = None
+    reads: list[BlindRead] = field(default_factory=list)
+    contrasts: list[ContrastRead] = field(default_factory=list)
+    panel: "Panel | None" = None
+    notes: list[str] = field(default_factory=list)
+
+    # -- what the paid half concluded ----------------------------------------
+
+    @property
+    def identified(self) -> "Consensus":
+        from llmlc.probe.panel import Consensus, Vote
+
+        return Consensus([
+            Vote(r.attestor, r.correct,
+                 abstained=not r.identification.decided)
+            for r in self.reads])
+
+    @property
+    def separated(self) -> "Consensus":
+        from llmlc.probe.panel import Consensus, Vote
+
+        return Consensus([
+            Vote(r.attestor, r.correct, abstained=r.merged or not r.separation.ok)
+            for r in self.contrasts])
+
+    @property
+    def grounding(self) -> Grounding:
+        return grounding([*self.reads, *self.contrasts])
+
+    # -- what the free half concluded ----------------------------------------
+
+    @property
+    def converts(self) -> bool:
+        return bool(self.conversions and any(c.converted for c in self.conversions.runs))
+
+    @property
+    def systematic(self) -> bool:
+        return bool(self.conversions and self.conversions.systematic)
+
+    # -- the ladder ----------------------------------------------------------
+
+    @property
+    def verdict(self):
+        """Where this variety lands, from the probes and nothing else.
+
+        Order of the checks is the whole of the logic, so it is written out
+        rather than scored:
+
+        1. **No competent attestor -> `indeterminate`.** Checked first, because
+           everything below it would otherwise read an absent measurement as a
+           negative. This is the common case for a rare dialect and the easiest
+           error to make.
+        2. **An attestor that fabricated its evidence -> `indeterminate`.** A
+           verdict propped up by invented quotations was not read off the text,
+           so the panel did not actually measure anything, however confident it
+           sounded.
+        3. **Blind identification confirmed -> `production` or better.** The
+           strongest evidence available: an attestor named the variety with no
+           label and no prompting. `full-command` additionally needs conversion
+           on demand *and* doing it the same way twice, since writing it when
+           free and rewriting on request are different competences.
+        4. **Separation without identification -> `recognition-only`.** The
+           attestors can tell the pair apart but could not name which was which
+           unprompted — real discrimination, weaker than production.
+        5. **Otherwise `no-evidence`**, which outside the calibration families
+           is the *weak* negative: see the note this result carries.
+        """
+        from llmlc.probe.variant import DialectVerdict
+
+        if self.panel is None or self.panel.empty:
+            return DialectVerdict.INDETERMINATE
+        if self.grounding.unreliable:
+            return DialectVerdict.INDETERMINATE
+
+        if self.identified.agreed is True:
+            return (DialectVerdict.FULL_COMMAND
+                    if self.converts and self.systematic
+                    else DialectVerdict.PRODUCTION)
+        if self.separated.agreed is True:
+            return DialectVerdict.RECOGNITION_ONLY
+        return DialectVerdict.NO_EVIDENCE
+
+    @property
+    def confidence(self) -> str:
+        """How much weight the verdict carries.
+
+        A single qualified attestor is `low` however clean its answer: one
+        judge is one opinion, and the panel rule says a single-member verdict is
+        never silently promoted to a panel result. A split panel is also `low`,
+        because the disagreement *is* the finding.
+        """
+        if self.panel is None or self.panel.empty:
+            return "low"
+        if self.panel.single:
+            return "low"
+        if self.identified.split or self.separated.split:
+            return "low"
+        return "high" if self.identified.agreed is not None else "medium"
+
+    def as_dict(self) -> dict:
+        return {
+            "tag": self.tag, "engine": self.engine, "designator": self.designator,
+            "verdict": self.verdict.value, "confidence": self.confidence,
+            "identified": self.identified.as_dict(),
+            "separated": self.separated.as_dict(),
+            "conversion": self.conversions.as_dict() if self.conversions else None,
+            "grounding": self.grounding.as_dict(),
+            "panel": self.panel.as_dict() if self.panel else None,
+            "notes": list(self.notes),
+        }
