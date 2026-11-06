@@ -98,6 +98,31 @@
   /* A group chip is a shortcut over the statuses beside it, not a sixth value.
      Set apart so it does not read as one, and separated from the breakdown. */
   .chip.group { border-style: dashed; margin-right: 10px; }
+  /* The picker lists. A two-column grid, not a flex row: with flex the
+     checkbox wrapped onto its own line *above* its label as soon as the row ran
+     out of width, which it does inside a narrow grid column holding a model id
+     and a reason. A grid row cannot wrap its own first cell. */
+  .pick { max-height: 11rem; overflow-y: auto; border: 1px solid var(--line);
+          border-radius: 4px; padding: 4px 8px; background: var(--card); }
+  .pick label { display: grid; grid-template-columns: auto 1fr; gap: 8px;
+                align-items: center; padding: 3px 0; cursor: pointer; }
+  .pick label > input { margin: 0; }
+  .pick label.off { opacity: .45; cursor: not-allowed; }
+  .pick label.full { opacity: .55; }
+  .pick .txt { min-width: 0; }
+  .pick .why { display: block; font-size: 13px; color: var(--muted); }
+
+  /* The fact checklist, one row per fact, paired with the verdict it received. */
+  table.facts { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 14.5px; }
+  table.facts td { padding: 3px 8px; vertical-align: top; border-top: 1px solid var(--line); }
+  table.facts td.fv { white-space: nowrap; width: 1%; color: var(--muted); }
+  table.facts tr.fv-present td.fv { color: var(--ok, #3fb950); }
+  table.facts tr.fv-missing td.fv { color: var(--warn, #d29922); }
+  table.facts tr.fv-contradicted td.fv { color: var(--bad, #f85149); }
+  table.facts tr.is-fixed td.fv { font-style: italic; }
+  table.facts td.fx { width: 1%; white-space: nowrap; }
+  .btn.tiny { padding: 1px 6px; font-size: 13px; }
+
   /* Bench. A step is a card: what happened, then the evidence it produced. */
   .step { border: 1px solid var(--line); border-left: 3px solid var(--line);
           background: var(--card); border-radius: 4px; padding: 10px 14px; margin-bottom: 10px; }
@@ -420,11 +445,13 @@
 
     <div class="grid d-dialect-only" hidden>
       <div class="field">
-        <label class="f" data-help="bench.varieties">Varieties to contrast</label>
-        <div class="pick" id="d-varieties"><span class="ev">type a language tag above</span></div>
+        <label class="f" for="d-against" data-help="bench.varieties">Contrast against</label>
+        <select id="d-against"><option value="">type a language tag above</option></select>
+        <span class="ev" id="d-against-note"></span>
       </div>
       <div class="field">
-        <label class="f" data-help="bench.attestors">Attestor panel</label>
+        <label class="f" data-help="bench.attestors">Attestor panel
+          <span class="ev" id="d-attestors-count"></span></label>
         <div class="pick" id="d-attestors"><span class="ev">name a model under test above</span></div>
       </div>
     </div>
@@ -566,10 +593,10 @@ const HELP = {
     'What the judge was asked to find in the back-translation, one row per fact with the verdict it received. "Four present, one missing" is not readable — <i>which</i> one is the only form in which you can tell whether the judge was right, and the judge is a model: protocol 016 found 90% of one metric\'s disagreements with fact recall were adequate translations. Marking a verdict re-scores the run and shows both numbers side by side. It never edits the measurement, and an adjudicated run is not saved.'],
   'bench.probe': ['What to run',
     'Two different questions. The <b>ladder</b> asks whether the model can write this language at all, scored by back-translation and fact recall. The <b>dialect battery</b> asks whether it commands a specific regional variety — it writes the variety, rewrites neutral text into it, and other models are asked blind which variety they are looking at. A model can pass one and fail the other, which is why they are separate.'],
-  'bench.varieties': ['Varieties to contrast',
-    'Two or more tags from this language, space- or comma-separated. Left empty, the battery takes the tag you typed and its <i>home</i> sibling — the variety an unqualified request actually gets. Name them explicitly where the family is large: Spanish carries 22 regional tags, and a 22-way blind choice is a much harder task than the one being measured. The unqualified tag is never a contrast arm; it is the source text the conversion rewrites.'],
+  'bench.varieties': ['Contrast against',
+    'The other arm. A contrast is a <b>pair</b>: the battery writes one text under each variety\'s own designator and an attestor is shown two, so there is one choice here and not a set — a third variety would add an option to the blind list that no text was produced for, an answer nobody could be right about. The default is the <i>home</i> sibling, the variety an unqualified request actually gets. The umbrella tag never appears: it is the source text the conversion rewrites, not something anyone could be asked to tell a variety apart from.'],
   'bench.attestors': ['Attestor panel',
-    'Who judges, blind. Left empty, the capability record puts the likely-qualified first and the rest follow — every one of them still faces the controls, because the record routes and never vouches. Naming them here forces the panel. The family guard still applies: a model may not judge its own output, and that is a rule rather than a setting.'],
+    'Who judges, blind. <b>At most three</b>: two is the minimum at which agreement means anything, three gives a tie-break, and past that each extra attestor costs five calls for a vote that rarely moves a verdict. One is allowed and is stamped low confidence, because a single-judge verdict is one opinion. The default takes one model per vendor family — five spellings of one vendor\'s model concurring is not independent agreement. Every one of them still faces the controls, because the record routes and never vouches; the family guard is a rule rather than a setting, so a model may not judge its own output whatever you tick.'],
   'support.scheme': ['Locale list',
     'Which list of languages the table runs down. The default is the 602-tag Catmint TMS list, whose dialects are named explicitly and whose script subtag appears last and only where it tells two dialects apart — sr-me-cyrl, but en-gb. Build a scheme from your own TMS export with scripts/build_scheme_from_tms.py.'],
   'support.status': ['Status',
@@ -836,39 +863,79 @@ async function loadDialectOptions() {
 }
 
 function renderVarietyPicker(d) {
-  dialectDefaults.varieties = d.varieties.filter(v => v.default).map(v => v.tag);
-  // The umbrella is shown and disabled rather than hidden: a reader scanning a
-  // list of Serbian tags should see `sr` and see *why* it cannot be picked,
-  // not wonder where it went. It is the conversion source, never a contrast arm.
-  $('#d-varieties').innerHTML = d.varieties.map(v => `
-    <label class="${v.umbrella ? 'off' : ''}">
-      <input type="checkbox" value="${esc(v.tag)}" ${v.default ? 'checked' : ''}
-             ${v.umbrella ? 'disabled' : ''}>
-      <code>${esc(v.tag)}</code> <span>${esc(v.region || '')}</span>
-      <span class="why">${v.umbrella ? 'neutral arm — the conversion source'
-                                      : esc(v.designator)}</span>
-    </label>`).join('');
+  // One choice, not a set. The contrast is a *pair*: the battery produces one
+  // text per arm and the attestor is shown two. A third variety would add an
+  // option to the blind list that no text was ever produced for — an answer
+  // nobody could be right about, quietly lowering every score. So the tag under
+  // test is one arm and this picks the other.
+  const sel = $('#d-against'), note = $('#d-against-note');
+  if (d.unrunnable) {
+    sel.innerHTML = `<option value="">—</option>`;
+    note.textContent = d.unrunnable;
+    note.className = 'ev bad';
+    dialectDefaults.against = '';
+    return;
+  }
+  const others = d.varieties.filter(v => !v.umbrella && v.tag !== d.tag);
+  const fallback = d.varieties.find(v => v.default && v.tag !== d.tag);
+  dialectDefaults.against = fallback ? fallback.tag : (others[0] || {}).tag || '';
+  sel.innerHTML = others.map(v =>
+    `<option value="${esc(v.tag)}" ${v.tag === dialectDefaults.against ? 'selected' : ''}
+     >${esc(v.tag)} — ${esc(v.region || '')}</option>`).join('');
+  note.className = 'ev';
+  note.textContent = d.neutral
+    ? `${d.neutral} is the neutral arm: the source text the conversion rewrites, never a contrast arm.`
+    : '';
 }
+
+let maxAttestors = 3;
 
 function renderAttestorPicker(d) {
   dialectDefaults.attestors = d.attestors.filter(a => a.default).map(a => a.model);
+  maxAttestors = d.max_attestors || 3;
   const box = $('#d-attestors');
   if (!d.attestors.length) {
     box.innerHTML = '<span class="ev">name a model under test above</span>';
+    $('#d-attestors-count').textContent = '';
     return;
   }
   box.innerHTML = d.attestors.map(a => `
     <label class="${a.eligible ? '' : 'off'}">
       <input type="checkbox" value="${esc(a.model)}" ${a.default ? 'checked' : ''}
              ${a.eligible ? '' : 'disabled'}>
-      <code>${esc(a.model)}</code>
-      <span class="why">${a.eligible
-        ? (a.known === true ? 'qualified here before'
-           : a.known === false ? 'failed a control here before — still tried'
-           : 'not measured on this variety yet')
-        : 'same family as the model under test'}</span>
+      <span class="txt"><code>${esc(a.model)}</code>
+        <span class="why">${a.eligible
+          ? (a.known === true ? 'qualified here before'
+             : a.known === false ? 'failed a control here before — still tried'
+             : 'not measured on this variety yet')
+          : 'same family as the model under test'}</span></span>
     </label>`).join('');
+  enforceAttestorCap();
 }
+
+// Two is the minimum at which agreement means anything and three gives a
+// tie-break; past that each extra attestor costs five calls for a vote that
+// rarely moves a verdict. The cap is enforced by disabling the unticked rest
+// rather than by refusing the click, so the reason is visible instead of the
+// box simply not responding.
+function enforceAttestorCap() {
+  const boxes = [...document.querySelectorAll('#d-attestors input')];
+  const n = boxes.filter(b => b.checked).length;
+  for (const b of boxes) {
+    const blocked = !b.checked && n >= maxAttestors;
+    b.disabled = blocked || b.closest('label').classList.contains('off');
+    b.closest('label').classList.toggle('full', blocked);
+  }
+  const note = $('#d-attestors-count');
+  note.textContent = n >= maxAttestors ? `${n} of ${maxAttestors} — the most a panel uses`
+    : n === 1 ? '1 attestor: a single-judge verdict, stamped low confidence'
+    : n === 0 ? 'pick at least one'
+    : `${n} of ${maxAttestors}`;
+}
+
+document.addEventListener('change', (ev) => {
+  if (ev.target.closest('#d-attestors')) enforceAttestorCap();
+});
 
 const picked = id => [...document.querySelectorAll(`#${id} input:checked`)].map(i => i.value);
 
@@ -877,7 +944,7 @@ const picked = id => [...document.querySelectorAll(`#${id} input:checked`)].map(
 // are the same list and not the same request: an explicit panel is *forced*,
 // which skips the capability record's ordering, and leaving the defaults alone
 // should not silently opt out of it.
-let dialectDefaults = { varieties: [], attestors: [] };
+let dialectDefaults = { against: '', attestors: [] };
 const sameSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));
 
 function switchProbe() {
@@ -885,6 +952,7 @@ function switchProbe() {
   for (const el of document.querySelectorAll('.d-ladder-only')) el.hidden = dialect;
   for (const el of document.querySelectorAll('.d-dialect-only')) el.hidden = !dialect;
   $('#d-lead').innerHTML = PROBE_LEAD[dialect ? 'dialect' : 'ladder'];
+  suggestTags();
   if (dialect) loadDialectOptions();
 }
 
@@ -1038,7 +1106,11 @@ async function suggestTags() {
     const scheme = $('#d-scheme').value;
     if (!scheme) return;
     try {
-      const d = await j(`/languages?scheme=${encodeURIComponent(scheme)}&limit=40`
+      // In dialect mode the list is narrowed to tags the battery can actually
+      // run on: not the umbrella, and not the only named variety of its family.
+      // Suggesting a tag the run would refuse is worse than suggesting nothing.
+      const ready = $('#d-probe').value === 'dialect' ? '&dialect_ready=true' : '';
+      const d = await j(`/languages?scheme=${encodeURIComponent(scheme)}&limit=40${ready}`
                         + (q ? `&q=${encodeURIComponent(q)}` : ''));
       // The label has to carry what distinguishes the tags, not just the
       // language name: a locale list holds nine Serbians, and `value` is only
@@ -1148,25 +1220,25 @@ function benchRequest() {
   // a field silently ignored is a field a reader thinks they set.
   const list = s => s.split(/[,\s]+/).map(x => x.trim()).filter(Boolean);
   if ($('#d-probe').value === 'dialect') {
-    const varieties = picked('d-varieties');
+    const tag = $('#d-tag').value.trim();
+    const against = $('#d-against').value;
     const attestors = picked('d-attestors');
-    if (varieties.length < 2)
-      throw new Error('Pick at least two varieties to contrast. The umbrella tag '
-        + 'is the conversion source, not a contrast arm — "Serbian" and "Serbian '
-        + '(Montenegro)" are not two varieties anyone could be asked to tell apart.');
+    if (!against)
+      throw new Error('Pick a variety to contrast against. A dialect claim is '
+        + 'comparative: it needs a sibling.');
     if (!attestors.length)
       throw new Error('Pick at least one attestor. Nobody judging means nothing '
         + 'measured, which the battery would report as `indeterminate` after '
         + 'spending the production half.');
     return ['/bench/dialect', {
       engine: $('#d-engine').value.trim(),
-      tag: $('#d-tag').value.trim(),
+      tag,
       scheme: $('#d-scheme').value,
-      // Sent only where the reader actually chose. The same list, left
+      // Sent only where the reader actually chose. The same selection, left
       // untouched, must not read as a forced panel: forcing skips the
       // capability record's ordering, and accepting a default is not a choice
       // to override it.
-      varieties: sameSet(varieties, dialectDefaults.varieties) ? null : varieties,
+      varieties: against === dialectDefaults.against ? null : [against, tag],
       attestors: sameSet(attestors, dialectDefaults.attestors) ? null : attestors,
     }];
   }

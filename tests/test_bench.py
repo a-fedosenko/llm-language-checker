@@ -339,11 +339,34 @@ def test_a_dialect_session_says_what_it_will_ask_before_spending(client):
     assert any("Montenegro" in v["designator"] for v in plan["varieties"])
 
 
-def test_a_family_with_no_second_named_variety_is_refused_with_a_reason(client):
-    """Rather than opening a session that cannot ask a question. The umbrella is
-    the conversion source, not a contrast arm."""
-    r = client.post("/bench/dialect", json=dialect_body(tag="sr", varieties=["sr"]))
-    assert r.status_code == 400 and "two named varieties" in r.json()["detail"]
+def test_the_umbrella_tag_cannot_be_the_subject_of_a_dialect_run(client):
+    """It is the neutral arm a variety is contrasted *against* — the source text
+    the conversion rewrites — so there is nothing to ask about it."""
+    r = client.post("/bench/dialect", json=dialect_body(tag="sr"))
+    assert r.status_code == 400 and "umbrella tag" in r.json()["detail"]
+
+
+def test_a_lone_variety_has_nothing_to_be_contrasted_with(client):
+    """A dialect claim is comparative. `be-by` is the only named Belarusian in
+    the list, so the battery has no sibling to run against."""
+    lone = client.get("/languages", params={"q": "be-by", "limit": 5}).json()
+    if not any(x["tag"] == "be-by" for x in lone["items"]):
+        pytest.skip("this locale list has no be-by")
+    r = client.post("/bench/dialect", json=dialect_body(tag="be-by"))
+    assert r.status_code == 400 and "nothing to contrast" in r.json()["detail"]
+
+
+def test_only_contrastable_tags_are_offered_for_a_dialect_run(client):
+    """The field must not suggest a tag the battery would refuse."""
+    d = client.get("/languages", params={"dialect_ready": True, "limit": 5000}).json()
+    tags = {x["tag"] for x in d["items"]}
+    assert "sr-me-cyrl" in tags and "pt-br" in tags
+    assert "sr" not in tags and "pt" not in tags, "umbrellas are not varieties"
+
+
+def test_the_picker_says_why_a_tag_cannot_be_run_rather_than_showing_nothing(client):
+    d = client.get("/dialect/options", params={"tag": "pt"}).json()
+    assert d["varieties"] == [] and "umbrella" in d["unrunnable"]
 
 
 def test_the_panel_can_be_forced_by_hand(client):

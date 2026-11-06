@@ -76,6 +76,15 @@ app = FastAPI(
 #: `scripts/build_scheme_from_tms.py` resolves a TMS list against.
 HIDDEN_SCHEMES = {"default"}
 
+#: Most attestors a run asks by default, and the most the page offers.
+#:
+#: Two is the minimum at which agreement means anything and three gives a
+#: tie-break, which is the whole of the panel rule's value. Past three each
+#: extra attestor costs five calls for a vote that rarely changes a verdict --
+#: and the one-per-family rule already caps the useful field at the number of
+#: distinct vendors, which here is three.
+MAX_ATTESTORS = 3
+
 #: When this process started. Sessions live in its memory, so a session id it
 #: has never heard of is very often one from *before* a restart rather than a
 #: typo -- and the two want different advice. Nothing can prove which, because
@@ -171,8 +180,14 @@ def languages(
     limit: int = Query(100, ge=1, le=5000),
     offset: int = Query(0, ge=0),
     scheme: str | None = Query(None, description="Locale list to search; the active one by default"),
+    dialect_ready: bool = Query(
+        False, description="Only tags the dialect battery can run on: a named "
+                           "variety whose family holds another to contrast it with"),
 ) -> dict:
-    items = list(get_scheme(scheme or settings.scheme).languages.values())
+    s = get_scheme(scheme or settings.scheme)
+    items = list(s.languages.values())
+    if dialect_ready:
+        items = [x for x in items if _dialect_ready(s, x)]
     if scope:
         items = [x for x in items if x.scope == scope]
     if type_:
@@ -919,6 +934,18 @@ def bench_dialect_start(body: DialectStart, request: Request) -> dict:
 
     from llmlc.probe.dialect import family_of
 
+    if lang.inclusive:
+        raise HTTPException(
+            400, f"{body.tag!r} is the umbrella tag for this language, not a "
+                 "variety. It is the neutral arm a dialect is contrasted "
+                 "against — the source text the conversion rewrites — so there "
+                 "is nothing to ask about it. Name a regional variety instead.")
+    if not _contrastable(scheme, lang):
+        raise HTTPException(
+            400, f"{body.tag!r} is the only named variety of this language in "
+                 f"{scheme.meta.name!r}, so there is nothing to contrast it "
+                 "with. A dialect claim is comparative: it needs a sibling.")
+
     family = family_of(scheme, lang)
     if body.varieties is not None:
         chosen = []
@@ -966,6 +993,29 @@ def bench_dialect_start(body: DialectStart, request: Request) -> dict:
     session.plan["scenario"] = scenario
     session.plan["attestors_asked"] = panel
     return session.public()
+
+
+def _contrastable(scheme: Scheme, lang: Language) -> list:
+    """The varieties this tag could be contrasted against.
+
+    Empty for an umbrella tag and for the only named variety in its family --
+    the two cases a dialect run cannot be asked about at all, for different
+    reasons. An umbrella is the neutral arm: "Portuguese" against "Portuguese
+    (Brazil)" is not two varieties anyone could be asked to tell apart. A lone
+    variety has nothing to be told apart *from*: `be-by` is the only named
+    Belarusian in the list, so there is no contrast to run.
+    """
+    from llmlc.probe.dialect import family_of
+
+    if lang.inclusive:
+        return []
+    return [v for v in family_of(scheme, lang)
+            if not v.inclusive and v.tag != lang.tag
+            and v.region_name and v.region_name != lang.region_name]
+
+
+def _dialect_ready(scheme: Scheme, lang: Language) -> bool:
+    return bool(lang.region_name) and bool(_contrastable(scheme, lang))
 
 
 def _default_varieties(scheme: Scheme, lang: Language, family: list) -> list:
@@ -1024,6 +1074,14 @@ def dialect_options(
     if lang is None:
         raise HTTPException(404, f"No tag {tag!r} in scheme {s.meta.name!r}.")
 
+    if lang.inclusive or not _contrastable(s, lang):
+        return {"tag": tag, "neutral": None, "varieties": [], "attestors": [],
+                "unrunnable": (
+                    f"{tag!r} is the umbrella tag for this language, not a variety"
+                    if lang.inclusive else
+                    f"{tag!r} is the only named variety of this language here, "
+                    "so there is nothing to contrast it with")}
+
     family = family_of(s, lang)
     default = {v.tag for v in _default_varieties(s, lang, family)}
     umbrella = next((v.tag for v in family if v.inclusive), None)
@@ -1059,7 +1117,12 @@ def dialect_options(
             })
 
     return {"tag": tag, "neutral": umbrella, "varieties": varieties,
-            "attestors": attestors}
+            "attestors": attestors, "unrunnable": None,
+            # The contrast is a *pair*: `attest_steps` produces one text per arm
+            # and `separate` takes two. A third tick would add an option to the
+            # blind list that no text was ever produced for -- an answer nobody
+            # could be right about, quietly lowering every score.
+            "max_varieties": 2, "max_attestors": MAX_ATTESTORS}
 
 
 def _attestor_candidates() -> list[str]:
