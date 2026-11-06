@@ -352,7 +352,8 @@ class Separation:
 
 
 def separate(client: OpenAICompatClient, model: str, *, first: str, second: str,
-             blind: Blind, max_tokens: int = 600) -> Separation:
+             blind: Blind, present: bool | None = None,
+             max_tokens: int = 600) -> Separation:
     """Ask one attestor, blind, to assign varieties to a pair of texts.
 
     The pair is presented in an order salted by the texts themselves, so the
@@ -362,8 +363,20 @@ def separate(client: OpenAICompatClient, model: str, *, first: str, second: str,
 
     `swapped` on the result says what the attestor actually saw. The caller
     scores against it; the attestor never learns it.
+
+    `present` forces the presentation instead of salting it, and exists for one
+    caller: the order control, which must see *both* orders of one pair and
+    cannot get them by swapping the arguments. Swapping flips which text is
+    `first` and also re-salts the coin, and when the two coins happen to agree
+    the attestor is shown the same order twice -- measured at 1,014 of 2,000
+    pairs, so the control would have degenerated into a repeat test about half
+    the time, passing a position-answering attestor for exactly the half of
+    cases it was built to catch.
+
+    It controls order only. Nothing about the expected answer passes through it,
+    and `swapped` still reports what was shown.
     """
-    swap = _coin(first + second)
+    swap = _coin(first + second) if present is None else present
     a, b = (second, first) if swap else (first, second)
 
     options = "\n".join(f"- {o}" for o in blind.options)
