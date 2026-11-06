@@ -297,10 +297,21 @@ def convert(*, client: OpenAICompatClient, engine: str, lang: Language, text: st
         out.error = gen.error or "no output"
         return out
 
-    # Gated like any other generation. A "conversion" that answered in the wrong
-    # language is not a small diff, it is a different failure, and the diff
-    # would report it as an enormous and meaningless one.
-    out.gate = gate_check(gen.text, prompt=shown, expect_lang=lang.iso639_3,
+    # Gated like any other generation, with one exception: the copy check sees
+    # the **system half only**.
+    #
+    # In a generation, output echoing the prompt means the model wrote nothing
+    # of its own, and the check has to see both messages to catch it. In a
+    # conversion the user message *is the text being transformed*, so returning
+    # it unchanged is not an echo -- it is the answer "nothing in this text needs
+    # to change", which is precisely the negative P3 exists to measure. Passing
+    # both halves convicted exactly that answer as `copy`, so a model that
+    # correctly declined to invent a difference was recorded as having failed to
+    # respond. Found on the Russian null control, where the correct answer is
+    # "unchanged" every time and the whole arm came back convicted.
+    #
+    # Echoing the *system* half is still an echo, and still caught.
+    out.gate = gate_check(gen.text, prompt=system, expect_lang=lang.iso639_3,
                           expect_script=lang.script, relatives=relatives,
                           accept_lang=accept, abstain_lang=abstain)
     if not out.gate.passed:

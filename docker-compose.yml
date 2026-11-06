@@ -12,7 +12,13 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     environment:
-      SCHEME: ${SCHEME:-default}
+      # The operating locale list. Defaults to the 602-tag Catmint TMS list,
+      # which is what dialects are measured against; `default` is the public
+      # 9,589-tag catalogue and is what back-translator controls resolve
+      # against, not a list to scan. A compose default of `default` silently
+      # overrode the library's own default and put the container on the wrong
+      # list while the CLI was on the right one.
+      SCHEME: ${SCHEME:-catmint}
       HARDWARE_PROFILE: ${HARDWARE_PROFILE:-auto}
       # Starting a scan from the browser spends your API budget. Inside a
       # container the caller's address is the bridge gateway and never loopback,

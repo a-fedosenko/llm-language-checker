@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Date** | 2026-11-05 |
-| **Status** | hypotheses recorded; run pending |
+| **Status** | hypotheses recorded; instrument built and smoke-tested on live models; the programme run is pending |
 | **Triggered by** | Marker sets exist for **7 of 534** variant tags, and the owner's decision that the remaining 527 will never be authored: each one needs somebody who reads the language, and that throughput does not exist. The instrument is sound (protocol 012 proved it) and cannot be scaled, which makes it the wrong instrument. |
 | **Artifacts** | S12.5. Planned: `probe/attest.py`, `probe/variant.py`, a capability-record table, `api/bench.py`. `markers/` is retained as fixtures, not deleted — see *Consequences known in advance*. |
 
@@ -161,6 +161,45 @@ The free half runs first — production, conversion, consistency — before any 
 Where the varieties are not named explicitly, the default sibling is the **home** variety rather than whichever comes first in the catalogue — the umbrella's likely-subtag region is what an unqualified request actually gets (`sr` resolves to Serbia), and it is the sibling `markers/serbian.json` already expresses itself against. Catalogue order had paired Montenegro with Bosnia: a real contrast, but not the one anyone asked for.
 
 ## Results
+
+**The programme has not been run.** What follows is the bench smoke test — one variety at each calibration end, `deepseek-v4-pro` as producer, 2026-11-06 — recorded here because it found two defects and one real model behaviour, and because leaving it out would be reporting only the clean half.
+
+**n = 1 per arm. This is not a measurement of anything**; it is the instrument being checked against two cases whose answers are known.
+
+### The known positive: `sr-me-cyrl` against `sr-rs-cyrl`
+
+Verdict **`full-command`**, confidence high — consistent with protocol 012's `proven` at 1.00 for the same pair through the marker instrument.
+
+| | |
+|---|---|
+| `sr` (neutral) | Жена је закаснила… Ишла је **пешице**… **Када** је стигла |
+| `sr-rs-cyrl` | …Ишла је **пешке**… **Када** је стигла |
+| `sr-me-cyrl` | …**Пјешачила** је… **Кад** је стигла |
+| conversion | `пешице → пјешице`, both runs, agreement 1.00 |
+
+Both qualified attestors named Montenegro unprompted and both cited **Пјешачила** — the ijekavian yat reflex, which is the standard marker and is actually in the text. The separation was correct with the pair shown in reverse order.
+
+**A control rejected an attestor on live data.** `groq-qwen3-8-27b` passed the identity control and failed the order control: shown one pair twice, it answered `Serbia`/`Montenegro` and then `indistinguishable`/`indistinguishable`. Its verdicts were discarded rather than counted. That is the control doing the job it was built for, on a real model, and it is the first evidence that the panel rule is not ceremonial.
+
+### The null control: `ru-kz` against `ru-ru`
+
+Verdict **`no-evidence`**. Conversion made **0 edits** on both runs, and all three attestors — the same three, including the two that named Montenegro with grounded markers — independently answered `generic` and `indistinguishable`.
+
+**This is the result H5 needed.** The instrument that fires on a known positive stays silent on a known null, with the same models and the same prompts. It remains subject to the limit recorded above: a clean null is also consistent with over-merging, and only the Serbian and English arms can tell those apart — which is exactly what makes the Serbian arm's `full-command` the other half of this evidence rather than a separate result.
+
+### Two defects, and one finding that is not a defect
+
+**1. The conversion copy check convicted the correct answer.** The gate's copy check compares output against the prompt, and in a conversion the user message *is* the text being transformed — so returning it unchanged, which the instructions explicitly ask for when nothing needs to change, was recorded as `copy`. The entire Russian arm came back convicted for giving the right answer. Fixed: the copy check now sees the **system half only** for conversions. Echoing the instructions is still an echo and still caught.
+
+This is the shape convention 15 warns about — a defect invisible in the output, since `copy` is a plausible verdict and nothing in it says the text was correct.
+
+**2. The container was on the wrong locale list.** `docker-compose.yml` set `SCHEME: ${SCHEME:-default}`, silently overriding the library's own default, so the UI ran the 9,589-tag public catalogue while the CLI ran the 602-tag TMS list. Caught by `/health` reporting `tags: 9589` on a machine configured for Catmint.
+
+**3. `ru-by` produced Belarusian, and the gate was right to convict it.** Asked for *Russian (Belarus, Cyrillic script)*, the model wrote `Жанчына спазнілася на свой ранішні аўтобус` — Belarusian, not Russian. **This is protocol 010's failure reproducing, and exactly what protocol 020's H3 predicted**: naming a region pulls the model toward that region's dominant language. 020 expected it to break first at `gsw-CH`; it broke at `ru-BY`, which was in the sample as a null-control arm rather than as a wrong-language test.
+
+The consequence for the method is that a region whose name is also a *language's* name cannot be probed through the region-qualified designator, and the battery reports `indeterminate` with a note saying the gap is in production rather than in discrimination. The consequence for the sample is that the Russian null runs through `ru-kz` and `ru-md` rather than `ru-by`. `markers/not-distinguishable.json`'s `ru-BY` entry is untouched by this: it is a claim about register, and this is a failure to produce the language at all.
+
+## Conclusions
 
 Not yet run.
 

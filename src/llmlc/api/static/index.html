@@ -369,7 +369,7 @@
   <!-- ── bench ─────────────────────────────────────────────────────── -->
   <section id="tab-bench" hidden>
     <h2 data-help="block.bench">The method, one step at a time</h2>
-    <p class="lead">One language, the real pipeline, nothing simulated. Every step below is
+    <p class="lead" id="d-lead">One language, the real pipeline, nothing simulated. Every step below is
       the same code a scan runs — there is no second version of the method for demonstration.
       <b>It spends your API budget</b>: roughly 9–15 calls for one language.</p>
 
@@ -380,6 +380,13 @@
     <div class="note" id="d-open" hidden></div>
 
     <div class="grid">
+      <div class="field">
+        <label class="f" for="d-probe" data-help="bench.probe">What to run</label>
+        <select id="d-probe">
+          <option value="ladder">Language ladder — can it write this language at all</option>
+          <option value="dialect">Dialect battery — does it command this variety</option>
+        </select>
+      </div>
       <div class="field">
         <label class="f" for="d-engine" data-help="scan.engine">Model under test</label>
         <input id="d-engine" list="model-list" placeholder="openai-gpt-4o">
@@ -401,17 +408,26 @@
         <label class="f" for="d-scheme" data-help="support.scheme">Locale list</label>
         <select id="d-scheme"></select>
       </div>
-      <div class="field">
+      <div class="field d-ladder-only">
         <label class="f" for="d-bt" data-help="bench.bt">Back-translator panel</label>
         <input id="d-bt" list="model-list" placeholder="(default panel)">
       </div>
-      <div class="field">
+      <div class="field d-ladder-only">
         <label class="f" for="d-judge" data-help="scan.judge">Judge</label>
         <input id="d-judge" list="model-list" placeholder="(default)">
       </div>
+      <div class="field d-dialect-only" hidden>
+        <label class="f" for="d-varieties" data-help="bench.varieties">Varieties to contrast</label>
+        <input id="d-varieties" placeholder="(the tag and its home sibling)" autocomplete="off">
+        <span class="ev" id="d-varieties-note"></span>
+      </div>
+      <div class="field d-dialect-only" hidden>
+        <label class="f" for="d-attestors" data-help="bench.attestors">Attestor panel</label>
+        <input id="d-attestors" list="model-list" placeholder="(routed by the record)">
+      </div>
     </div>
 
-    <details id="d-specs-box">
+    <details id="d-specs-box" class="d-ladder-only">
       <summary data-help="bench.specs">Content specifications — what the model is asked to describe</summary>
       <p class="ev">The model is told <em>what</em> to say and chooses every word; the facts are the
         grading checklist. Editing either changes the measurement, so an edited run is kept out of
@@ -543,6 +559,12 @@ const HELP = {
     'The scenario the model is asked to describe, and the facts that scenario commits it to. The model chooses every word; the facts are the grading checklist. Editing either makes the run incomparable to the stored results, so it is not saved — the raw output still goes to the corpus.'],
   'block.support': ['Language support',
     'One model against every locale in the active scheme. The status answers whether the model can be used for that language; the score says how well it carried meaning. Everything about how a verdict was reached — the designator, the gate verdict, the interval, the back-translator — is on the Results tab.'],
+  'bench.probe': ['What to run',
+    'Two different questions. The <b>ladder</b> asks whether the model can write this language at all, scored by back-translation and fact recall. The <b>dialect battery</b> asks whether it commands a specific regional variety — it writes the variety, rewrites neutral text into it, and other models are asked blind which variety they are looking at. A model can pass one and fail the other, which is why they are separate.'],
+  'bench.varieties': ['Varieties to contrast',
+    'Two or more tags from this language, space- or comma-separated. Left empty, the battery takes the tag you typed and its <i>home</i> sibling — the variety an unqualified request actually gets. Name them explicitly where the family is large: Spanish carries 22 regional tags, and a 22-way blind choice is a much harder task than the one being measured. The unqualified tag is never a contrast arm; it is the source text the conversion rewrites.'],
+  'bench.attestors': ['Attestor panel',
+    'Who judges, blind. Left empty, the capability record puts the likely-qualified first and the rest follow — every one of them still faces the controls, because the record routes and never vouches. Naming them here forces the panel. The family guard still applies: a model may not judge its own output, and that is a rule rather than a setting.'],
   'support.scheme': ['Locale list',
     'Which list of languages the table runs down. The default is the 602-tag Catmint TMS list, whose dialects are named explicitly and whose script subtag appears last and only where it tells two dialects apart — sr-me-cyrl, but en-gb. Build a scheme from your own TMS export with scripts/build_scheme_from_tms.py.'],
   'support.status': ['Status',
@@ -776,6 +798,27 @@ const RUNG_HELP = {
 };
 const rungLabel = n => `rung ${n}${RUNG_NAME[n] ? ' · ' + RUNG_NAME[n] : ''}`;
 
+// The two batteries answer different questions and cost differently, so the
+// page says which it is about to run before it runs it rather than leaving the
+// reader to infer it from the steps.
+const PROBE_LEAD = {
+  ladder: `One language, the real pipeline, nothing simulated. Every step below is the same
+    code a scan runs — there is no second version of the method for demonstration.
+    <b>It spends your API budget</b>: roughly 9–15 calls for one language.`,
+  dialect: `One variety, blind. The model writes it, rewrites into it, and other models are
+    asked — with no label and no expected answer — which variety they are looking at. Every
+    attestor faces two controls first, and one that fails them is discarded rather than counted.
+    <b>It spends your API budget</b>: about 6 calls plus 5 per eligible attestor.`,
+};
+
+function switchProbe() {
+  const dialect = $('#d-probe').value === 'dialect';
+  for (const el of document.querySelectorAll('.d-ladder-only')) el.hidden = dialect;
+  for (const el of document.querySelectorAll('.d-dialect-only')) el.hidden = !dialect;
+  $('#d-lead').innerHTML = PROBE_LEAD[dialect ? 'dialect' : 'ladder'];
+  $('#d-varieties-note').textContent = '';
+}
+
 async function loadBench() {
   if (!bench.help) bench.help = await j('/bench/help');
   await refreshSessions();
@@ -961,10 +1004,31 @@ $('#d-specs-reset').addEventListener('click', () => {
   renderSpecs();
 });
 
+function renderDialectPlan(plan) {
+  // What the battery will ask, and of whom, while the cost is still zero.
+  const box = $('#d-plan');
+  box.hidden = false;
+  box.className = 'note';
+  const vs = plan.varieties || [];
+  box.innerHTML = `This battery contrasts `
+    + vs.map(v => `<b>${esc(v.region || v.tag)}</b> (<code>${esc(v.tag)}</code>,
+        asked for as ${esc(v.designator)})`).join(' against ')
+    + `. The attestors will be shown these texts with <b>no label and no expected
+       answer</b>, and may reply that they cannot be told apart — which is often
+       the true answer.`
+    + (plan.neutral
+        ? ` <code>${esc(plan.neutral)}</code> is the neutral arm: it is the source
+           text the conversion rewrites, never a contrast arm.` : '')
+    + (plan.attestors_asked
+        ? ` <span class="ev">panel asked: ${esc((plan.attestors_asked || []).join(', '))}</span>`
+        : '');
+}
+
 function renderPlan(plan) {
   // Said before the first call, not discovered by running two tags and noticing
   // the answers match.
   const box = $('#d-plan');
+  if (plan && plan.varieties) return renderDialectPlan(plan);
   if (!plan || !plan.primary) { box.hidden = true; return; }
   const twins = (plan.siblings || []);
   const unnamed = (plan.unnamed_subtags || []);
@@ -1009,6 +1073,33 @@ function benchButtons({ live, busy }) {
   $('#d-close').disabled = !live || busy;
 }
 
+function benchRequest() {
+  // Two endpoints, one form. Which fields are sent is decided here rather than
+  // by sending everything and letting the server ignore what it does not want:
+  // a field silently ignored is a field a reader thinks they set.
+  const list = s => s.split(/[,\s]+/).map(x => x.trim()).filter(Boolean);
+  if ($('#d-probe').value === 'dialect') {
+    const varieties = list($('#d-varieties').value);
+    const attestors = list($('#d-attestors').value);
+    return ['/bench/dialect', {
+      engine: $('#d-engine').value.trim(),
+      tag: $('#d-tag').value.trim(),
+      scheme: $('#d-scheme').value,
+      varieties: varieties.length ? varieties : null,
+      attestors: attestors.length ? attestors : null,
+    }];
+  }
+  return ['/bench', {
+    engine: $('#d-engine').value.trim(),
+    tag: $('#d-tag').value.trim(),
+    mode: $('#d-mode').value,
+    scheme: $('#d-scheme').value,
+    backtranslator: $('#d-bt').value.trim() || null,
+    judge: $('#d-judge').value.trim() || null,
+    specs: bench.specs,
+  }];
+}
+
 async function startBench() {
   $('#d-steps').innerHTML = '';
   $('#d-result').innerHTML = '';
@@ -1016,25 +1107,19 @@ async function startBench() {
   $('#d-plan').hidden = true;
   benchButtons({ live: false, busy: true });
   try {
-    const d = await j('/bench', { method: 'POST',
+    const [url, body] = benchRequest();
+    const d = await j(url, { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        engine: $('#d-engine').value.trim(),
-        tag: $('#d-tag').value.trim(),
-        mode: $('#d-mode').value,
-        scheme: $('#d-scheme').value,
-        backtranslator: $('#d-bt').value.trim() || null,
-        judge: $('#d-judge').value.trim() || null,
-        specs: bench.specs,
-      }) });
+      body: JSON.stringify(body) });
     bench.id = d.id;
     sessionStorage.setItem('benchSession', d.id);
     benchButtons({ live: true, busy: false });
     $('#d-cost').textContent = 'nothing spent yet';
     renderPlan(d.plan);
     await refreshSessions();
-    if ($('#d-mode').value === 'auto') await runBenchToEnd();
-    else describeNext({ kind: 'generated' });
+    const dialect = d.kind === 'dialect';
+    if (!dialect && $('#d-mode').value === 'auto') await runBenchToEnd();
+    else describeNext({ kind: dialect ? 'plan' : 'generated' });
   } catch (e) {
     bench.id = null;
     benchButtons({ live: false, busy: false });
@@ -1086,10 +1171,78 @@ async function runBenchToEnd() {
   bench.running = false;
 }
 
+// Step kinds the dialect battery yields. A step is rendered as a dialect step
+// because of what it *is*, not because of which session asked for it -- the
+// page renders a reloaded session's steps the same way without having to know
+// how it started.
+const DIALECT_KINDS = new Set(['plan', 'produced', 'converted', 'consistency',
+                               'controls', 'identified', 'separated', 'verdict']);
+
+function renderDialectRows(d, add) {
+  add('designator', d.designator);
+  if (d.options) add('could be', d.options.join(', '));
+  if (d.attestors) add('attestors', d.attestors.join(', '));
+  if (d.routing) add('chosen', d.routing);
+  // Named rather than left implicit: a panel silently shorter than the one
+  // asked for is the thing a reader would otherwise have to read source to
+  // explain.
+  if (d.dropped_by_family_guard && d.dropped_by_family_guard.length)
+    add('dropped (same family as the model under test)',
+        d.dropped_by_family_guard.join(', '));
+  if (d.abstain && d.abstain.length)
+    add('language ID cannot separate', d.abstain.join(', ')
+        + ' — an item reading as one of these is voided, not convicted');
+  add('gate', d.gate);
+  if (d.rate !== undefined) add('text changed', `${Math.round(d.rate * 100)}%`);
+  if (d.edits && d.edits.length)
+    add('edits', d.edits.map(([a, b]) => `${a} → ${b}`).join(' · '));
+  if (d.paraphrased) add('note', 'rewrote more than half the text: a paraphrase, not a conversion');
+  if (d.agreement !== undefined && d.agreement !== null)
+    add('agreement between runs', d.agreement);
+  if (d.failed && d.failed.length) add('failed control(s)', d.failed.join(', '));
+  if (d.controls) add('controls', d.controls.map(c =>
+    `${c.kind} ${c.passed ? 'passed' : 'failed'}${c.detail ? ' — ' + c.detail : ''}`).join(' · '));
+  if (d.answer) add('answered', d.answer);
+  if (d.expected) add('expected', Array.isArray(d.expected) ? d.expected.join(' / ') : d.expected);
+  if (d.a || d.b) add('assigned', `A → ${d.a} · B → ${d.b}`
+    + (d.swapped ? ' (shown in reverse order)' : ''));
+  if (d.confidence) add('confidence', d.confidence);
+  if (d.markers && d.markers.length)
+    add('markers cited', d.markers.map(m => `“${m.text}”${m.why ? ' — ' + m.why : ''}`).join(' · '));
+  // The hallucination gate's output, and the reason an attestor's verdict can
+  // be thrown away: a quotation that is not in the text was not read off it.
+  if (d.fabricated && d.fabricated.length)
+    add('NOT IN THE TEXT', d.fabricated.join(', ') + ' — this attestor fabricated its evidence');
+  if (d.verdict) add('verdict', d.verdict);
+  if (d.error) add('error', d.error);
+}
+
 function renderStep(s) {
   const d = s.detail || {};
   const rows = [];
   const add = (k, v) => { if (v !== null && v !== undefined && v !== '') rows.push([k, v]); };
+  const dialect = DIALECT_KINDS.has(s.kind) && s.rung === undefined;
+  if (dialect) {
+    renderDialectRows(d, add);
+    const texts = [];
+    if (d.text) texts.push(['written', d.text]);
+    if (d.before && d.after) { texts.push(['before', d.before]); texts.push(['after', d.after]); }
+    const calls = s.calls || {};
+    const total = Object.values(calls).reduce((a, b) => a + b, 0);
+    $('#d-cost').textContent = `${total} call(s): ` +
+      Object.entries(calls).filter(([, v]) => v).map(([k, v]) => `${k} ${v}`).join(', ');
+    $('#d-steps').insertAdjacentHTML('beforeend', `
+      <div class="step t-${esc(s.tone || 'none')} ${s.terminal ? 'is-terminal' : ''}">
+        <span class="rung" title="${esc(s.explains || '')}">dialect battery</span>
+        <h4>${esc(s.title)}</h4>
+        <div class="verdict">${esc(s.summary)}</div>
+        ${rows.length ? `<dl>${rows.map(([k, v]) =>
+          `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}
+        ${texts.map(([k, v]) => `<pre><b>${esc(k)}</b>\n${esc(v)}</pre>`).join('')}
+      </div>`);
+    $('#d-actions')?.scrollIntoView?.({ block: 'end', behavior: 'smooth' });
+    return;
+  }
   add('gate', d.gate); add('detail', d.gate_detail);
   if (d.lid) add('identified as',
     `${d.lid.label} (${d.lid.confidence}${d.lid.backend ? ', ' + d.lid.backend : ''})`);
@@ -1141,8 +1294,52 @@ function renderStep(s) {
   $('#d-actions')?.scrollIntoView?.({ block: 'end', behavior: 'smooth' });
 }
 
+const VERDICT_MEANS = {
+  'full-command': 'writes the variety distinctly, converts into it on demand, and does it the same way twice',
+  'production': 'writes the variety distinctly, confirmed blind',
+  'recognition-only': 'can tell the variety apart, but does not write it distinctly',
+  'no-evidence': 'nothing distinguished this variety from its neighbour',
+  'indeterminate': 'nobody competent could check — a statement about the instrument, NOT about the model',
+};
+
+function renderDialectResult(sess) {
+  const r = sess.result;
+  if (!r) {
+    $('#d-result').innerHTML =
+      `<div class="note ${sess.status === 'failed' ? 'bad' : ''}">${esc(sess.error || sess.status)}</div>`;
+    return;
+  }
+  const tone = r.verdict === 'indeterminate' ? 'warn'
+    : (r.verdict === 'production' || r.verdict === 'full-command') ? 'ok' : '';
+  const g = r.grounding || {};
+  $('#d-result').innerHTML = `
+    <div class="note ${tone}">
+      <strong>${esc(r.verdict)}</strong> — ${esc(VERDICT_MEANS[r.verdict] || '')}
+      <span class="flag ${r.confidence === 'high' ? 'ok' : 'warn'}">confidence ${esc(r.confidence)}</span><br>
+      ${(r.notes || []).map(n => esc(n)).join('<br>')}
+      ${r.notes && r.notes.length ? '<br>' : ''}
+      <span class="ev">
+        panel ${esc(((r.panel || {}).qualified || []).join(', ') || 'none qualified')}${
+          ((r.panel || {}).disqualified || []).length
+            ? ` · discarded ${esc(r.panel.disqualified.join(', '))}` : ''}
+        ${r.identified && r.identified.split ? ' · <b>the panel disagreed</b>, which is the finding' : ''}
+        ${g.unreliable ? ' · <b>an attestor cited markers that are not in the text</b>' : ''}
+        · corpus ${esc(sess.corpus || '')}
+      </span>
+    </div>`;
+}
+
 function renderBenchSession(sess) {
   if (sess.status === 'running') return;
+  if (sess.kind === 'dialect' || (sess.result && sess.result.verdict)) {
+    renderDialectResult(sess);
+    bench.id = null;
+    sessionStorage.removeItem('benchSession');
+    benchButtons({ live: false, busy: false });
+    $('#d-next').hidden = true;
+    refreshSessions();
+    return;
+  }
   const r = sess.result;
   const saved = sess.persisted
     ? `<span class="flag ok">saved to results</span>`
@@ -1167,6 +1364,8 @@ function renderBenchSession(sess) {
   refreshSessions();
 }
 
+$('#d-probe').addEventListener('change', switchProbe);
+switchProbe();
 $('#d-start').addEventListener('click', startBench);
 $('#d-step').addEventListener('click', stepBench);
 $('#d-auto').addEventListener('click', runBenchToEnd);

@@ -371,3 +371,50 @@ def test_the_corpus_records_the_expectation_even_though_the_prompt_did_not():
     assert written[0].meta["expected"] == "Montenegro"
     assert "Montenegro" not in (written[0].prompt or "").replace(
         ", ".join(SR.options), "")
+
+
+def test_an_unchanged_conversion_is_a_result_not_a_copy_failure():
+    """The gate's copy check compares output against the prompt, and in a
+    conversion the user message *is* the text being transformed. Returning it
+    unchanged is the answer "nothing here needs to change" -- the negative P3
+    exists to measure -- and passing both halves convicted exactly that as
+    `copy`, so a model correctly declining to invent a difference was recorded
+    as having failed to respond.
+
+    Found on the Russian null control, where "unchanged" is the correct answer
+    every time and the whole arm came back convicted.
+    """
+    from llmlc.probe.dialect import convert
+
+    text = "Женщина опоздала на утренний автобус. Она шла на работу под дождём."
+
+    class Echo:
+        def complete(self, model, prompt, *, max_tokens=400, temperature=0.0, system=None):
+            from llmlc.client.openai_compat import Completion
+            return Completion(text, None)          # unchanged, as instructed
+
+    from llmlc.scheme.model import Language
+    ru = Language(tag="ru-by", lang="ru", iso639_3="rus", script="Cyrl", cls="rus|Cyrl")
+    c = convert(client=Echo(), engine="m", lang=ru, text=text,
+                designator="Russian (Belarus)", corpus=NullCorpus(),
+                relatives=set(), accept=set())
+    assert c.ok, f"gated out as {c.error}"
+    assert not c.converted and c.rate == 0.0
+
+
+def test_echoing_the_instructions_is_still_a_copy():
+    """Only the material is exempt. A model parroting the system message has
+    written nothing, in a conversion exactly as in a generation."""
+    from llmlc.probe.dialect import CONVERT_SYSTEM, convert
+
+    class Parrot:
+        def complete(self, model, prompt, *, max_tokens=400, temperature=0.0, system=None):
+            from llmlc.client.openai_compat import Completion
+            return Completion(system, None)
+
+    from llmlc.scheme.model import Language
+    ru = Language(tag="ru-by", lang="ru", iso639_3="rus", script="Cyrl", cls="rus|Cyrl")
+    c = convert(client=Parrot(), engine="m", lang=ru, text="Женщина опоздала.",
+                designator="Russian (Belarus)", corpus=NullCorpus(),
+                relatives=set(), accept=set())
+    assert not c.ok and "copy" in (c.error or "").lower() or c.gate.verdict.value == "copy"

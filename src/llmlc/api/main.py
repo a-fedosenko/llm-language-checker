@@ -788,11 +788,16 @@ def bench_help() -> dict:
     will do before spending it. Served rather than duplicated in the markup for
     the usual reason: a description that lives in two places stops matching the
     one that moves.
+
+    Both batteries, in one map. Their step kinds do not collide, and the page
+    renders them through one path -- a reader should learn one vocabulary, not
+    one per probe.
     """
+    from llmlc.probe.dialect import ATTEST_HELP
     from llmlc.probe.ladder import STEP_HELP
 
     return {kind: {"title": title, "explains": explains}
-            for kind, (title, explains) in STEP_HELP.items()}
+            for kind, (title, explains) in (*STEP_HELP.items(), *ATTEST_HELP.items())}
 
 
 @app.post("/bench/{session_id}/step")
@@ -931,26 +936,54 @@ def bench_dialect_start(body: DialectStart, request: Request) -> dict:
 def _attestor_field(engine: str) -> list[str]:
     """Every configured model that could attest, the producer's family aside.
 
-    Wider than the back-translator panel on purpose: that panel is two measured
-    readers for a job where reading ability is the whole question, while an
-    attestor only has to recognise a variety, and the controls decide which of
-    them can. Narrowing the field in advance would decide by assumption what
-    the controls exist to measure.
+    Drawn from the same list the model picker offers -- the custom model list
+    where one is configured, the gateway's own list otherwise -- and
+    deliberately **wider than the back-translator panel**. That panel is two
+    measured readers for a job where reading ability is the whole question,
+    while an attestor only has to recognise a variety, and the controls decide
+    which of them can. Narrowing the field in advance would decide by
+    assumption what the controls exist to measure.
+
+    It also has to be wide enough to *be* a panel. Falling back to the
+    two-member back-translator default left exactly one eligible attestor once
+    the producer's family was dropped, and a single-member verdict is stamped
+    low-confidence by rule -- so every dialect verdict would have come back low
+    whatever the models actually did.
     """
     from llmlc.probe.panel import eligible
 
+    #: Models that cannot answer a chat prompt at all. Dropped by name rather
+    #: than discovered by spending three control calls finding out.
+    NOT_CHAT = ("embedding", "whisper", "tts", "rerank")
+
     try:
-        ids = [m["model_id"] for m in custom_models()]
-    except Exception:  # noqa: BLE001 -- no custom list is the aggregator route
+        ids = [m for m in _model_list()
+               if not any(k in m.lower() for k in NOT_CHAT)]
+    except Exception:  # noqa: BLE001 -- a picker failing must not stop a run
         ids = []
     if not ids:
-        # `custom_models()` returns an empty list rather than raising when no
-        # list is configured, so an `except` alone never fires and the field
-        # came back empty -- which the family guard then reported as "no
-        # attestor left after excluding the model under test", blaming the
-        # guard for a missing configuration.
+        # `_model_list()` can come back empty -- an unreachable gateway, or no
+        # custom list -- and an empty field is then reported by the family guard
+        # as "no attestor left after excluding the model under test", blaming
+        # the guard for a configuration problem.
         ids = [m.strip() for m in runner.DEFAULT_PANEL.split(",") if m.strip()]
-    return eligible(ids, producer=engine)
+
+    # One per vendor family, not every id. Two costs: a gateway listing eleven
+    # models would run eleven attestors at five calls each, and -- the reason
+    # that actually matters -- agreement between two spellings of one vendor's
+    # model is not independent agreement. The panel rule exists to make
+    # concurring judges mean something, and five gemini variants concurring
+    # means about as much as one.
+    #
+    # Measured models first within a family, because the four from the
+    # programme are the ones whose behaviour is already characterised.
+    measured = set(results_store.page(
+        results_store.Query(limit=1)).get("summary", {}).get("engines", {}))
+    chosen: dict[str, str] = {}
+    for m in sorted(eligible(ids, producer=engine),
+                    key=lambda m: (m not in measured, m)):
+        chosen.setdefault(runner.model_family(m), m)
+    return list(chosen.values())
 
 
 def _default_scenario() -> str:
