@@ -6,6 +6,7 @@ to keep claims apart that a four-value scheme would merge.
 """
 import pytest
 
+from llmlc.config import settings
 from llmlc.support import (CONFIDENCE_CUTS, MEANING, ORDER, Status,
                            confidence_for, row_for, status_for)
 
@@ -132,9 +133,13 @@ def test_the_scheme_is_the_left_side_of_the_join(db):
     """Every tag in the scheme appears, measured or not. `unchecked` is the
     answer that says what is left to do, and dropping those rows would hide it."""
     from llmlc.api.support_table import build
+    from llmlc.scheme import load_scheme
 
     d = build("never-measured-model")
-    assert d["total"] > 9000
+    # Against the *active* scheme's own census rather than a hardcoded one: the
+    # claim is that nothing is dropped from the left side, which is true of any
+    # locale list and was never about the public catalogue's size.
+    assert d["total"] == len(load_scheme(settings.scheme).languages)
     assert d["counts"]["unchecked"] == d["total"]
     assert all(r["score"] is None for r in d["rows"])
 
@@ -214,7 +219,13 @@ def test_collapsed_rows_are_counted_rather_than_hidden(db):
     original = support_table._results_for_engine
     support_table._results_for_engine = lambda engine: monkey
     try:
-        d = support_table.build("m")
+        # Pinned to the public catalogue, where exactly one tag is `de`. A TMS
+        # locale list carries `de-at`, `de-ch`, `de-de` and more, each of which
+        # legitimately borrows the stored `de` row through its alias and
+        # collapses its own pair -- correct behaviour, but it turns a count of
+        # one into a count of however many regional spellings that list happens
+        # to hold, which is not what this test is about.
+        d = support_table.build("m", "default")
     finally:
         support_table._results_for_engine = original
     assert d["rows_collapsed"] == 1
@@ -236,7 +247,10 @@ def test_a_huge_scheme_is_capped_and_says_so(db):
     from fastapi.testclient import TestClient
     from llmlc.api.main import app, SUPPORT_MAX_ROWS
 
-    d = TestClient(app).get("/support", params={"engine": "m"}).json()
+    # Explicitly the 9,589-tag catalogue: the active scheme is a 602-tag locale
+    # list, which is under the cap and correctly reports nothing truncated.
+    d = TestClient(app).get("/support", params={"engine": "m",
+                                                "scheme": "default"}).json()
     assert d["truncated"] > SUPPORT_MAX_ROWS
     assert len(d["rows"]) == SUPPORT_MAX_ROWS
     assert d["total"] == d["truncated"]       # the counts still cover everything
@@ -305,7 +319,10 @@ def test_the_schemes_endpoint_lists_what_is_on_disk(db):
 
     d = TestClient(app).get("/schemes").json()
     names = {s["file"] for s in d["schemes"]}
-    assert "default" in names
+    # The active locale list is always offered. `default` is withheld whenever
+    # a real locale list exists beside it -- see `schemes()` for why that is
+    # conditional rather than absolute.
+    assert settings.scheme in names
     assert all({"name", "file", "count"} <= set(s) for s in d["schemes"])
 
 

@@ -84,3 +84,52 @@ def test_identity_adapter_roundtrips():
 def test_missing_scheme_names_the_fix():
     with pytest.raises(FileNotFoundError, match="build_default_scheme"):
         load_scheme("no-such-scheme")
+
+
+# -- ISO scope against a locale list's umbrella flag -------------------------
+
+def test_iso_scope_and_the_lists_umbrella_flag_are_two_fields():
+    """`kk` is the unqualified spelling standing over `kk-kz`, and ISO still
+    calls it an individual language. Storing the second claim in `scope` made it
+    a macrolanguage with no members, and `/resolution?macro_only=true` -- which
+    asks which *member language* a macrolanguage resolved to -- returned it
+    beside Swahili, where that question has no answer.
+    """
+    pytest.importorskip("llmlc.scheme")
+    try:
+        s = load_scheme("catmint")
+    except FileNotFoundError:
+        pytest.skip("no TMS-derived scheme on disk; built from a list we do not ship")
+
+    kk, sw = s.get("kk"), s.get("sw")
+    assert kk.inclusive is True and kk.scope == "individual" and kk.members == []
+    # Swahili is both, and that is the point of keeping two fields: one tag can
+    # be an umbrella in the list *and* a macrolanguage in ISO's sense.
+    assert sw.inclusive is True and sw.is_macro and "swh" in sw.members
+
+
+def test_the_unqualified_tag_is_the_arm_a_dialect_is_contrasted_against():
+    """What the dialect probes read. `pt` is the neutral arm and `pt-br` is a
+    variety beside it -- unlike the public catalogue, where `pt` resolves to
+    `pt-Latn-BR` and is itself the Brazilian variety, leaving nothing neutral.
+    """
+    try:
+        s = load_scheme("catmint")
+    except FileNotFoundError:
+        pytest.skip("no TMS-derived scheme on disk")
+
+    for base, variety in [("pt", "pt-br"), ("en", "en-gb"), ("ru", "ru-kz"),
+                          ("sr", "sr-me-cyrl")]:
+        assert s.get(base).inclusive is True, base
+        assert s.get(variety).inclusive is False, variety
+
+
+def test_a_derived_scheme_carries_its_references_attribution():
+    """Every resolved locale takes its ISO code, script, scope and endonym from
+    SIL's data, so the licence travels with the derived list."""
+    try:
+        s = load_scheme("catmint")
+    except FileNotFoundError:
+        pytest.skip("no TMS-derived scheme on disk")
+
+    assert any("SIL" in a for a in s.meta.attribution)

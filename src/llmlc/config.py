@@ -7,7 +7,21 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    scheme: str = "default"
+    #: The operating locale list: what a scan runs down, what the bench offers,
+    #: what a tag is resolved against. `catmint` is the 602-tag TMS list, whose
+    #: dialects are named explicitly and whose script subtag appears last and
+    #: only where it discriminates -- `sr-me-cyrl`, but `en-gb` and never
+    #: `en-Latn-GB`. That is what makes it the right list to measure dialects
+    #: against: the public catalogue resolves a base tag to one of its own
+    #: varieties (`pt` -> `pt-Latn-BR`), leaving no neutral arm to contrast a
+    #: dialect against, while here `pt` is the macrolanguage and `pt-br` is a
+    #: dialect beside it.
+    #:
+    #: **This is not the catalogue controls are resolved against.** A control
+    #: tag is always the public catalogue's (`bt/qualify.py`, `bootstrap.py`),
+    #: because FLORES is published in canonical BCP-47 and a locale list is not
+    #: a catalogue. The two loads are deliberately different and must stay so.
+    scheme: str = "catmint"
     hardware_profile: str = "auto"
 
     #: Path to a JSON file listing models, each with its own endpoint and key.

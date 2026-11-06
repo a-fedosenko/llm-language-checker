@@ -69,6 +69,13 @@ app = FastAPI(
 )
 
 
+#: Locale lists kept on disk but not offered in the UI. `default` is the public
+#: 9,589-tag catalogue: still the reference controls resolve against, no longer
+#: a list anyone should scan. Hidden, not removed -- it is what
+#: `scripts/build_scheme_from_tms.py` resolves a TMS list against.
+HIDDEN_SCHEMES = {"default"}
+
+
 @lru_cache(maxsize=4)
 def get_scheme(name: str) -> Scheme:
     return load_scheme(name)
@@ -335,17 +342,33 @@ def schemes() -> dict:
     catalogue is a catalogue, not anyone's locale list -- and requiring an
     environment variable and a restart to look at it would be the wrong
     ergonomics for a question asked once a week.
+
+    **`default` is withheld once a real locale list exists.** It remains on disk
+    and remains what controls are resolved against, but offering it beside a TMS
+    list invites a scan down 9,589 tags spelled in a different convention from
+    the one being measured, whose base tags are themselves varieties.
+
+    It is withheld *conditionally*, because `schemes/default.json` is the only
+    scheme a fresh clone has -- every other one is gitignored, being built from a
+    locale list that is not ours to publish. Hiding it unconditionally would
+    hand a new user an empty picker. So: hidden when there is something better
+    to offer, shown when it is all there is.
     """
     from llmlc.scheme.loader import SCHEMES_DIR
 
-    out = []
+    found = []
     for f in sorted(SCHEMES_DIR.glob("*.json")):
         try:
             s = load_scheme(f.stem)
         except Exception:  # noqa: BLE001 -- a broken scheme file is not a 500 here
             continue
-        out.append({"name": s.meta.name, "file": f.stem, "count": len(s.languages),
-                    "description": s.meta.description})
+        found.append({"name": s.meta.name, "file": f.stem, "count": len(s.languages),
+                      "description": s.meta.description})
+
+    hideable = {f["file"] for f in found} - HIDDEN_SCHEMES
+    out = [f for f in found
+           if f["file"] not in HIDDEN_SCHEMES or f["file"] == settings.scheme
+           or not hideable]
     return {"schemes": out, "active": settings.scheme}
 
 

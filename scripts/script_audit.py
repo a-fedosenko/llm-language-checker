@@ -79,7 +79,10 @@ def derive_hints() -> dict[str, str]:
 
 
 def main() -> int:
-    scheme = load_scheme("default")
+    # The operating scheme: the audit asks which scripts the list we measure
+    # actually needs, not which the public catalogue could name.
+    from llmlc.config import settings
+    scheme = load_scheme(settings.scheme)
     wanted = Counter(l.script for l in scheme.languages.values() if l.script)
     shipped = set(_SCRIPT_HINTS.values())
     derived_map = derive_hints()

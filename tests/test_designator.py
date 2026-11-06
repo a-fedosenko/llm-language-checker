@@ -87,3 +87,44 @@ def test_the_script_rule_does_not_leak_into_the_user_half():
     _, user = generation_prompt("Serbian (Cyrillic script)", "a woman misses her bus",
                                 script_name=script_name_for("Cyrl"))
     assert user == "a woman misses her bus"
+
+
+# -- the unqualified tag must not be asked as a dialect -----------------------
+
+def test_an_unqualified_tag_is_not_given_a_region_it_does_not_carry():
+    """`pt` has no region subtag but inherits the region *name* "Brazil" from the
+    catalogue's likely-subtag resolution. Naming it made `pt` and `pt-br` the
+    same request -- "Portuguese (Brazil)" -- so the neutral arm a dialect is
+    contrasted against was itself asked to be that dialect, and the comparison
+    was null by construction.
+
+    Protocol 020's trigger in mirror image: there two tags shared one prompt
+    because the region was never passed; here because it was passed where the
+    tag had none.
+    """
+    import pytest
+
+    from llmlc.probe.ladder import candidates_for
+    from llmlc.scheme import load_scheme
+
+    try:
+        s = load_scheme("catmint")
+    except FileNotFoundError:
+        pytest.skip("no TMS-derived scheme on disk")
+
+    for base, variety in [("pt", "pt-br"), ("en", "en-us"), ("es", "es-es"),
+                          ("ru", "ru-ru"), ("sr", "sr-rs-cyrl")]:
+        b = candidates_for(s, s.get(base))[0].value
+        v = candidates_for(s, s.get(variety))[0].value
+        assert b != v, f"{base} and {variety} ask for the same thing: {b!r}"
+        # Checked against the parenthesised qualifier list, not the whole
+        # string: "Serbia" is a substring of "Serbian", and a naive `in` test
+        # would convict a correct designator.
+        def qualifiers(d):
+            return d[d.index("(") + 1:d.rindex(")")].split(", ") if "(" in d else []
+
+        assert s.get(base).region_name not in qualifiers(b), (
+            f"{base} named a region its tag does not carry: {b!r}")
+        # The variety still names its own region -- this must not be fixed by
+        # dropping the region everywhere, which is method 3.0.0 undone.
+        assert s.get(variety).region_name in qualifiers(v)

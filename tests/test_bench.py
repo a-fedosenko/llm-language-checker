@@ -34,7 +34,11 @@ def client():
 
 
 def body(**kw):
-    return {"engine": "some-engine", "tag": "cv", **kw}
+    # A tag the *active* scheme has. These tests are about session mechanics --
+    # capping, closing, editing specs -- so the tag only has to resolve; the
+    # ones that genuinely need Chuvash (no FLORES control, hand-seeded) name it
+    # together with `scheme="default"`, because `cv` is not in a TMS locale list.
+    return {"engine": "some-engine", "tag": "de", **kw}
 
 
 # -- specifications, and what editing one costs ------------------------------

@@ -144,8 +144,13 @@ def build(src: pathlib.Path, name: str, reference: str = "default") -> tuple[Sch
                          or (match.region_name if match else None) or None),
             name=(entry.get("name") or entry.get("title") or key),
             local_name=(match.local_name if match else None),
-            scope=("macrolanguage" if entry.get("inclusive")
-                   else (match.scope if match else "individual")),
+            # ISO scope comes from the catalogue and only from the catalogue.
+            # The TMS `inclusive` flag is a different claim and gets its own
+            # field: writing it here made `kk` a macrolanguage with no members,
+            # which put it in `/resolution?macro_only` beside Swahili, where the
+            # question is which *member language* a macrolanguage resolved to.
+            scope=(match.scope if match else "individual"),
+            inclusive=bool(entry.get("inclusive")),
             type=(match.type if match else None),
             macro=(match.macro if match else None),
             members=(match.members if match else []),
@@ -162,6 +167,12 @@ def build(src: pathlib.Path, name: str, reference: str = "default") -> tuple[Sch
         generated_at=datetime.now(timezone.utc).isoformat(),
         generator="scripts/build_scheme_from_tms.py",
         sources={"locale_list": str(src), "reference_catalogue": reference},
+        # Carried from the reference catalogue, not dropped. Every resolved
+        # locale takes its ISO code, script, scope, macrolanguage membership and
+        # endonym from SIL's data, so the attribution those data carry travels
+        # with the derived scheme. It was lost here until `catmint` became the
+        # active scheme and `/scheme` started serving an empty attribution list.
+        attribution=list(ref.meta.attribution),
         counts={"languages": len(languages), "resolved": stats["resolved"],
                 "unresolved": len(stats["unresolved"]),
                 "classes": len({l.cls for l in languages.values()})},

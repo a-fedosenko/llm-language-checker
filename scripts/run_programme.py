@@ -46,12 +46,17 @@ def api(base: str, path: str, body: dict | None = None, timeout: int = 60):
 
 
 def target_tags() -> list[str]:
-    """Every living language that has a back-translator control — the same set
-    `llmlc scan --with-controls --living-only` produces."""
+    """Every living language in the operating scheme that has a back-translator
+    control — the same set `llmlc scan --with-controls --living-only` produces.
+
+    The scheme is the configured one, not the public catalogue: the programme
+    measures the list we actually publish results for.
+    """
     from llmlc.bt import load_controls
+    from llmlc.config import settings
     from llmlc.scheme import load_scheme
     have = set(load_controls())
-    return [x.tag for x in load_scheme("default").languages.values()
+    return [x.tag for x in load_scheme(settings.scheme).languages.values()
             if x.type == "L" and x.tag in have]
 
 

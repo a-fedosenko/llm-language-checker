@@ -293,8 +293,21 @@ def candidates_for(scheme: Scheme, lang: Language, incumbent: str | None = None)
     """
     from llmlc.probe.variant import is_script_variant
 
+    # The region is named only when the *tag* carries one. `region_name` alone
+    # is not that test: a locale list's unqualified tag has no region subtag and
+    # still inherits a region name from the reference catalogue's likely-subtag
+    # resolution -- `pt` carries "Brazil", `en` "United States", `sr` "Serbia".
+    # Passing it unconditionally asked for `pt` with the identical designator as
+    # `pt-br` ("Portuguese (Brazil)"), and for `en` as `en-us`, so the
+    # unqualified tag -- the neutral arm a dialect is contrasted against -- was
+    # silently asked to be a dialect, and the contrast was a null comparison by
+    # construction.
+    #
+    # This is protocol 020's trigger in mirror image: there two tags shared one
+    # prompt because the region was never passed, here because it was passed
+    # where the tag had none. A designator must say exactly what the tag says.
     return dsg.candidates(lang, incumbent=incumbent,
-                          region_name=lang.region_name,
+                          region_name=lang.region_name if lang.region else None,
                           qualify_script=is_script_variant(scheme, lang) or None)
 
 

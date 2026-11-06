@@ -32,11 +32,26 @@ class Language(BaseModel):
     type: str | None = Field(None, description="ISO 639-3 type: L living, E extinct, H historical, A ancient, C constructed")
     macro: str | None = Field(None, description="ISO 639-3 code of the macrolanguage this belongs to")
     members: list[str] = Field(default_factory=list, description="ISO 639-3 codes of members, if a macrolanguage")
+    #: The *locale list's* own umbrella flag, which is not ISO scope and must not
+    #: be stored in `scope`.
+    #:
+    #: A TMS marks `kk` inclusive because it is the unqualified spelling standing
+    #: over `kk-kz` -- a statement about that list's shape. ISO calls `kk`
+    #: `individual`, and calls `sw` a macrolanguage because `swh` and `swc` are
+    #: separate languages inside it. Both facts are true and they are different
+    #: facts: `sw` is both, `kk` is only the first, `ar` is both for different
+    #: reasons. Writing the umbrella flag into `scope` made `kk` a macrolanguage
+    #: with no members, which is a contradiction in ISO's terms.
+    #:
+    #: Dialect work reads this one, not `scope`: the inclusive tag is the neutral
+    #: arm a dialect is contrasted against.
+    inclusive: bool = Field(False, description="The locale list's unqualified umbrella tag, e.g. `pt` over `pt-br`")
     cls: str = Field(description="Equivalence class `iso639_3|script`; base-language capability is probed once per class")
     aliases: list[str] = Field(default_factory=list)
 
     @property
     def is_macro(self) -> bool:
+        """ISO 639-3 macrolanguage. See `inclusive` for the other question."""
         return self.scope == "macrolanguage"
 
 

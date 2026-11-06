@@ -544,7 +544,7 @@ const HELP = {
   'block.support': ['Language support',
     'One model against every locale in the active scheme. The status answers whether the model can be used for that language; the score says how well it carried meaning. Everything about how a verdict was reached — the designator, the gate verdict, the interval, the back-translator — is on the Results tab.'],
   'support.scheme': ['Locale list',
-    'Which list of languages the table runs down. Your own locale list is the useful one; the shipped 9,589-tag catalogue is a catalogue, not anyone\'s list. Build a scheme from a TMS export with scripts/build_scheme_from_tms.py.'],
+    'Which list of languages the table runs down. The default is the 602-tag Catmint TMS list, whose dialects are named explicitly and whose script subtag appears last and only where it tells two dialects apart — sr-me-cyrl, but en-gb. Build a scheme from your own TMS export with scripts/build_scheme_from_tms.py.'],
   'support.status': ['Status',
     'Five values, and the last two are not verdicts about the model. supported: it wrote the language and a qualified reader confirmed the meaning survived. supported-via-dialect: not probed directly, inheriting its base language — which says nothing about whether the model marks this variant. unsupported: proven locally, the model refused or wrote the wrong language or script. unverifiable: it wrote something, but no back-translator could be qualified for this language, so quality cannot be assessed. unchecked: never probed.'],
   'support.score': ['Score',

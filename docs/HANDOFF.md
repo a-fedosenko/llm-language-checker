@@ -14,7 +14,7 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/04 - Methodology.md` — the reference page, written at S9: every pipeline step with the protocol that settled it, and a limitations section of the same length
 - `experiments/protocols/README.md` — twenty protocols. **016 and 018 matter most**; then 019, 017, 005, 012. **020 is written but not run**, and gates the programme re-run
 
-**State:** S0–S11 complete. 436 tests. Method version **3.0.0** — and **every one of the 1,564 stored rows is stale**, because 3.0.0 changed the generation prompt. Nothing in the UI reflects the current method. Re-running the four-engine programme is ~14,200 calls, and two decisions below should be settled first.
+**State:** S0–S11 complete. 440 tests. **The operating scheme is now `catmint`**, the 602-tag TMS locale list — dialects named explicitly, script last and only where it discriminates. The public 9,589-tag catalogue stays on disk as what back-translator controls resolve against, and is withheld from the UI picker whenever a real locale list exists beside it. Method version **3.0.0** — and **every one of the 1,564 stored rows is stale**, because 3.0.0 changed the generation prompt. Nothing in the UI reflects the current method. Re-running the four-engine programme is ~14,200 calls, and two decisions below should be settled first.
 
 ---
 
@@ -59,7 +59,7 @@ On that reading the architecture is right and the gap is **authoring throughput*
 ## The two decisions this blocks
 
 1. **Split equivalence classes by region?** +239 probes on the TMS list, ~+2,150 calls per engine, **~65% more per scan**. Do not re-run the programme before settling it, or it gets run twice.
-2. **Protocol 020** (`experiments/protocols/020-region-aware-prompts.md`) — hypotheses recorded, **not run**. It tests whether naming the region works and whether it reintroduces protocol 010's failure. ~400 calls, against a 14,200-call re-run. Its H1 would be a much better experiment with the Serbian marker set as the metric rather than chrF++ between two generations.
+2. **Protocol 020's H2** (`experiments/protocols/020-region-aware-prompts.md`) — whether method 3.0.0's system/user split moves the verdict on languages with no regional variant. Still open, still unrun, and still what gates the 14,200-call re-run. Its H1 and H3 were superseded by [021](../experiments/protocols/021-attestation-without-a-marker-corpus.md), which answers them with blind identification rather than chrF++ between two generations.
 
 ---
 
