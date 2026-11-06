@@ -209,3 +209,102 @@ def test_ambiguous_han_voids_rather_than_convicts():
     g = check("中文" * 12, prompt="p", expect_lang=None, expect_script="Hant")
     assert g.verdict in (GateVerdict.LOW_CONFIDENCE, GateVerdict.DEGENERATE)
     assert g.verdict is not GateVerdict.WRONG_SCRIPT
+
+
+# -- abstention where the instrument cannot tell two standards apart ----------
+
+SR_LATN = ("Dijete je pronašlo izgubljenog psa pored rijeke. "
+           "Donijelo ga je kući i dalo mu mlijeka.")
+
+
+def test_an_indistinguishable_neighbour_voids_rather_than_convicting():
+    """Ijekavian Serbian in Latin reads as Bosnian, and correctly: the written
+    standards very nearly coincide in that script. Convicting records "the model
+    did not write Serbian" when what happened is that nothing could have told
+    the three apart -- an instrument failure published as a model failure, which
+    is what protocol 005 exists to prevent."""
+    r = check(SR_LATN, prompt=PROMPT, expect_lang="srp", expect_script="Latn",
+              abstain_lang={"bos", "hrv", "cnr"},
+              lid_result=lid("bos_Latn", "bos", "Latn", 0.47))
+    assert r.verdict is GateVerdict.LOW_CONFIDENCE
+    assert not r.is_negative
+    assert "not distinguishable" in r.detail
+
+
+def test_abstention_beats_the_confidence_floor():
+    """The instrument is not unsure here -- it is confidently sure, and
+    confidently unable to tell these apart. A high-confidence `bos_Latn` would
+    otherwise sail past the confidence check straight into a conviction."""
+    r = check(SR_LATN, prompt=PROMPT, expect_lang="srp", expect_script="Latn",
+              abstain_lang={"bos", "hrv", "cnr"},
+              lid_result=lid("bos_Latn", "bos", "Latn", 0.99))
+    assert r.verdict is GateVerdict.LOW_CONFIDENCE
+
+
+def test_abstention_voids_and_never_passes():
+    """Narrower than `accept_lang` on purpose. We are not saying Croatian
+    satisfies a request for Serbian; we are saying we cannot tell, so we decline
+    to answer -- and a declined item scores nothing either way."""
+    r = check(SR_LATN, prompt=PROMPT, expect_lang="srp", expect_script="Latn",
+              abstain_lang={"bos"}, lid_result=lid("bos_Latn", "bos", "Latn", 0.99))
+    assert not r.passed and not r.is_negative
+
+
+def test_a_language_outside_the_abstain_set_still_convicts():
+    """Abstention must not become a blanket excuse: Russian is not Serbian in
+    any script, and the gate still says so."""
+    r = check("Я говорю по-русски и сегодня очень хорошая погода в городе.",
+              prompt=PROMPT, expect_lang="srp", expect_script="Cyrl",
+              abstain_lang={"bos", "hrv", "cnr"},
+              lid_result=lid("rus_Cyrl", "rus", "Cyrl", 0.99))
+    assert r.verdict is GateVerdict.WRONG_LANGUAGE and r.is_negative
+
+
+def test_without_an_abstain_set_the_old_verdict_is_unchanged():
+    """The parameter is additive: every existing caller behaves exactly as before."""
+    r = check(SR_LATN, prompt=PROMPT, expect_lang="srp", expect_script="Latn",
+              lid_result=lid("bos_Latn", "bos", "Latn", 0.99))
+    assert r.verdict is GateVerdict.WRONG_LANGUAGE
+
+
+def test_the_indistinguishable_table_is_keyed_by_script():
+    """Cyrillic does not collapse -- Croatian is not written in it -- which is
+    why `srp_Cyrl` is identified cleanly and needs no abstention. A table that
+    ignored script would void the one Serbian case that actually works."""
+    from llmlc.probe.ladder import indistinguishable_codes
+    from llmlc.scheme.model import Language
+
+    def srp(script):
+        return Language(tag="x", lang="sr", iso639_3="srp", script=script, cls="srp|")
+
+    assert indistinguishable_codes(srp("Latn")) >= {"bos", "hrv", "cnr"}
+    assert indistinguishable_codes(srp("Cyrl")) == set()
+
+
+def test_a_language_is_never_indistinguishable_from_itself():
+    from llmlc.probe.ladder import indistinguishable_codes
+    from llmlc.scheme.model import Language
+
+    out = indistinguishable_codes(
+        Language(tag="x", lang="sr", iso639_3="srp", script="Latn", cls="srp|"))
+    assert "srp" not in out
+
+
+def test_abstention_does_not_spill_onto_unrelated_latin_languages():
+    """The table is keyed by script, so every Latin-script language shares a key.
+    Membership of a group is what matters, not the key -- otherwise Portuguese
+    would start voiding items because Serbo-Croatian is written in Latin too."""
+    from llmlc.probe.ladder import indistinguishable_codes
+    from llmlc.scheme import load_scheme
+
+    try:
+        s = load_scheme("catmint")
+    except FileNotFoundError:
+        pytest.skip("no TMS-derived scheme on disk")
+
+    assert indistinguishable_codes(s.get("pt-br")) == set()
+    assert indistinguishable_codes(s.get("en-gb")) == set()
+    assert indistinguishable_codes(s.get("sr-me-latn")) >= {"bos", "hrv", "cnr"}
+    # The one Serbian case that already works end to end must stay untouched:
+    # `srp_Cyrl` is identified cleanly and voiding it would be a regression.
+    assert indistinguishable_codes(s.get("sr-me-cyrl")) == set()

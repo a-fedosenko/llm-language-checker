@@ -12,9 +12,9 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 - `docs/02 - Experiment - invented language control.md` — why self-reported language support cannot be trusted
 - `docs/03 - Architecture and development stages.md` — architecture, data model, staging, implementation log. **Read "Services as built" before believing the five-service diagram above it**, which is the S0 plan and was never built
 - `docs/04 - Methodology.md` — the reference page, written at S9: every pipeline step with the protocol that settled it, and a limitations section of the same length
-- `experiments/protocols/README.md` — twenty protocols. **016 and 018 matter most**; then 019, 017, 005, 012. **020 is written but not run**, and gates the programme re-run
+- `experiments/protocols/README.md` — twenty-one protocols. **016 and 018 matter most**; then 019, 017, 005, 012. **021 is the live one** (dialect attestation, hypotheses recorded); 020's H1/H3 are superseded by it and **020's H2 is still open and still gates the programme re-run**
 
-**State:** S0–S11 complete. 440 tests. **The operating scheme is now `catmint`**, the 602-tag TMS locale list — dialects named explicitly, script last and only where it discriminates. The public 9,589-tag catalogue stays on disk as what back-translator controls resolve against, and is withheld from the UI picker whenever a real locale list exists beside it. Method version **3.0.0** — and **every one of the 1,564 stored rows is stale**, because 3.0.0 changed the generation prompt. Nothing in the UI reflects the current method. Re-running the four-engine programme is ~14,200 calls, and two decisions below should be settled first.
+**State:** S0–S11 complete, S12.5 in progress (dialect attestation). 440 tests. **The operating scheme is now `catmint`**, the 602-tag TMS locale list — dialects named explicitly, script last and only where it discriminates. The public 9,589-tag catalogue stays on disk as what back-translator controls resolve against, and is withheld from the UI picker whenever a real locale list exists beside it. Method version **3.0.0** — and **every one of the 1,564 stored rows is stale**, because 3.0.0 changed the generation prompt. Nothing in the UI reflects the current method. Re-running the four-engine programme is ~14,200 calls, and two decisions below should be settled first.
 
 ---
 

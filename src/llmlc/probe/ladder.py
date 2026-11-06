@@ -281,6 +281,42 @@ def relative_codes(scheme: Scheme, lang: Language) -> set[str]:
     return out - accepted_codes(lang)
 
 
+#: Written standards a general-purpose LID cannot separate *in a given script*,
+#: keyed by script. Authored, not derived: this is a claim about orthographies,
+#: and no table in the catalogue encodes it.
+#:
+#: Serbo-Croatian in Latin is the case that forced it. GlotLID reads ijekavian
+#: Serbian in Latin as `bos` or `hrv`, and is right to: Bosnian, Croatian,
+#: Montenegrin and Latin-script Serbian very nearly coincide on the page, and
+#: the differences that remain are not what a sentence-level classifier sees.
+#: In **Cyrillic** the same four do not collapse -- Croatian is not written in
+#: it -- which is why this is keyed by script and why `srp_Cyrl` is identified
+#: cleanly and needs no abstention.
+#:
+#: Entries here void items; they never pass them. Adding a pair is saying "we
+#: cannot tell", not "these satisfy each other" -- see `gate.check`.
+INDISTINGUISHABLE: dict[str, tuple[frozenset[str], ...]] = {
+    "Latn": (frozenset({"srp", "bos", "hrv", "cnr", "hbs"}),),
+}
+
+
+def indistinguishable_codes(lang: Language) -> set[str]:
+    """Codes the instrument cannot tell from this language, in its own script.
+
+    Returned separately from `relative_codes` because the two mean opposite
+    things about where the fault lies: a relative substitution is the model
+    reaching for a neighbour, and an indistinguishable pair is us being unable
+    to look. Conflating them would publish the second as the first.
+    """
+    code = lang.iso639_3 or ""
+    out: set[str] = set()
+    for group in INDISTINGUISHABLE.get(lang.script or "", ()):
+        if code in group:
+            out |= set(group)
+    out.discard(code)
+    return out
+
+
 def candidates_for(scheme: Scheme, lang: Language, incumbent: str | None = None):
     """The designators this language will actually be asked by.
 
@@ -353,6 +389,9 @@ def ladder_steps(
 
     accept = accepted_codes(lang)
     relatives = relative_codes(scheme, lang)
+    # Standards this instrument cannot separate in this language's script. Voids
+    # an item instead of convicting it -- see `indistinguishable_codes`.
+    abstain = indistinguishable_codes(lang)
     candidates = candidates_for(scheme, lang, incumbent)
     calls = {"generation": 0, "backtranslation": 0, "judge": 0}
     resolves: dict[str, int] = {}
@@ -371,7 +410,8 @@ def ladder_steps(
         for spec in specs[:RUNG1_ITEMS]:
             item = generate_and_gate(client=client, engine=engine, lang=lang,
                                      designator=cand.value, spec=spec, corpus=corpus,
-                                     relatives=relatives, accept=accept)
+                                     relatives=relatives, accept=accept,
+                                     abstain=abstain)
             calls["generation"] += 1
             record_lid(item)
             items.append(item)
@@ -543,7 +583,8 @@ def ladder_steps(
     for n, spec in enumerate(extra, 1):
         item = generate_and_gate(client=client, engine=engine, lang=lang,
                                  designator=best.value, spec=spec, corpus=corpus,
-                                 relatives=relatives, accept=accept)
+                                 relatives=relatives, accept=accept,
+                                 abstain=abstain)
         calls["generation"] += 1
         record_lid(item)
         if item.lang_ok:

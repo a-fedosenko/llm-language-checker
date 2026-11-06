@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Date** | 2026-11-03 |
-| **Status** | hypotheses recorded; run pending |
+| **Status** | H1 and H3 superseded by [021](021-attestation-without-a-marker-corpus.md); **H2 still open and not run** |
 | **Triggered by** | Running `sr-RS-Cyrl` and `sr-ME-Cyrl` through the demo stand returned identical verdicts, because both produced the identical prompt. `region_name` was a parameter in `designator.py` that no caller had ever passed. |
 | **Artifacts** | method 3.0.0; `probe/designator.py`, `probe/steps.py`, `client/openai_compat.py` |
 

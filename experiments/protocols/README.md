@@ -33,7 +33,8 @@ changed as a result.
 | [017](017-are-the-tiers-measurable.md) | 2026-09-24 | Is the five-tier scale measurable? | No — `Basic` never occurs, `Usable` is mis-ordered, and the tier function orders languages worse (0.436) than one of its own inputs (0.664). **H2's correlation withdrawn by 018** |
 | [018](018-eligibility-and-adequacy.md) | 2026-09-25 | Does an eligibility filter plus a published adequacy score replace it? | Yes — monotonic, ρ 0.647 against the number's 0.686. And the study's gate verdicts were wrong: the calibration harness convicted every macrolanguage |
 | [019](019-script-check-completeness.md) | 2026-09-26 | Can the script check name the scripts the catalogue asks about? | Not all of them — 40 scripts blocked, 63 tags of them Chinese. Fixed from Unicode's own data; simplified vs traditional now decided 7/7. The protocol's own premise was overstated tenfold |
-| [020](020-region-aware-prompts.md) | 2026-11-03 | Does naming the region — with an instruction to use it — separate `sr-RS` from `sr-ME`, and does a system/user split move the verdict? | **Hypotheses recorded; run pending.** H3 is expected to break first, at `gsw-CH` |
+| [020](020-region-aware-prompts.md) | 2026-11-03 | Does naming the region — with an instruction to use it — separate `sr-RS` from `sr-ME`, and does a system/user split move the verdict? | **Partly superseded by 021** (H1, H3 — blind identification is the better metric). **H2 is still open** and still gates the programme re-run |
+| [021](021-attestation-without-a-marker-corpus.md) | 2026-11-05 | Can dialect command be measured by blind attestation instead of a marker corpus — and does the battery stay silent on Russian, where there is nothing to find? | **Hypotheses recorded; run pending.** H1 is expected to break, on item length rather than attestor ability |
 
 ## Writing one
 

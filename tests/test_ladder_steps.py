@@ -1,6 +1,6 @@
 """The ladder has one traversal, and two ways to consume it.
 
-`run_ladder` drains the generator; the demo stand advances it a step at a time.
+`run_ladder` drains the generator; the bench advances it a step at a time.
 The property that matters is that those cannot disagree -- a second walk of the
 ladder would drift, and convention 9 records what that costs: an analysis
 harness re-implemented a production call, got it subtly wrong, and 68 bad
@@ -30,7 +30,7 @@ def stub(monkeypatch, *, gate=GateVerdict.PASS, recall=1.0, trustworthy=True):
     calls = {"generate": 0, "judge": 0}
 
     def fake_generate(*, client, engine, lang, designator, spec, corpus,
-                      relatives, accept, n_sentences=3):
+                      relatives, accept, abstain=None, n_sentences=3):
         calls["generate"] += 1
         return ItemOutcome(spec.id, designator, f"text for {spec.id}",
                            GateResult(gate, None, ""))
@@ -183,7 +183,7 @@ def test_stopping_early_spends_nothing_further(monkeypatch, kw):
 # -- how the session layer consumes it ---------------------------------------
 
 def test_a_terminal_step_leaves_only_the_return_value(monkeypatch, kw):
-    """The demo collects the verdict in the same request as the terminal step.
+    """The bench collects the verdict in the same request as the terminal step.
     That is only sound if nothing but the return remains after it -- otherwise
     the session would skip a step to get there."""
     stub(monkeypatch)

@@ -107,6 +107,7 @@ def _normalise(s: str) -> str:
 def check(text: str | None, *, prompt: str, expect_lang: str | None,
           expect_script: str | None, relatives: set[str] | None = None,
           accept_lang: set[str] | None = None,
+          abstain_lang: set[str] | None = None,
           lid_result: LidResult | None = None) -> GateResult:
     """Screen one generation.
 
@@ -116,6 +117,25 @@ def check(text: str | None, *, prompt: str, expect_lang: str | None,
     resolving to a member, which is the answer, not a substitution.
     `relatives` are neighbours whose appearance means substitution rather than a
     generic miss.
+
+    `abstain_lang` holds codes the *instrument* cannot tell from the target, as
+    opposed to codes that would be a wrong answer. Seeing one is `LOW_CONFIDENCE`
+    -- a void item -- rather than a conviction, because the finding is about LID
+    and not about the model.
+
+    The case it exists for: ijekavian Serbian written in Latin script is read as
+    Bosnian or Croatian, and correctly, since the three written standards very
+    nearly coincide in that script. Convicting there records "the model did not
+    write Serbian" when what happened is that nothing could have told the three
+    apart. That is the distinction protocol 005 is built on -- a failure of the
+    instrument must never be published as a failure of the model -- and it is
+    load-bearing for dialect work, where a variety's nearest neighbour is
+    precisely what a general-purpose LID will reach for.
+
+    Deliberately narrower than `accept_lang`: an abstention voids the item and
+    scores nothing, where acceptance would pass it. We are not saying Croatian
+    satisfies a request for Serbian; we are saying we cannot tell, so we decline
+    to answer.
     """
     checks: dict[str, bool] = {}
 
@@ -185,6 +205,18 @@ def check(text: str | None, *, prompt: str, expect_lang: str | None,
             checks["language"] = True
             return GateResult(GateVerdict.PASS, lid=lid,
                               detail=f"{expect_lang} ranked below {got} but above threshold",
+                              checks=checks)
+
+        # Before confidence, because this abstention is not about how sure the
+        # instrument is: it is confidently sure, and confidently unable to tell
+        # these apart. A high-confidence `bos_Latn` on Serbian text would sail
+        # past the confidence floor straight into a conviction.
+        if abstain_lang and got in abstain_lang:
+            return GateResult(GateVerdict.LOW_CONFIDENCE, lid=lid,
+                              detail=f"{got} is not distinguishable from "
+                                     f"{expect_lang} by this instrument in "
+                                     f"{expect_script or 'this script'}; "
+                                     "abstaining rather than convicting",
                               checks=checks)
 
         if lid.confidence < LID_CONFIDENT:

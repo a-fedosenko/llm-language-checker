@@ -52,6 +52,7 @@ class ItemOutcome:
 def generate_and_gate(*, client: OpenAICompatClient, engine: str, lang: Language,
                       designator: str, spec: Spec, corpus: Corpus,
                       relatives: set[str], accept: set[str],
+                      abstain: set[str] | None = None,
                       n_sentences: int = 3) -> ItemOutcome:
     system, user = dsg.generation_prompt(designator, spec.scenario, n_sentences,
                                          script_name=dsg.script_name_for(lang.script))
@@ -65,7 +66,8 @@ def generate_and_gate(*, client: OpenAICompatClient, engine: str, lang: Language
     # so it has to see both messages: an output echoing the system half is still
     # an echo, and would otherwise pass as original text.
     gate = gate_check(gen.text, prompt=shown, expect_lang=lang.iso639_3,
-                      expect_script=lang.script, relatives=relatives, accept_lang=accept)
+                      expect_script=lang.script, relatives=relatives, accept_lang=accept,
+                      abstain_lang=abstain)
     return ItemOutcome(spec.id, designator, gen.text, gate, error=gen.error,
                        prompt=shown)
 
