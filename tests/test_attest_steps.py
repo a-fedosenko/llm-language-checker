@@ -306,3 +306,63 @@ def test_the_contrast_pair_is_two_named_varieties(monkeypatch, kw):
     sep = next(s for s in steps if s.kind == "separated")
     assert sep.detail["expected"] == ["Serbia", "Montenegro"]
     assert result.contrasts and result.contrasts[0].correct
+
+
+# -- what a finished run leaves behind ---------------------------------------
+
+def test_the_verdict_about_the_model_under_test_is_recorded(kw, monkeypatch):
+    """The one thing the run was for. Until this was written a battery kept only
+    how well the *attestors* discriminated and let its own verdict die with the
+    session -- a `full-command` on `pt-pt` vanished with the page that showed
+    it."""
+    stub(monkeypatch)
+    rec = CapabilityRecord()
+    drain(D.attest_steps(**{**kw, "record": rec}))
+
+    from llmlc.probe.panel import CapabilityKey
+
+    script = kw["scheme"].get("sr-me-cyrl").script
+    got = rec.get(CapabilityKey("alpha-pro", "sr-me-cyrl", Role.GENERATION, script))
+    assert got is not None and got.qualified is True
+    assert "full-command" in got.detail
+
+
+def test_a_negative_verdict_is_recorded_too_with_its_level(kw, monkeypatch):
+    """`recognition-only` and `no-evidence` are both not-qualified and are not
+    the same answer, so the level is kept beside the boolean."""
+    stub(monkeypatch, identifies=False, separates=False)
+    rec = CapabilityRecord()
+    drain(D.attest_steps(**{**kw, "record": rec}))
+
+    from llmlc.probe.panel import CapabilityKey
+
+    got = rec.get(CapabilityKey("alpha-pro", "sr-me-cyrl", Role.GENERATION,
+                                kw["scheme"].get("sr-me-cyrl").script))
+    assert got.qualified is False and "no-evidence" in got.detail
+
+
+def test_indeterminate_is_recorded_rather_than_dropped(kw, monkeypatch):
+    """A gap in the record reads as "never measured", which is a third thing
+    again: we measured, and could not tell."""
+    stub(monkeypatch, controls_pass=False)
+    rec = CapabilityRecord()
+    drain(D.attest_steps(**{**kw, "record": rec}))
+
+    from llmlc.probe.panel import CapabilityKey
+
+    got = rec.get(CapabilityKey("alpha-pro", "sr-me-cyrl", Role.GENERATION,
+                                kw["scheme"].get("sr-me-cyrl").script))
+    assert got is not None and got.qualified is False
+    assert "indeterminate" in got.detail and "No attestor passed" in got.detail
+
+
+def test_the_producer_record_is_separate_from_the_attestor_records(kw, monkeypatch):
+    """Different roles, different claims. One is "can this model write the
+    variety", the other "can this model tell it apart"."""
+    stub(monkeypatch)
+    rec = CapabilityRecord()
+    drain(D.attest_steps(**{**kw, "record": rec}))
+    roles = {(r.key.model, r.key.role.value) for r in rec.rows()}
+    assert ("alpha-pro", "generation") in roles
+    assert ("beta-one", "discrimination") in roles
+    assert ("alpha-pro", "discrimination") not in roles

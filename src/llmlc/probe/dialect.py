@@ -884,6 +884,23 @@ def attest_steps(*, scheme: Scheme, tag: str, engine: str, client: OpenAICompatC
 
     # -- the paid half ------------------------------------------------------
 
+    def keep(attestors: bool = False) -> None:
+        """Write what this run found, on **every** path out of the battery.
+
+        The two early exits -- no usable pair, no competent attestor -- are
+        exactly the ones that most need recording, and were the two that
+        silently skipped it: an absent row reads as "never measured", which is a
+        third answer again from "measured and could not tell".
+        """
+        if record is None:
+            return
+        if attestors:
+            for cap in capabilities_from(panel, tag=tag, role=Role.DISCRIMINATION,
+                                         script=lang.script,
+                                         probes=["identity", "order"]):
+                record.put(cap)
+        record.put(_producer_capability(out, lang))
+
     panel = Panel()
     out.panel = panel
     # The contrast pair is two *named* varieties. The neutral text stays out of
@@ -895,6 +912,7 @@ def attest_steps(*, scheme: Scheme, tag: str, engine: str, client: OpenAICompatC
             "No usable pair was produced, so no attestor could be qualified and "
             "nothing was attested. This is a gap in the production half, not a "
             "verdict about discrimination.")
+        keep()
         yield AttestStep("verdict", f"{out.verdict.value} — {out.notes[-1]}",
                          out.as_dict(), calls, terminal=True, tone="warn")
         return out
@@ -916,6 +934,7 @@ def attest_steps(*, scheme: Scheme, tag: str, engine: str, client: OpenAICompatC
             "No attestor passed the controls for this family, so nothing was "
             "measured. `indeterminate` is a statement about the instrument and "
             "must not be read as a negative about the model.")
+        keep(attestors=True)
         yield AttestStep("verdict", f"{out.verdict.value} — {out.notes[-1]}",
                          out.as_dict(), calls, terminal=True, tone="warn")
         return out
@@ -949,11 +968,11 @@ def attest_steps(*, scheme: Scheme, tag: str, engine: str, client: OpenAICompatC
                              tone=attest_tone(True if s.correct
                                               else None if s.merged else False))
 
-    if record is not None:
-        for cap in capabilities_from(panel, tag=tag, role=Role.DISCRIMINATION,
-                                     script=lang.script,
-                                     probes=["identity", "order"]):
-            record.put(cap)
+    # The attestors' competence, **and** the finding about the model actually
+    # under test. Until the second was written a battery kept only how well the
+    # attestors could discriminate and let its own verdict die with the session
+    # -- the one thing the run was for was the one thing it did not keep.
+    keep(attestors=True)
 
     yield AttestStep("verdict",
                      f"{out.verdict.value} (confidence {out.confidence})",
@@ -962,6 +981,29 @@ def attest_steps(*, scheme: Scheme, tag: str, engine: str, client: OpenAICompatC
                                       else None if out.verdict in _NOT_A_CLAIM()
                                       else False))
     return out
+
+
+def _producer_capability(out: DialectResult, lang: Language):
+    """What the battery concluded about the engine, as a durable record.
+
+    `qualified` is the positive half of the ladder -- production or better --
+    so a reader asking "can this model write this variety" gets a boolean, and
+    `detail` keeps the level, because `recognition-only` and `no-evidence` are
+    both False and are not the same answer.
+
+    `indeterminate` is recorded as not-qualified with its reason, never dropped.
+    A gap in the record would read as "never measured", which is a third thing
+    again: we measured, and could not tell.
+    """
+    from llmlc.probe.panel import Capability, CapabilityKey, Role
+
+    return Capability(
+        key=CapabilityKey(out.engine, out.tag, Role.GENERATION, lang.script),
+        qualified=out.verdict in _POSITIVE(),
+        confidence=out.confidence,
+        probes=["identification", "contrast", "conversion", "consistency"],
+        detail=out.verdict.value + (f" — {out.notes[0]}" if out.notes else ""),
+    )
 
 
 def _POSITIVE():

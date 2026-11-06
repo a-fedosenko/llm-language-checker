@@ -493,6 +493,7 @@
       <button id="d-step" class="btn" disabled>Run next step</button>
       <button id="d-auto" class="btn" disabled>Run to the end</button>
       <button id="d-close" class="btn ghost" disabled>Abandon</button>
+      <button id="d-next-variety" class="btn" hidden>Run the next variety</button>
       <span class="ev" id="d-cost"></span>
     </div>
   </section>
@@ -1234,11 +1235,17 @@ function renderPlan(plan) {
         ${plan.designators.map(esc).join(' · ')}</span>`;
 }
 
-function benchButtons({ live, busy }) {
+function benchButtons({ live, busy, done }) {
   $('#d-start').disabled = live || busy;
-  $('#d-step').disabled = !live || busy;
-  $('#d-auto').disabled = !live || busy;
-  $('#d-close').disabled = !live || busy;
+  $('#d-start').textContent = done ? 'Start another run' : 'Start';
+  // Hidden rather than merely disabled once a run is over. A greyed "Run next
+  // step" still reads as an action the page is withholding, and the reader is
+  // left looking for the one they are supposed to take; there is no next step,
+  // and saying so by absence is clearer than saying it by opacity.
+  for (const id of ['#d-step', '#d-auto', '#d-close']) {
+    $(id).disabled = !live || busy;
+    $(id).hidden = !!done;
+  }
 }
 
 function benchRequest() {
@@ -1286,6 +1293,7 @@ async function startBench() {
   $('#d-next').hidden = true;
   $('#d-plan').hidden = true;
   benchButtons({ live: false, busy: true });
+  $('#d-next-variety').hidden = true;
   try {
     const [url, body] = benchRequest();
     const d = await j(url, { method: 'POST',
@@ -1505,6 +1513,28 @@ const VERDICT_MEANS = {
   'indeterminate': 'nobody competent could check — a statement about the instrument, NOT about the model',
 };
 
+// The obvious next move after measuring one variety is the next variety of the
+// same language -- a family is five or eight of them, and retyping the tag to
+// walk a family is the friction that stops someone walking it.
+function offerNextVariety() {
+  const btn = $('#d-next-variety');
+  const sel = $('#d-against');
+  const rest = [...sel.options].filter(o => o.value && o.value !== sel.value);
+  if (!rest.length) { btn.hidden = true; return; }
+  btn.hidden = false;
+  btn.textContent = `Next: ${rest[0].textContent}`;
+  btn.dataset.tag = rest[0].value;
+}
+
+$('#d-next-variety').addEventListener('click', async () => {
+  const next = $('#d-next-variety').dataset.tag;
+  if (!next) return;
+  $('#d-tag').value = next;
+  await loadDialectOptions();
+  $('#d-next-variety').hidden = true;
+  startBench();
+});
+
 function renderDialectResult(sess) {
   const r = sess.result;
   if (!r) {
@@ -1527,7 +1557,24 @@ function renderDialectResult(sess) {
             ? ` · discarded ${esc(r.panel.disqualified.join(', '))}` : ''}
         ${r.identified && r.identified.split ? ' · <b>the panel disagreed</b>, which is the finding' : ''}
         ${g.unreliable ? ' · <b>an attestor cited markers that are not in the text</b>' : ''}
-        · corpus ${esc(sess.corpus || '')}
+      </span>
+    </div>
+    <!-- What the run left behind, so "is that it?" has an answer on the page
+         rather than in the source. Nothing is pending and nothing needs
+         approving: a measurement is not a proposal. -->
+    <div class="note">
+      <strong>Run finished. Nothing is waiting on you.</strong><br>
+      <span class="ev">
+        Recorded: <b>${esc(r.engine)}</b> can
+        ${['production', 'full-command'].includes(r.verdict) ? '' : '<b>not</b> '}write
+        <code>${esc(r.tag)}</code> (<code>${esc(r.verdict)}</code>, confidence
+        ${esc(r.confidence)}), and what each attestor was worth on this variety —
+        both in the capability record, which <em>routes</em> later runs and never
+        vouches for them.<br>
+        Every prompt and reply is in <code>${esc(sess.corpus || '')}</code>, which is
+        where you read the text rather than the number.<br>
+        It is <b>not</b> stored as a result row: a dialect verdict is not a
+        language tier and does not belong in that table.
       </span>
     </div>`;
 }
@@ -1538,8 +1585,9 @@ function renderBenchSession(sess) {
     renderDialectResult(sess);
     bench.id = null;
     sessionStorage.removeItem('benchSession');
-    benchButtons({ live: false, busy: false });
+    benchButtons({ live: false, busy: false, done: true });
     $('#d-next').hidden = true;
+    offerNextVariety();
     refreshSessions();
     return;
   }
