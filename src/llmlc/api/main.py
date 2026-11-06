@@ -24,7 +24,7 @@ from llmlc import __version__, bootstrap, hardware, runner
 from llmlc.api import results as results_store
 from llmlc.client import (NotConfigured, build_client, check_models, custom_models,
                           is_configured)
-from llmlc.api import demo as demo_sessions, support_table
+from llmlc.api import bench as bench_sessions, support_table
 from llmlc.support import (GROUP_MEANING as support_group_meaning,
                            GROUPS as support_groups,
                            MEANING as support_meaning, ORDER as support_order)
@@ -451,7 +451,7 @@ class ScanTrigger(BaseModel):
     scheme: str | None = None
 
 
-class DemoStart(BaseModel):
+class BenchStart(BaseModel):
     engine: str
     tag: str
     mode: str = "interactive"          # interactive | auto -- recorded, not enforced
@@ -677,10 +677,10 @@ def export_csv(
                                       'attachment; filename="llmlc-results.csv"'})
 
 
-# -- the demo stand ----------------------------------------------------------
+# -- the bench ----------------------------------------------------------
 
-@app.post("/demo", status_code=201)
-def demo_start(body: DemoStart, request: Request) -> dict:
+@app.post("/bench", status_code=201)
+def bench_start(body: BenchStart, request: Request) -> dict:
     """Open a session over one language. Spends nothing until the first step.
 
     Gated exactly like `POST /scans`: it reaches a model with the user's own key
@@ -710,7 +710,7 @@ def demo_start(body: DemoStart, request: Request) -> dict:
     if scheme.get(body.tag) is None:
         raise HTTPException(404, f"No tag {body.tag!r} in scheme {scheme.meta.name!r}.")
 
-    specs, modified = demo_sessions.specs_for(body.specs)
+    specs, modified = bench_sessions.specs_for(body.specs)
     if not specs:
         raise HTTPException(400, "No content specifications to run.")
 
@@ -718,7 +718,7 @@ def demo_start(body: DemoStart, request: Request) -> dict:
     from llmlc.db.qualcache import DbQualificationCache
 
     try:
-        session = demo_sessions.start(
+        session = bench_sessions.start(
             engine=body.engine, tag=body.tag, scheme=scheme, client=client,
             backtranslators=[RemoteBackTranslator(client, m, body.pivot) for m in panel],
             judge_model=judge, pivot=body.pivot, mode=body.mode,
@@ -735,8 +735,8 @@ def demo_start(body: DemoStart, request: Request) -> dict:
     return session.public()
 
 
-@app.get("/demo/help")
-def demo_help() -> dict:
+@app.get("/bench/help")
+def bench_help() -> dict:
     """What each kind of step does, from the table beside the code.
 
     The page needs this before the first step exists, to say what the first call
@@ -750,41 +750,41 @@ def demo_help() -> dict:
             for kind, (title, explains) in STEP_HELP.items()}
 
 
-@app.post("/demo/{session_id}/step")
-def demo_step(session_id: str) -> dict:
+@app.post("/bench/{session_id}/step")
+def bench_step(session_id: str) -> dict:
     """Advance one step. The call that actually spends money.
 
     One step per request rather than a stream, because the point of interactive
     mode is that a person decides whether the next call happens.
     """
-    session = demo_sessions.get(session_id)
+    session = bench_sessions.get(session_id)
     if session is None:
-        raise HTTPException(404, "No such demo session. They live in memory and do "
+        raise HTTPException(404, "No such bench session. They live in memory and do "
                                  "not survive a restart.")
-    step = demo_sessions.advance(session, on_result=_save_demo_result)
+    step = bench_sessions.advance(session, on_result=_save_bench_result)
     return {"step": step, "session": session.public()}
 
 
-@app.get("/demo/{session_id}")
-def demo_state(session_id: str) -> dict:
-    session = demo_sessions.get(session_id)
+@app.get("/bench/{session_id}")
+def bench_state(session_id: str) -> dict:
+    session = bench_sessions.get(session_id)
     if session is None:
-        raise HTTPException(404, "No such demo session.")
+        raise HTTPException(404, "No such bench session.")
     return session.public()
 
 
-@app.delete("/demo/{session_id}")
-def demo_close(session_id: str) -> dict:
+@app.delete("/bench/{session_id}")
+def bench_close(session_id: str) -> dict:
     """Abandon a session. Every yield sits after the work it reports, so closing
     one mid-run cannot leave a call half-paid-for."""
-    return {"closed": demo_sessions.close(session_id)}
+    return {"closed": bench_sessions.close(session_id)}
 
 
 @app.get("/specs")
 def specs() -> list[dict]:
     """The shipped content specifications.
 
-    Served rather than restated in the page because the demo lets them be
+    Served rather than restated in the page because the bench lets them be
     edited, and the page has to be able to tell an edit from the original — a
     second copy in the markup would make every run look edited the first time
     a scenario was reworded here.
@@ -795,16 +795,16 @@ def specs() -> list[dict]:
             for s in load_specs()]
 
 
-@app.get("/demo")
-def demo_list() -> dict:
-    return {"sessions": demo_sessions.listing(),
-            "max_sessions": demo_sessions.MAX_SESSIONS}
+@app.get("/bench")
+def bench_list() -> dict:
+    return {"sessions": bench_sessions.listing(),
+            "max_sessions": bench_sessions.MAX_SESSIONS}
 
 
-def _save_demo_result(result) -> None:
-    """Store a finished demo run as a result row.
+def _save_bench_result(result) -> None:
+    """Store a finished bench run as a result row.
 
-    Only reached for a run whose specifications were not edited -- `demo.py`
+    Only reached for a run whose specifications were not edited -- `bench.py`
     enforces that -- so what lands here is the same measurement a scan would
     have produced, taken through whichever instrument the operator chose. It is
     keyed by that instrument like every other row (convention 4), so it sits

@@ -122,7 +122,7 @@ def test_a_users_own_tag_finds_the_derived_control():
 
 
 def test_the_scheme_is_passed_in_not_read_from_settings():
-    """A demo session and an HTTP scan each carry their own scheme per request.
+    """A bench session and an HTTP scan each carry their own scheme per request.
     Reading the process-wide setting fixed the CLI and left the container doing
     exactly what it had been doing — the bug looked fixed from one entry point
     and was not."""

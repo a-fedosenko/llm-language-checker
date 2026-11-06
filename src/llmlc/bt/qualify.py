@@ -211,7 +211,7 @@ def _script_sibling(controls: dict[str, dict], tag: str, scheme=None) -> dict | 
     Latin control sitting in the set and still reported `no-control`, because
     that spelling is not a tag the catalogue has heard of.
 
-    `scheme` is passed in rather than read from settings. A demo session and an
+    `scheme` is passed in rather than read from settings. A bench session and an
     HTTP scan both carry their own scheme per request, and a process-wide
     setting is a different value — reading it here fixed the CLI and left the
     container doing exactly what it had been doing.

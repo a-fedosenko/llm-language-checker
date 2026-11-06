@@ -78,7 +78,7 @@ Set `AGGREGATOR_BASE_URL` and `AGGREGATOR_ADMIN_API_KEY` instead, and every mode
 
 </details>
 
-- UI: <http://localhost:8000> — **Support** (one model, every locale, five statuses), **Demo** (the method over one language, a step at a time), plus results, variants, and planning and running a scan
+- UI: <http://localhost:8000> — **Support** (one model, every locale, five statuses), **Bench** (the method over one language, a step at a time), plus results, variants, and planning and running a scan
 - API and interactive docs: <http://localhost:8000/docs>
 
 **Before your first scan, fetch the two files the repository cannot ship.** The UI says so on arrival and offers a button; `llmlc bootstrap` does the same from a terminal, and `AUTO_BOOTSTRAP=1` does it at startup.
@@ -201,9 +201,9 @@ The short version of [the methodology's limitations section](docs/04%20-%20Metho
 
 ## Watching it work
 
-The **Demo** tab runs the real pipeline over one language and shows every step: the generated text, the gate's verdict and what GlotLID made of it, the back-translation, which facts survived, and the score it adds up to. Automatic mode runs it through; interactive mode waits between steps and tells you what the next one will do *before* you pay for the call.
+The **Bench** tab runs the real pipeline over one language and shows every step: the generated text, the gate's verdict and what GlotLID made of it, the back-translation, which facts survived, and the score it adds up to. Automatic mode runs it through; interactive mode waits between steps and tells you what the next one will do *before* you pay for the call.
 
-There is no demonstration copy of the method. The page advances the same generator a scan drains, so the two cannot drift apart — which is the only way a demo is worth anything.
+There is no demonstration copy of the method. The page advances the same generator a scan drains, so the two cannot drift apart — which is the only way a bench is worth anything.
 
 You can rewrite the scenario and its fact checklist in interactive mode, to see what the model does with content of your own. **An edited run is not saved**: results are comparable only within one method, and the shipped scenarios are mundane on purpose — a memorised encyclopedia opening cannot satisfy *"an old man bought fish and the price had doubled"*, and a rewrite can lose that without anyone noticing. The raw output still goes to the corpus, which is where you read it.
 

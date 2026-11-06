@@ -1,10 +1,10 @@
-"""The demo stand: the real pipeline, one step at a time.
+"""The bench: the real pipeline, one step at a time.
 
 What makes this honest is what it does *not* contain. There is no second walk of
 the ladder here -- `ladder_steps` is the one traversal (convention 11), and this
 module only holds the generator open between HTTP calls and decides when to
-advance it. If the demo and a scan ever disagreed about what the method does,
-the demo would be a lie told in the project's own voice.
+advance it. If the bench and a scan ever disagreed about what the method does,
+the bench would be a lie told in the project's own voice.
 
 Sessions live in memory, keyed by id. A generator cannot be pickled and there is
 no second user to share them with, so that is the whole of the storage design:
@@ -151,7 +151,7 @@ def plan_for(scheme, tag: str) -> dict:
     # rest inherit -- even though those tags now produce different prompts. For
     # `srp|Cyrl` the representative is bare `sr`, which has no region, so a scan
     # asks for plain "Serbian (Cyrillic script)" and four regional variants
-    # inherit an answer that was never asked of them. The demo probes the tag
+    # inherit an answer that was never asked of them. The bench probes the tag
     # you typed, so it shows a prompt a scan would not send. Saying so is the
     # minimum; closing it is a decision about scan cost, not a bug fix.
     sibling_prompts = {}
@@ -188,7 +188,7 @@ def start(*, engine: str, tag: str, scheme, client, backtranslators, judge_model
         live = [s for s in _SESSIONS.values() if s.status == "running"]
         if len(live) >= MAX_SESSIONS:
             raise RuntimeError(
-                f"{len(live)} demo session(s) already open, which is the limit. "
+                f"{len(live)} bench session(s) already open, which is the limit. "
                 f"They are listed above and can be closed there — reloading the "
                 f"page mid-run leaves one behind, and this is where it turns up.")
         sid = uuid.uuid4().hex[:12]

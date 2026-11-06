@@ -98,7 +98,7 @@
   /* A group chip is a shortcut over the statuses beside it, not a sixth value.
      Set apart so it does not read as one, and separated from the breakdown. */
   .chip.group { border-style: dashed; margin-right: 10px; }
-  /* Demo stand. A step is a card: what happened, then the evidence it produced. */
+  /* Bench. A step is a card: what happened, then the evidence it produced. */
   .step { border: 1px solid var(--line); border-left: 3px solid var(--line);
           background: var(--card); border-radius: 4px; padding: 10px 14px; margin-bottom: 10px; }
   .step.is-terminal { border-left-color: var(--accent); }
@@ -209,7 +209,7 @@
     <button role="tab" data-tab="results" aria-selected="false">Results</button>
     <button role="tab" data-tab="resolution" aria-selected="false">Resolution</button>
     <button role="tab" data-tab="variants" aria-selected="false">Variants</button>
-    <button role="tab" data-tab="demo" aria-selected="false">Demo</button>
+    <button role="tab" data-tab="bench" aria-selected="false">Bench</button>
     <button role="tab" data-tab="scan" aria-selected="false">Scan</button>
     <button role="tab" data-tab="jobs" aria-selected="false">Jobs</button>
   </nav>
@@ -366,9 +366,9 @@
     </div>
   </section>
 
-  <!-- ── demo stand ─────────────────────────────────────────────────────── -->
-  <section id="tab-demo" hidden>
-    <h2 data-help="block.demo">The method, one step at a time</h2>
+  <!-- ── bench ─────────────────────────────────────────────────────── -->
+  <section id="tab-bench" hidden>
+    <h2 data-help="block.bench">The method, one step at a time</h2>
     <p class="lead">One language, the real pipeline, nothing simulated. Every step below is
       the same code a scan runs — there is no second version of the method for demonstration.
       <b>It spends your API budget</b>: roughly 9–15 calls for one language.</p>
@@ -385,13 +385,13 @@
         <input id="d-engine" list="model-list" placeholder="openai-gpt-4o">
       </div>
       <div class="field">
-        <label class="f" for="d-tag" data-help="demo.tag">Language tag</label>
+        <label class="f" for="d-tag" data-help="bench.tag">Language tag</label>
         <input id="d-tag" list="tag-list" placeholder="start typing a language…" autocomplete="off">
         <datalist id="tag-list"></datalist>
         <span class="ev" id="d-tag-note"></span>
       </div>
       <div class="field">
-        <label class="f" for="d-mode" data-help="demo.mode">Mode</label>
+        <label class="f" for="d-mode" data-help="bench.mode">Mode</label>
         <select id="d-mode">
           <option value="interactive">Interactive — one step per click</option>
           <option value="auto">Automatic — run it through</option>
@@ -402,7 +402,7 @@
         <select id="d-scheme"></select>
       </div>
       <div class="field">
-        <label class="f" for="d-bt" data-help="demo.bt">Back-translator panel</label>
+        <label class="f" for="d-bt" data-help="bench.bt">Back-translator panel</label>
         <input id="d-bt" list="model-list" placeholder="(default panel)">
       </div>
       <div class="field">
@@ -412,7 +412,7 @@
     </div>
 
     <details id="d-specs-box">
-      <summary data-help="demo.specs">Content specifications — what the model is asked to describe</summary>
+      <summary data-help="bench.specs">Content specifications — what the model is asked to describe</summary>
       <p class="ev">The model is told <em>what</em> to say and chooses every word; the facts are the
         grading checklist. Editing either changes the measurement, so an edited run is kept out of
         the results and marked here — the raw text still goes to the corpus, which is where you read it.</p>
@@ -531,15 +531,15 @@ const HELP = {
     'Heuristic measurements of what a model actually produces when asked to write a language — not what its vendor claims. Every number here is evidence, not proof.'],
   'block.results': ['Results',
     'One row per language per model. Click a row to see its individual items, the gate verdict on each, and the instrument that graded them.'],
-  'block.demo': ['The method, one step at a time',
+  'block.bench': ['The method, one step at a time',
     'The real pipeline over one language, advanced a step at a time. Every step is produced by the same generator a scan drains — there is no demonstration copy of the method that could drift from it. Each step says what it just did, and what the next one will do before you pay for it.'],
-  'demo.tag': ['Language tag',
-    'A single tag from the chosen locale list. The demo runs one language; a scan runs many, collapsing variants onto one experiment per equivalence class.'],
-  'demo.bt': ['Back-translator panel',
+  'bench.tag': ['Language tag',
+    'A single tag from the chosen locale list. The bench runs one language; a scan runs many, collapsing variants onto one experiment per equivalence class.'],
+  'bench.bt': ['Back-translator panel',
     'Ordered, comma separated. The first member that qualifies for the language is the one used — not the best-scoring one. Panel order is measured rather than alphabetical, and ranking candidates by their chrF++ would use that number for the job protocol 016 showed it cannot do: it separates fabrication from faithful reading and is unreliable in the middle. Any member sharing the engine\'s family is dropped automatically, because a model grading itself measures self-consistency.'],
-  'demo.mode': ['Mode',
+  'bench.mode': ['Mode',
     'Interactive advances one step per click and shows what the next step will do first. Automatic runs the whole ladder through. The steps and the result are identical either way — the only difference is who decides when the next call happens.'],
-  'demo.specs': ['Content specifications',
+  'bench.specs': ['Content specifications',
     'The scenario the model is asked to describe, and the facts that scenario commits it to. The model chooses every word; the facts are the grading checklist. Editing either makes the run incomparable to the stored results, so it is not saved — the raw output still goes to the corpus.'],
   'block.support': ['Language support',
     'One model against every locale in the active scheme. The status answers whether the model can be used for that language; the score says how well it carried meaning. Everything about how a verdict was reached — the designator, the gate verdict, the interval, the back-translator — is on the Results tab.'],
@@ -752,18 +752,18 @@ for (const b of document.querySelectorAll('nav button')) {
       $('#tab-' + o.dataset.tab).hidden = o !== b;
     }
     if (b.dataset.tab === 'support') loadSupport();
-    if (b.dataset.tab === 'demo') loadDemo();
+    if (b.dataset.tab === 'bench') loadBench();
     if (b.dataset.tab === 'resolution') loadResolution();
     if (b.dataset.tab === 'variants') loadVariants();
     if (b.dataset.tab === 'jobs') loadJobs();
   });
 }
 
-// ── demo stand ────────────────────────────────────────────────────────────
+// ── bench ────────────────────────────────────────────────────────────
 // Holds no copy of the method: it starts a session, asks the server for the
 // next step, and renders whatever comes back. The server is advancing the one
 // generator a scan drains.
-let demo = { id: null, specs: null, shipped: null, running: false, help: null };
+let bench = { id: null, specs: null, shipped: null, running: false, help: null };
 
 // The ladder's three rungs, named. "Rung" is the project's own word for them --
 // it is the column on every stored result -- but a number on its own tells a
@@ -776,19 +776,19 @@ const RUNG_HELP = {
 };
 const rungLabel = n => `rung ${n}${RUNG_NAME[n] ? ' · ' + RUNG_NAME[n] : ''}`;
 
-async function loadDemo() {
-  if (!demo.help) demo.help = await j('/demo/help');
+async function loadBench() {
+  if (!bench.help) bench.help = await j('/bench/help');
   await refreshSessions();
   // A reload mid-run should hand the run back, not strand it. sessionStorage
   // is the right scope: the session lives in the server's memory and dies with
   // it, so remembering it in a new tab or after a restart would only ever
   // produce a 404.
-  const saved = sessionStorage.getItem('demoSession');
-  if (saved && !demo.id && !(await adoptSession(saved)))
-    sessionStorage.removeItem('demoSession');
-  if (!demo.shipped) {
-    demo.shipped = await j('/specs');
-    demo.specs = structuredClone(demo.shipped);
+  const saved = sessionStorage.getItem('benchSession');
+  if (saved && !bench.id && !(await adoptSession(saved)))
+    sessionStorage.removeItem('benchSession');
+  if (!bench.shipped) {
+    bench.shipped = await j('/specs');
+    bench.specs = structuredClone(bench.shipped);
     renderSpecs();
   }
   if (!$('#d-bt').value) {
@@ -801,7 +801,7 @@ async function loadDemo() {
     $('#d-scheme').innerHTML = s.schemes.slice().sort((a, b) => a.count - b.count)
       .map(x => `<option value="${esc(x.file)}">${esc(x.name)} (${x.count})</option>`).join('');
   }
-  renderDemoNote();
+  renderBenchNote();
   suggestTags();
 }
 
@@ -810,14 +810,14 @@ async function loadDemo() {
 // to reach them from here, which is the whole reason this strip exists.
 async function refreshSessions() {
   let d;
-  try { d = await j('/demo'); } catch { return; }
+  try { d = await j('/bench'); } catch { return; }
   const box = $('#d-open');
-  const mine = sessionStorage.getItem('demoSession');
+  const mine = sessionStorage.getItem('benchSession');
   const open = d.sessions.filter(s => s.status === 'running');
   if (!open.length) { box.hidden = true; return; }
   box.hidden = false;
   box.className = 'note warn';
-  box.innerHTML = `<strong>${open.length} of ${d.max_sessions} demo session(s) still
+  box.innerHTML = `<strong>${open.length} of ${d.max_sessions} bench session(s) still
     open on the server.</strong> A reload leaves one behind — it is still holding its
     place, and nothing was spent on it after you left.
     <div class="chips" style="margin-top:8px">`
@@ -831,19 +831,19 @@ async function refreshSessions() {
 
 async function adoptSession(id) {
   let s;
-  try { s = await j('/demo/' + id); } catch { return false; }
-  demo.id = id;
-  sessionStorage.setItem('demoSession', id);
+  try { s = await j('/bench/' + id); } catch { return false; }
+  bench.id = id;
+  sessionStorage.setItem('benchSession', id);
   $('#d-steps').innerHTML = '';
   $('#d-result').innerHTML = '';
   for (const step of s.steps) renderStep(step);
   renderPlan(s.plan);
   if (s.status === 'running') {
-    demoButtons({ live: true, busy: false });
+    benchButtons({ live: true, busy: false });
     const last = s.steps[s.steps.length - 1];
     describeNext(last ? last.next : { kind: 'generated' });
   } else {
-    renderDemoSession(s);
+    renderBenchSession(s);
   }
   await refreshSessions();
   return true;
@@ -853,33 +853,33 @@ $('#d-open').addEventListener('click', async e => {
   const btn = e.target.closest('button');
   if (!btn) return;
   if (btn.id === 'd-drop-all') {
-    const d = await j('/demo');
+    const d = await j('/bench');
     await Promise.all(d.sessions.map(s =>
-      fetch('demo/' + s.id, { method: 'DELETE' })));
-    if (demo.id) { demo.id = null; demoButtons({ live: false, busy: false }); }
-    sessionStorage.removeItem('demoSession');
+      fetch('bench/' + s.id, { method: 'DELETE' })));
+    if (bench.id) { bench.id = null; benchButtons({ live: false, busy: false }); }
+    sessionStorage.removeItem('benchSession');
     return refreshSessions();
   }
   if (btn.dataset.resume) return void adoptSession(btn.dataset.resume);
   if (btn.dataset.drop) {
-    await fetch('demo/' + btn.dataset.drop, { method: 'DELETE' });
-    if (demo.id === btn.dataset.drop) {
-      demo.id = null;
-      demoButtons({ live: false, busy: false });
+    await fetch('bench/' + btn.dataset.drop, { method: 'DELETE' });
+    if (bench.id === btn.dataset.drop) {
+      bench.id = null;
+      benchButtons({ live: false, busy: false });
     }
-    if (sessionStorage.getItem('demoSession') === btn.dataset.drop)
-      sessionStorage.removeItem('demoSession');
+    if (sessionStorage.getItem('benchSession') === btn.dataset.drop)
+      sessionStorage.removeItem('benchSession');
     return refreshSessions();
   }
 });
 
 function specsEdited() {
-  return JSON.stringify(demo.specs) !== JSON.stringify(demo.shipped);
+  return JSON.stringify(bench.specs) !== JSON.stringify(bench.shipped);
 }
 
 function renderSpecs() {
-  $('#d-specs').innerHTML = demo.specs.map((s, i) => {
-    const orig = demo.shipped[i];
+  $('#d-specs').innerHTML = bench.specs.map((s, i) => {
+    const orig = bench.shipped[i];
     const edited = !orig || orig.scenario !== s.scenario
                    || JSON.stringify(orig.facts) !== JSON.stringify(s.facts);
     return `<div class="spec ${edited ? 'edited' : ''}">
@@ -889,10 +889,10 @@ function renderSpecs() {
         >${esc(s.facts.join('\n'))}</textarea>
     </div>`;
   }).join('');
-  renderDemoNote();
+  renderBenchNote();
 }
 
-function renderDemoNote() {
+function renderBenchNote() {
   const note = $('#d-note');
   if (specsEdited()) {
     note.hidden = false;
@@ -907,10 +907,10 @@ function renderDemoNote() {
 $('#d-specs').addEventListener('input', e => {
   const el = e.target;
   if (!el.dataset.spec) return;
-  const s = demo.specs[Number(el.dataset.spec)];
+  const s = bench.specs[Number(el.dataset.spec)];
   if (el.dataset.field === 'scenario') s.scenario = el.value;
   else s.facts = el.value.split('\n').map(x => x.trim()).filter(Boolean);
-  renderDemoNote();
+  renderBenchNote();
   for (const box of $('#d-specs').querySelectorAll('.spec')) box.classList.remove('x');
 });
 // Tag suggestions come from the chosen locale list, looked up as you type.
@@ -957,7 +957,7 @@ $('#d-tag').addEventListener('input', suggestTags);
 $('#d-scheme').addEventListener('change', () => { $('#d-tag-note').textContent = ''; suggestTags(); });
 
 $('#d-specs-reset').addEventListener('click', () => {
-  demo.specs = structuredClone(demo.shipped);
+  bench.specs = structuredClone(bench.shipped);
   renderSpecs();
 });
 
@@ -987,7 +987,7 @@ function renderPlan(plan) {
            different (${divergent.slice(0, 4).map(x =>
              `<code>${esc(x)}</code> → ${esc(plan.sibling_designators[x] || '')}`).join('; ')}${
              divergent.length > 4 ? '; …' : ''}) — but a scan probes a class <em>once</em>
-           and the rest inherit, so only one of them is ever asked. The demo probes the tag
+           and the rest inherit, so only one of them is ever asked. The bench probes the tag
            you typed. Closing that gap means splitting equivalence classes by region, which
            is a decision about scan cost.` : '')
     + (plan.panel
@@ -1002,21 +1002,21 @@ function renderPlan(plan) {
         ${plan.designators.map(esc).join(' · ')}</span>`;
 }
 
-function demoButtons({ live, busy }) {
+function benchButtons({ live, busy }) {
   $('#d-start').disabled = live || busy;
   $('#d-step').disabled = !live || busy;
   $('#d-auto').disabled = !live || busy;
   $('#d-close').disabled = !live || busy;
 }
 
-async function startDemo() {
+async function startBench() {
   $('#d-steps').innerHTML = '';
   $('#d-result').innerHTML = '';
   $('#d-next').hidden = true;
   $('#d-plan').hidden = true;
-  demoButtons({ live: false, busy: true });
+  benchButtons({ live: false, busy: true });
   try {
-    const d = await j('/demo', { method: 'POST',
+    const d = await j('/bench', { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         engine: $('#d-engine').value.trim(),
@@ -1025,19 +1025,19 @@ async function startDemo() {
         scheme: $('#d-scheme').value,
         backtranslator: $('#d-bt').value.trim() || null,
         judge: $('#d-judge').value.trim() || null,
-        specs: demo.specs,
+        specs: bench.specs,
       }) });
-    demo.id = d.id;
-    sessionStorage.setItem('demoSession', d.id);
-    demoButtons({ live: true, busy: false });
+    bench.id = d.id;
+    sessionStorage.setItem('benchSession', d.id);
+    benchButtons({ live: true, busy: false });
     $('#d-cost').textContent = 'nothing spent yet';
     renderPlan(d.plan);
     await refreshSessions();
-    if ($('#d-mode').value === 'auto') await runDemoToEnd();
+    if ($('#d-mode').value === 'auto') await runBenchToEnd();
     else describeNext({ kind: 'generated' });
   } catch (e) {
-    demo.id = null;
-    demoButtons({ live: false, busy: false });
+    bench.id = null;
+    benchButtons({ live: false, busy: false });
     $('#d-result').innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
     // The commonest cause is sessions this page has lost, and the strip is
     // where they can be closed — so refresh it rather than leaving a dead end.
@@ -1049,7 +1049,7 @@ function describeNext(next) {
   // Interactive mode's whole point: say what the next call does before it is paid for.
   const box = $('#d-next');
   if (!next) { box.hidden = true; return; }
-  const help = (demo.help || {})[next.kind] || {};
+  const help = (bench.help || {})[next.kind] || {};
   const title = next.title || help.title || next.kind;
   const why = next.explains || help.explains || '';
   box.hidden = false;
@@ -1057,33 +1057,33 @@ function describeNext(next) {
   box.innerHTML = `<strong>Next: ${esc(title)}.</strong> ${esc(why)}`;
 }
 
-async function stepDemo() {
-  if (!demo.id) return;
-  demoButtons({ live: true, busy: true });
+async function stepBench() {
+  if (!bench.id) return;
+  benchButtons({ live: true, busy: true });
   try {
-    const d = await j(`/demo/${demo.id}/step`, { method: 'POST' });
+    const d = await j(`/bench/${bench.id}/step`, { method: 'POST' });
     if (d.step) renderStep(d.step);
-    renderDemoSession(d.session);
+    renderBenchSession(d.session);
     const live = d.session.status === 'running';
-    demoButtons({ live, busy: false });
+    benchButtons({ live, busy: false });
     describeNext(live && d.step ? d.step.next : null);
     return live;
   } catch (e) {
-    demoButtons({ live: false, busy: false });
+    benchButtons({ live: false, busy: false });
     $('#d-result').innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
     return false;
   }
 }
 
-async function runDemoToEnd() {
-  demo.running = true;
+async function runBenchToEnd() {
+  bench.running = true;
   $('#d-next').hidden = true;
   // One request per step even in automatic mode: the server advances the same
   // generator either way, so the two modes cannot produce different runs.
-  for (let i = 0; i < 200 && demo.running; i++) {
-    if (!(await stepDemo())) break;
+  for (let i = 0; i < 200 && bench.running; i++) {
+    if (!(await stepBench())) break;
   }
-  demo.running = false;
+  bench.running = false;
 }
 
 function renderStep(s) {
@@ -1141,7 +1141,7 @@ function renderStep(s) {
   $('#d-actions')?.scrollIntoView?.({ block: 'end', behavior: 'smooth' });
 }
 
-function renderDemoSession(sess) {
+function renderBenchSession(sess) {
   if (sess.status === 'running') return;
   const r = sess.result;
   const saved = sess.persisted
@@ -1160,22 +1160,22 @@ function renderDemoSession(sess) {
         corpus ${esc(sess.corpus || '')}</span>
     </div>`
     : `<div class="note ${sess.status === 'failed' ? 'bad' : ''}">${esc(sess.error || sess.status)}</div>`;
-  demo.id = null;
-  sessionStorage.removeItem('demoSession');
-  demoButtons({ live: false, busy: false });
+  bench.id = null;
+  sessionStorage.removeItem('benchSession');
+  benchButtons({ live: false, busy: false });
   $('#d-next').hidden = true;
   refreshSessions();
 }
 
-$('#d-start').addEventListener('click', startDemo);
-$('#d-step').addEventListener('click', stepDemo);
-$('#d-auto').addEventListener('click', runDemoToEnd);
+$('#d-start').addEventListener('click', startBench);
+$('#d-step').addEventListener('click', stepBench);
+$('#d-auto').addEventListener('click', runBenchToEnd);
 $('#d-close').addEventListener('click', async () => {
-  demo.running = false;
-  if (demo.id) await fetch(`demo/${demo.id}`, { method: 'DELETE' });
-  demo.id = null;
-  sessionStorage.removeItem('demoSession');
-  demoButtons({ live: false, busy: false });
+  bench.running = false;
+  if (bench.id) await fetch(`bench/${bench.id}`, { method: 'DELETE' });
+  bench.id = null;
+  sessionStorage.removeItem('benchSession');
+  benchButtons({ live: false, busy: false });
   $('#d-next').hidden = true;
   refreshSessions();
 });

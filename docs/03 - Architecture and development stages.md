@@ -111,7 +111,7 @@ That is a real argument and it is unfinished business, not a closed question. It
 
 ## Stack
 
-Chosen for legibility and for being demonstrable in a portfolio, not for novelty.
+Chosen for legibility and for being benchnstrable in a portfolio, not for novelty.
 
 | Layer | Choice | Note |
 |---|---|---|
@@ -211,7 +211,7 @@ Single-tenant removes the abuse case but not the accident case:
 
 ## Development stages
 
-Each stage ends in something demonstrable. Review between stages.
+Each stage ends in something benchnstrable. Review between stages.
 
 | # | Stage | Done when |
 |---|---|---|
@@ -286,7 +286,7 @@ S0 gains the scheme adapter and template generation; the UI moves earlier.
 | **S8** ✅ | **Distribution** — making "clone and run" true, and the back-translator panel policy | **Done 2026-09-29** — `llmlc bootstrap` fetches both uncommittable assets, the UI says when the instrument is incomplete, and the panel sits outside the scan set |
 | **S9** ✅ | README, **methodology page**, limitations | **Done 2026-11-03** — `docs/04 - Methodology.md`; a reader can reproduce a result and knows what it does not mean |
 | **S10** ✅ | **Support table** — one model, every locale, five statuses | **Done 2026-11-03** — `/support`, a Support tab, and a TMS scheme adapter so it runs down a real 602-locale list |
-| **S11** ✅ | **Demo stand** — the method, step by step, in the browser | **Done 2026-11-03** — the ladder is a generator, `run_ladder` drains it, and `/demo` steps it; auto and interactive, with editable hints that quarantine the run |
+| **S11** ✅ | **Bench** — the method, step by step, in the browser | **Done 2026-11-03** — the ladder is a generator, `run_ladder` drains it, and `/bench` steps it; auto and interactive, with editable hints that quarantine the run |
 | **S12** | **Public landing page** | The project is explicable to someone who has never run it |
 | **S13** | **Human-in-the-loop estimation** — a speaker grades a language the instrument cannot | A language the machine cannot verify gets a verdict from someone who reads it, stored as its own evidence class |
 
@@ -1113,7 +1113,7 @@ A *set but broken* list is an error and never degrades to "not configured" — t
 
 # S10–S13 — the public surface (planned 2026-11-03)
 
-Four stages, decided together because they share two pieces of machinery and one risk. The order is **support table → demo stand → landing → contribution**, and the landing deliberately sits third: it is the portfolio piece and it only needs the first two to exist, while contribution is the one stage that changes what kind of system this is.
+Four stages, decided together because they share two pieces of machinery and one risk. The order is **support table → bench → landing → contribution**, and the landing deliberately sits third: it is the portfolio piece and it only needs the first two to exist, while contribution is the one stage that changes what kind of system this is.
 
 ## The shared prerequisites
 
@@ -1143,17 +1143,17 @@ One model, every locale in the active scheme, five statuses, a number, and nothi
 
 Scheme-driven rather than hardcoded to 602: the page is the user's own locale list left-joined onto results, which is what `schemes/` has always been for. One caveat to handle — the 602-tag list fits in a single response and can be filtered client-side, the 9,589-tag public catalogue cannot, so breadth above a threshold paginates.
 
-## S11 — the demo stand
+## S11 — the bench
 
 The page is the easy half. `probe/steps.py` already splits the pipeline into exactly the primitives worth stepping through — `generate_and_gate`, then `judge_item` — and qualification is separable too.
 
 **The hard half is not writing a second pipeline.** Convention 11 says `runner.py` is the only definition of "run a scan", and convention 9 records what breaking it cost: an analysis harness re-implemented a production call, got it subtly wrong, and 68 bad verdicts reached a protocol's conclusions. A step-by-step page is a second traversal of the ladder and will drift the same way.
 
-So S11 begins as a refactor: **the ladder becomes a generator** that yields a typed event per step — designator trial, generation and gate verdict, qualification attempt, back-translation, judgement, final scoring. `runner` drains it in one go and behaves exactly as now, with the existing tests as the guard; the demo steps it one click at a time. Auto mode drains; interactive mode waits between events and shows what happens next.
+So S11 begins as a refactor: **the ladder becomes a generator** that yields a typed event per step — designator trial, generation and gate verdict, qualification attempt, back-translation, judgement, final scoring. `runner` drains it in one go and behaves exactly as now, with the existing tests as the guard; the bench steps it one click at a time. Auto mode drains; interactive mode waits between events and shows what happens next.
 
 The explanatory text for each step ships **with the event, from the server**, beside the code it describes. Keeping it in the page is how it goes stale the first time a threshold moves.
 
-**Edited hints are a method change, and are quarantined.** A run whose spec the user rewrote is not comparable to anything (convention 4). Demo sessions write to the corpus so the output can be inspected, and write a `result` row only when the specs are untouched.
+**Edited hints are a method change, and are quarantined.** A run whose spec the user rewrote is not comparable to anything (convention 4). Bench sessions write to the corpus so the output can be inspected, and write a `result` row only when the specs are untouched.
 
 ## S13 — contribution, inverted
 
@@ -1232,26 +1232,26 @@ Each would have attached a locale to the wrong equivalence class and then inheri
 
 Four of the twelve unresolved locales are Chinese — `zh`, `zh-hans`, `zh-hant`, `cmn-cn` — and they fail for a reason worth fixing rather than working around. The catalogue holds `zh-CN`, `zh-AU`, `zh-Hans-HK`, `zh-Hans-MO`, `zh-Hans-MY` and 32 others, but **no bare `zh` and no plain `zh-Hans`**, so no locale list naming generic Chinese can resolve. The programme measured `zh-CN` and `zh-AU`. This is a defect in `scripts/build_default_scheme.py`'s output, not in the adapter, and it is left for its own change: inventing a `zh` here would put a tag in a user's scheme that the catalogue does not agree exists.
 
-## S11 — the demo stand (2026-11-03)
+## S11 — the bench (2026-11-03)
 
 The real pipeline over one language, advanced a step at a time, in the browser. Auto mode runs it through; interactive mode waits between steps and says what the next one will do *before* the call that does it is paid for.
 
 ### The refactor is the stage; the page is the easy half
 
-The obvious way to build a step-by-step page is a second walk of the ladder, and that is the way this project has already been burned — convention 9 exists because an analysis harness re-implemented a production call, got it subtly wrong, and 68 bad verdicts reached a protocol's conclusions. A demo that disagreed with a scan would be a lie told in the project's own voice.
+The obvious way to build a step-by-step page is a second walk of the ladder, and that is the way this project has already been burned — convention 9 exists because an analysis harness re-implemented a production call, got it subtly wrong, and 68 bad verdicts reached a protocol's conclusions. A bench that disagreed with a scan would be a lie told in the project's own voice.
 
-So `ladder_steps()` yields a `Step` after every action and returns the `LadderResult`, and **`run_ladder()` is a drain over it** rather than a second implementation. Every caller outside the demo kept its signature and behaviour; the 362 tests that existed before the refactor are what guarantee it.
+So `ladder_steps()` yields a `Step` after every action and returns the `LadderResult`, and **`run_ladder()` is a drain over it** rather than a second implementation. Every caller outside the bench kept its signature and behaviour; the 362 tests that existed before the refactor are what guarantee it.
 
 Two properties fell out of the shape and are now relied on:
 
 - **Every `yield` sits after the work it reports**, so a consumer that stops early has paid for what it has seen and nothing more. Abandoning a session closes the generator; a test pins that it spends nothing further.
 - **A terminal step leaves only the return value.** The session collects the verdict in the same request as the terminal step, which is only sound because nothing else remains — pinned by a test, because the alternative is a reader clicking once more for a step that does not exist.
 
-The per-step explanations live in `STEP_HELP` beside the code and are served with the step, and by `GET /demo/help` for the first one. In the page they would go stale the first time a threshold moved.
+The per-step explanations live in `STEP_HELP` beside the code and are served with the step, and by `GET /bench/help` for the first one. In the page they would go stale the first time a threshold moved.
 
 ### Sessions
 
-In memory, keyed by id, capped at four, reaped after an idle hour. A generator cannot be pickled and there is no second user to share one with, so that is the whole storage design: they die with the process, which is the right lifetime for something a person is watching. `POST /demo` is gated exactly like `POST /scans` — cheaper than a scan is not the same as free, and one language is 9 to 15 calls against the operator's own key.
+In memory, keyed by id, capped at four, reaped after an idle hour. A generator cannot be pickled and there is no second user to share one with, so that is the whole storage design: they die with the process, which is the right lifetime for something a person is watching. `POST /bench` is gated exactly like `POST /scans` — cheaper than a scan is not the same as free, and one language is 9 to 15 calls against the operator's own key.
 
 ### Editing the hints, and what it costs
 
@@ -1263,15 +1263,15 @@ The raw output still goes to the corpus, which is where you read it. Verified en
 
 ### Three defects the browser found that the tests did not
 
-1. **`DemoStart` was declared after the route that used it.** With `from __future__ import annotations` FastAPI could not resolve the annotation at decoration time and silently treated the body as a *query* parameter, so every request 422'd on a missing field. Moved below the models.
-2. **`GET /demo/help` was being claimed by `GET /demo/{session_id}`** — FastAPI matches in declaration order, so "help" was read as a session id. The static path is now declared first.
+1. **`BenchStart` was declared after the route that used it.** With `from __future__ import annotations` FastAPI could not resolve the annotation at decoration time and silently treated the body as a *query* parameter, so every request 422'd on a missing field. Moved below the models.
+2. **`GET /bench/help` was being claimed by `GET /bench/{session_id}`** — FastAPI matches in declaration order, so "help" was read as a session id. The static path is now declared first.
 3. **A free-text tag field with no idea which list it is searching.** `cv` is Chuvash in the public catalogue and `cv-ru` in the TMS one, and the error — correct, and correctly surfaced — was `No tag 'cv' in scheme 'catmint'`. The field now suggests tags from the chosen locale list as you type, against `/languages?scheme=`.
 
 A live run, end to end, in automatic mode: deepseek over `cv`, ten steps across both rungs, **exactly nine calls** — three generations, three back-translations, three judgements — a qualified reader, and `Proficient` at adequacy 1.00. The same session showed the back-translated English beside each generation, which is the thing worth seeing: *"A child finds a lost dog by the river. He brings it home. His parents say it can stay as a guest for one night."*
 
 ## Method 3.0.0 — the region in the designator, and a system/user split (2026-11-03)
 
-Running `sr-RS-Cyrl` and `sr-ME-Cyrl` through the demo returned identical verdicts, because both produced the identical prompt. The cause: **`region_name` was a parameter in `designator.py` that no caller had ever passed.**
+Running `sr-RS-Cyrl` and `sr-ME-Cyrl` through the bench returned identical verdicts, because both produced the identical prompt. The cause: **`region_name` was a parameter in `designator.py` that no caller had ever passed.**
 
 Three changes, and they are a method change rather than a fix — **every one of the 1,560 stored rows is now stale**, which is convention 4 doing its job rather than a side effect.
 
@@ -1293,7 +1293,7 @@ That experiment is **protocol 020**, written with its hypotheses before the run,
 
 ### And the consequence that is already certain
 
-**Naming the region is inert in a scan as the code stands.** The equivalence class is `iso639_3|script`, so `srp|Cyrl` holds five tags; a scan probes the class once — through bare `sr`, which has no region — and the other four inherit. The region reaches the prompt only for a directly probed tag, which the demo does and a scan does not. The demo's pre-flight now says so against the specific siblings, naming what each of them would be asked instead.
+**Naming the region is inert in a scan as the code stands.** The equivalence class is `iso639_3|script`, so `srp|Cyrl` holds five tags; a scan probes the class once — through bare `sr`, which has no region — and the other four inherit. The region reaches the prompt only for a directly probed tag, which the bench does and a scan does not. The bench's pre-flight now says so against the specific siblings, naming what each of them would be asked instead.
 
 Closing it means splitting equivalence classes by region, and the cost is measurable: on the 602-locale list, 81 classes hold more than one tag and **239 tags currently inherit rather than being probed**. Splitting turns those into probes — roughly 2,150 extra calls per engine on top of about 3,270, a **65% increase per scan**. That is a budget decision, not a methodology one, and it is open.
 
@@ -1301,9 +1301,9 @@ Closing it means splitting equivalence classes by region, and the cost is measur
 
 `deepseek-v4-pro`, one scenario: `sr-rs-cyrl` produced *"Ишла је **пе**шице"* and `sr-me-cyrl` produced *"**Пје**шачила је"* — the ekavian/ijekavian alternation, which is the standard marker between the two varieties rather than an arbitrary difference. One item, one model, no sampling control. It is a reason to run protocol 020, not a result from it.
 
-## After S11 — what the demo stand exposed (2026-11-03/04)
+## After S11 — what the bench exposed (2026-11-03/04)
 
-Driving the pipeline one step at a time, over languages someone actually reads, surfaced more defects in two days than the test suite had in a month. None of them were in the code the demo added; all were in code the demo made visible.
+Driving the pipeline one step at a time, over languages someone actually reads, surfaced more defects in two days than the test suite had in a month. None of them were in the code the bench added; all were in code the bench made visible.
 
 **The region never reached the prompt.** `region_name` was a parameter in `designator.py` that no caller had ever passed, so `sr-RS-Cyrl` and `sr-ME-Cyrl` produced the identical prompt and the identical verdict. Method 3.0.0, above.
 
@@ -1315,7 +1315,7 @@ Driving the pipeline one step at a time, over languages someone actually reads, 
 
 **The marker probe called the gate with different arguments from the ladder** — no `relatives`, no `accept_lang` — so it could not reach `relative_substitution` and convicted Latin Serbian as `wrong_language`. Two call sites of one function disagreeing about the same text.
 
-**A page reload stranded a demo session.** Four of them filled the cap and locked the tab out for an hour with no way to reach them. The id now survives in `sessionStorage`, orphans are listed with resume and close, and the refusal names where to look.
+**A page reload stranded a bench session.** Four of them filled the cap and locked the tab out for an hour with no way to reach them. The id now survives in `sessionStorage`, orphans are listed with resume and close, and the refusal names where to look.
 
 ### The one that is not a defect
 
@@ -1323,6 +1323,6 @@ Driving the pipeline one step at a time, over languages someone actually reads, 
 
 ## The dialect question, reopened (2026-11-04)
 
-The owner's assessment after using the demo: the scan method "is not precise at all as it ignores regional differences." Correct, and the cause is the equivalence class `iso639_3|script` — a scan probes one tag per class and the rest inherit, so five Serbian locales are measured once, through bare `sr`, which has no region. The collapse is what makes 602 locales cost 363 experiments, and it is also what makes the scan dialect-blind.
+The owner's assessment after using the bench: the scan method "is not precise at all as it ignores regional differences." Correct, and the cause is the equivalence class `iso639_3|script` — a scan probes one tag per class and the rest inherit, so five Serbian locales are measured once, through bare `sr`, which has no region. The collapse is what makes 602 locales cost 363 experiments, and it is also what makes the scan dialect-blind.
 
 The numbers, the reframe worth testing first (ladder per class plus a 4-call marker probe per variant, against 9–15 calls per extra class), the counter-case that would decide it (does *base capability* differ by region, which markers cannot see), and the two decisions it blocks are all at the top of `docs/HANDOFF.md`, because that is where the next session starts. **A new session is being opened specifically for this**; nothing should be re-run until it concludes.

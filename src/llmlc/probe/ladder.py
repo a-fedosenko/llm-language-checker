@@ -16,7 +16,7 @@ interface -- a `None` verdict must mean "none under our best designator", never
 **There is one traversal of the ladder, and it is a generator.** `ladder_steps`
 yields a `Step` after every action and returns the result; `run_ladder` drains
 it and is what every existing caller still uses. A step-at-a-time consumer --
-the demo stand -- advances the same generator instead of walking the same
+the bench -- advances the same generator instead of walking the same
 sequence a second time.
 
 That shape is not a preference. Convention 11 says `runner.py` is the only
@@ -54,7 +54,7 @@ VOID = {GateVerdict.MEMORISED, GateVerdict.TOO_SHORT, GateVerdict.LOW_CONFIDENCE
 
 
 #: What each kind of step is for, in the terms the tool reports in. Served to
-#: the demo stand with the step itself rather than restated in the page: text
+#: the bench with the step itself rather than restated in the page: text
 #: describing what the code does belongs beside the code, or it goes stale the
 #: first time a threshold moves.
 STEP_HELP: dict[str, tuple[str, str]] = {
@@ -176,7 +176,7 @@ class Step:
 
 
 def item_detail(item: ItemOutcome) -> dict:
-    """An item as the demo shows it. Deliberately the whole text: reading the
+    """An item as the bench shows it. Deliberately the whole text: reading the
     raw output is how nearly every real defect in this project was found."""
     return {
         "spec_id": item.spec_id,
@@ -285,7 +285,7 @@ def candidates_for(scheme: Scheme, lang: Language, incumbent: str | None = None)
     """The designators this language will actually be asked by.
 
     One definition, because two callers need it and they must not disagree: the
-    ladder spends money on these, and the demo stand's pre-flight tells a reader
+    ladder spends money on these, and the bench's pre-flight tells a reader
     what is about to be asked. A pre-flight built from a second copy of this
     logic would describe a run that is not the one about to happen -- the same
     failure as an analysis harness re-implementing a production call
@@ -300,7 +300,7 @@ def candidates_for(scheme: Scheme, lang: Language, incumbent: str | None = None)
 
 def run_ladder(**kw) -> LadderResult:
     """Run the ladder to completion. The one-shot path, and what every caller
-    outside the demo stand uses.
+    outside the bench uses.
 
     A drain over `ladder_steps`, not a second implementation of it: the result
     of running every step must be identical to the result of stepping through
