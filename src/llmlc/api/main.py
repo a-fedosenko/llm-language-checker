@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import time
 from contextlib import asynccontextmanager
 import pathlib
 import urllib.error
@@ -74,6 +75,34 @@ app = FastAPI(
 #: a list anyone should scan. Hidden, not removed -- it is what
 #: `scripts/build_scheme_from_tms.py` resolves a TMS list against.
 HIDDEN_SCHEMES = {"default"}
+
+#: When this process started. Sessions live in its memory, so a session id it
+#: has never heard of is very often one from *before* a restart rather than a
+#: typo -- and the two want different advice. Nothing can prove which, because
+#: ids are random rather than timestamped, but a process that came up two
+#: minutes ago is itself the likeliest explanation and the reader can be told so.
+_STARTED_AT = time.time()
+
+
+def _lost_session_detail() -> str:
+    """Why a bench session is gone, and where the work it did went.
+
+    `data/corpus/` has every prompt and reply the run paid for, written before
+    anything else happens to them -- so a lost session costs the ability to
+    continue, never the evidence. Saying so is the difference between a dead end
+    and a redirect.
+    """
+    up = time.time() - _STARTED_AT
+    when = (f"{int(up)}s" if up < 120 else
+            f"{int(up // 60)}m" if up < 7200 else f"{int(up // 3600)}h")
+    restarted = (" This server started **{}** ago, so a restart is the likely "
+                 "cause — `docker compose up --build` takes every open session "
+                 "with it.").format(when) if up < 600 else ""
+    return ("No such bench session. They live in this process's memory and do not "
+            "survive a restart." + restarted +
+            " Nothing measured is lost: every prompt and reply is already in "
+            "data/corpus/, newest file first. The run cannot be continued, but "
+            "it can be read.")
 
 
 @lru_cache(maxsize=4)
@@ -809,8 +838,7 @@ def bench_step(session_id: str) -> dict:
     """
     session = bench_sessions.get(session_id)
     if session is None:
-        raise HTTPException(404, "No such bench session. They live in memory and do "
-                                 "not survive a restart.")
+        raise HTTPException(404, _lost_session_detail())
     step = bench_sessions.advance(session, on_result=_save_bench_result)
     return {"step": step, "session": session.public()}
 
@@ -833,7 +861,7 @@ def bench_adjudicate(session_id: str, body: Adjudication) -> dict:
     """
     session = bench_sessions.get(session_id)
     if session is None:
-        raise HTTPException(404, "No such bench session.")
+        raise HTTPException(404, _lost_session_detail())
     try:
         return bench_sessions.adjudicate(session, body.overrides)
     except ValueError as e:
@@ -844,7 +872,7 @@ def bench_adjudicate(session_id: str, body: Adjudication) -> dict:
 def bench_state(session_id: str) -> dict:
     session = bench_sessions.get(session_id)
     if session is None:
-        raise HTTPException(404, "No such bench session.")
+        raise HTTPException(404, _lost_session_detail())
     return session.public()
 
 

@@ -508,3 +508,32 @@ def test_the_endpoint_returns_both_numbers():
     d = r.json()
     assert r.status_code == 200
     assert d["measured"]["s_content"] < d["adjudicated"]["s_content"]
+
+
+def test_a_lost_session_says_where_the_work_went(client):
+    """A dead end against a redirect. Sessions die with the process, but every
+    prompt and reply was written to the corpus before anything else happened to
+    it -- so a lost session costs the ability to continue, never the evidence,
+    and the message is the only place a reader learns that."""
+    r = client.post("/bench/nope/step")
+    assert r.status_code == 404
+    detail = r.json()["detail"]
+    assert "data/corpus/" in detail and "cannot be continued" in detail
+
+
+def test_a_recent_restart_is_named_as_the_likely_cause(client, monkeypatch):
+    """Ids are random rather than timestamped, so nothing can prove a restart
+    took the session -- but a process that came up moments ago is itself the
+    likeliest explanation, and `docker compose up --build` is how it happens."""
+    from llmlc.api import main
+
+    monkeypatch.setattr(main, "_STARTED_AT", __import__("time").time() - 30)
+    detail = client.get("/bench/nope").json()["detail"]
+    assert "restart is the likely cause" in detail and "30s" in detail
+
+
+def test_a_long_running_server_does_not_blame_a_restart(client, monkeypatch):
+    from llmlc.api import main
+
+    monkeypatch.setattr(main, "_STARTED_AT", __import__("time").time() - 86400)
+    assert "likely cause" not in client.get("/bench/nope").json()["detail"]
