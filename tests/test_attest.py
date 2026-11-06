@@ -223,3 +223,88 @@ def test_a_transport_error_is_not_a_verdict():
 
     out = identify(Broken(), "a", text="x" * 40, blind=SR)
     assert not out.ok and out.error == "HTTP 500"
+
+
+# -- the pair, and its own escape --------------------------------------------
+
+def test_separate_offers_an_indistinguishable_answer():
+    """What makes the contrast probe able to return a negative. A forced two-way
+    assignment floors at 0.5 by guessing, so without this escape a model that
+    sees no difference still scores half the pairs right and the null control
+    could never come back clean."""
+    from llmlc.probe.attest import INDISTINGUISHABLE, separate
+
+    client = FakeClient('{"a": "Serbia", "b": "Montenegro", "markers": []}')
+    separate(client, "a", first="x" * 40, second="y" * 40, blind=SR)
+    assert INDISTINGUISHABLE in client.sent
+
+
+def test_calling_a_pair_indistinguishable_is_parsed_as_an_answer():
+    from llmlc.probe.attest import INDISTINGUISHABLE, separate
+
+    client = FakeClient(f'{{"a": "{INDISTINGUISHABLE}", "b": "{INDISTINGUISHABLE}"}}')
+    out = separate(client, "a", first="x" * 40, second="y" * 40, blind=SR)
+    assert out.ok and out.merged and not out.split
+
+
+def test_naming_two_varieties_is_a_split():
+    from llmlc.probe.attest import separate
+
+    client = FakeClient('{"a": "Serbia", "b": "Montenegro"}')
+    out = separate(client, "a", first="x" * 40, second="y" * 40, blind=SR)
+    assert out.split and not out.merged
+
+
+def test_naming_one_variety_twice_is_not_a_split():
+    from llmlc.probe.attest import separate
+
+    client = FakeClient('{"a": "Serbia", "b": "Serbia"}')
+    out = separate(client, "a", first="x" * 40, second="y" * 40, blind=SR)
+    assert not out.split and not out.merged
+
+
+def test_the_pair_order_is_recorded_so_the_caller_can_score_it():
+    """The attestor never learns which text was which; `swapped` is how the
+    caller unscrambles the answer afterwards."""
+    from llmlc.probe.attest import separate
+
+    seen = set()
+    for i in range(30):
+        c = FakeClient('{"a": "Serbia", "b": "Montenegro"}')
+        out = separate(c, "a", first=f"first {i}" + "x" * 40,
+                       second=f"second {i}" + "y" * 40, blind=SR)
+        seen.add(out.swapped)
+        # Whichever way round it went, the prompt shows the text that `swapped`
+        # claims it shows.
+        shown_first = c.calls[-1]["user"].index("TEXT A:")
+        body = c.calls[-1]["user"][shown_first:]
+        assert (f"second {i}" in body.split("TEXT B:")[0]) == out.swapped
+    assert seen == {True, False}, "the order must actually vary"
+
+
+def test_the_pair_prompt_names_neither_expected_assignment():
+    from llmlc.probe.attest import separate
+
+    c = FakeClient('{"a": "Serbia", "b": "Montenegro"}')
+    separate(c, "a", first="x" * 40, second="y" * 40, blind=SR)
+    for leak in ("sr-me", "sr-rs", "text a is", "text b is"):
+        assert leak not in c.sent.lower()
+
+
+def test_a_pair_answer_outside_the_option_set_is_an_error():
+    from llmlc.probe.attest import separate
+
+    c = FakeClient('{"a": "Croatia", "b": "Montenegro"}')
+    out = separate(c, "a", first="x" * 40, second="y" * 40, blind=SR)
+    assert not out.ok and "not both" in out.error
+
+
+def test_pair_markers_are_grounded_against_both_texts():
+    from llmlc.probe.attest import separate
+
+    c = FakeClient('{"a": "Serbia", "b": "Montenegro", '
+                   '"markers": [{"text": "дете", "in": "A"}, '
+                   '{"text": "nowhere", "in": "B"}]}')
+    out = separate(c, "a", first="Дете је нашло пса поред реке данас.",
+                   second="Дијете је нашло пса поред ријеке данас.", blind=SR)
+    assert out.fabricated == ["nowhere"]

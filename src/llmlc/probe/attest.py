@@ -262,3 +262,141 @@ def identify(client: OpenAICompatClient, model: str, *, text: str,
                            confidence=str(data.get("confidence") or "") or None,
                            raw=completion.text)
     return ground(ident, text)
+
+
+#: What an attestor answers when two texts cannot be told apart -- because they
+#: are the same variety, or because neither carries anything distinguishing.
+#:
+#: Offering it is what makes the contrast probe able to return a *negative*. A
+#: forced two-way assignment has a floor of 0.5 by guessing, so without this
+#: escape a model that can see no difference still scores half the pairs right
+#: and the null control could never come back clean. The Russian set is the case
+#: that matters: it must be possible to answer "these are the same", because
+#: that is the true answer there.
+INDISTINGUISHABLE = "indistinguishable"
+
+
+SEPARATE_SYSTEM = """You are a linguist and a native speaker of {language}, \
+asked to judge two texts.
+
+You will be shown two texts, A and B. Decide which regional variety each one is \
+written in, judging only from the texts themselves.
+
+Answer "{indistinguishable}" for both if the two cannot be told apart — because \
+they are written in the same variety, or because neither contains anything that \
+distinguishes one variety from another. Two texts being different texts does not \
+make them different varieties. This is a common and correct answer — do not \
+invent a difference to avoid it.
+Answer "{unsupported}" for both if you do not know these varieties well enough \
+to tell them apart.
+
+For every marker you cite, quote the exact word or phrase as it appears in the \
+text, and say which text it came from. Do not cite a marker that is not present.
+
+Reply with JSON only, exactly: \
+{{"a": "<variety for text A>", "b": "<variety for text B>", \
+"markers": [{{"text": "<quoted>", "in": "A"|"B", "why": "<what it shows>"}}], \
+"confidence": "high"|"medium"|"low"}}
+No other text."""
+
+SEPARATE_USER = """Varieties they may be:
+{options}
+
+TEXT A:
+{a}
+
+TEXT B:
+{b}"""
+
+
+@dataclass
+class Separation:
+    """One attestor's blind reading of a pair."""
+
+    a: str | None
+    b: str | None
+    markers: list[dict] = field(default_factory=list)
+    confidence: str | None = None
+    raw: str | None = None
+    error: str | None = None
+    fabricated: list[str] = field(default_factory=list)
+    #: Whether the texts were shown in the order the caller passed them. The
+    #: caller needs this to score the answer, and nothing in the prompt reveals
+    #: it.
+    swapped: bool = False
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None and bool(self.a) and bool(self.b)
+
+    @property
+    def declined(self) -> bool:
+        return self.a == UNSUPPORTED or self.b == UNSUPPORTED
+
+    @property
+    def merged(self) -> bool:
+        """Said the two cannot be told apart. The negative result, and a real one."""
+        return self.ok and (self.a == INDISTINGUISHABLE or self.b == INDISTINGUISHABLE)
+
+    @property
+    def split(self) -> bool:
+        """Named two different varieties. The only answer that can be *correct*;
+        whether it is correct is the caller's to decide, since only the caller
+        knows which text was which."""
+        return self.ok and not self.declined and not self.merged and self.a != self.b
+
+    def as_dict(self) -> dict:
+        return {"a": self.a, "b": self.b, "swapped": self.swapped,
+                "confidence": self.confidence, "markers": self.markers,
+                "fabricated": self.fabricated, "error": self.error}
+
+
+def separate(client: OpenAICompatClient, model: str, *, first: str, second: str,
+             blind: Blind, max_tokens: int = 600) -> Separation:
+    """Ask one attestor, blind, to assign varieties to a pair of texts.
+
+    The pair is presented in an order salted by the texts themselves, so the
+    expected answer is not always A. A model that always answers the options in
+    the order they were listed would otherwise score 100% on every pair, and we
+    would read a formatting habit as dialect knowledge.
+
+    `swapped` on the result says what the attestor actually saw. The caller
+    scores against it; the attestor never learns it.
+    """
+    swap = _coin(first + second)
+    a, b = (second, first) if swap else (first, second)
+
+    options = "\n".join(f"- {o}" for o in blind.options)
+    system = SEPARATE_SYSTEM.format(language=blind.language, unsupported=UNSUPPORTED,
+                                    indistinguishable=INDISTINGUISHABLE)
+    user = SEPARATE_USER.format(options=options, a=a.strip(), b=b.strip())
+
+    completion = client.complete(model, user, max_tokens=max_tokens, system=system)
+    if not completion.ok:
+        return Separation(None, None, error=completion.error, raw=completion.text,
+                          swapped=swap)
+
+    data, err = _parse(completion.text or "")
+    if data is None:
+        return Separation(None, None, raw=completion.text, error=err, swapped=swap)
+
+    allowed = (*blind.options, INDISTINGUISHABLE, UNSUPPORTED)
+
+    def pick(key: str) -> str | None:
+        want = str(data.get(key) or "").strip()
+        return next((o for o in allowed if o.casefold() == want.casefold()), None)
+
+    got_a, got_b = pick("a"), pick("b")
+    out = Separation(got_a, got_b, markers=_markers(data),
+                     confidence=str(data.get("confidence") or "") or None,
+                     raw=completion.text, swapped=swap)
+    if got_a is None or got_b is None:
+        out.error = (f"answers {data.get('a')!r}/{data.get('b')!r} are not both "
+                     "in the option set")
+        return out
+    return ground(out, a + "\n" + b)
+
+
+def _coin(salt: str) -> bool:
+    """A stable coin flip from a string. Same reasoning as `shuffled`."""
+    return hashlib.sha256(salt.encode("utf-8")).digest()[0] & 1 == 1
