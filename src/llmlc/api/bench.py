@@ -60,6 +60,13 @@ class Session:
     corpus: Corpus | None = None
     #: What this run will ask for, worked out before anything is spent.
     plan: dict = field(default_factory=dict)
+    #: The result object itself, kept past `_finish` so a reader can correct a
+    #: judge verdict and have the run re-scored by the production scorer.
+    _result_obj: object = None
+    #: Verdicts a reader overrode, and what the run scores with them applied.
+    #: Never written back over `result`: an adjudication says what the run
+    #: *would* have scored, and a measurement is not edited after the fact.
+    adjudication: dict | None = None
     _gen: object = None
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -74,6 +81,7 @@ class Session:
             # and the page must be able to say so wherever it shows the verdict.
             "persisted": self.persisted,
             "plan": self.plan,
+            "adjudication": self.adjudication,
             "steps": self.steps, "result": self.result,
             "corpus": str(self.corpus.path) if self.corpus else None,
         }
@@ -313,6 +321,7 @@ def _finish(session: Session, result, *, on_result=None) -> None:
         # capability record as the battery ran, and the corpus has every text.
         return
 
+    session._result_obj = result
     session.result = {
         "tag": result.tag, "engine": result.engine,
         "designator": result.designator,
@@ -357,3 +366,69 @@ def close(session_id: str, *, status: str = "abandoned") -> bool:
 def reset_for_tests() -> None:
     for sid in list(_SESSIONS):
         close(sid)
+
+
+def adjudicate(session: Session, overrides: list[dict]) -> dict:
+    """Re-score a finished run with a reader's corrections to the judge.
+
+    **It never edits the measurement.** The stored result stands; this reports
+    what the same run would have scored had the judge answered differently, and
+    the two sit side by side. A measurement that could be hand-edited after the
+    fact is not a measurement, and an adjudicated number silently replacing a
+    measured one is how a result comes to mean something nobody can reconstruct.
+
+    The re-score goes through `ladder.score_run` -- the function that produced
+    the original number -- rather than a copy of it, because two numbers on one
+    page inviting a comparison had better be comparable (convention 9).
+
+    This is the bench's reason to exist. The judge is a model and models are
+    wrong; protocol 016 found 90% of one metric's disagreements with fact recall
+    were adequate translations. Seeing *which* fact was called missing, and
+    being able to say "it is in there", is how that gets caught -- and how a
+    protocol gets written about it.
+    """
+    from llmlc.probe.judge import FactVerdict
+    from llmlc.probe.ladder import score_run
+
+    result = session._result_obj
+    if result is None:
+        raise ValueError("This run has no result to adjudicate yet.")
+
+    by_spec: dict[str, dict[int, FactVerdict]] = {}
+    for o in overrides:
+        try:
+            by_spec.setdefault(str(o["spec_id"]), {})[int(o["index"])] = \
+                FactVerdict(str(o["verdict"]))
+        except (KeyError, ValueError, TypeError) as e:
+            raise ValueError(f"Not a usable override: {o!r} ({e})") from e
+
+    applied, changed = [], 0
+    for item in result.items:
+        wants = by_spec.get(item.spec_id)
+        if not wants or not (item.judgement and item.judgement.ok):
+            continue
+        for i, v in wants.items():
+            if not 0 <= i < len(item.judgement.verdicts):
+                raise ValueError(
+                    f"{item.spec_id}: fact {i} does not exist "
+                    f"({len(item.judgement.verdicts)} facts)")
+            was = item.judgement.verdicts[i]
+            if was is v:
+                continue
+            item.judgement.verdicts[i] = v
+            changed += 1
+            applied.append({"spec_id": item.spec_id, "index": i,
+                            "fact": item.facts[i] if i < len(item.facts) else None,
+                            "was": was.value, "now": v.value})
+
+    rescored = score_run(result.items, qualification=result.qualification,
+                         tag=result.tag)
+    session.adjudication = {
+        "applied": applied, "changed": changed,
+        "measured": session.result["score"],
+        "adjudicated": rescored.as_dict(),
+        "note": "What this run would have scored had the judge answered this "
+                "way. The measurement above is unchanged, and an adjudicated "
+                "run is never saved to results.",
+    }
+    return session.adjudication

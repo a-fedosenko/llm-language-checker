@@ -175,11 +175,50 @@ class Step:
         }
 
 
+def score_run(items: list[ItemOutcome], *, qualification, tag: str) -> Score:
+    """Combine a run's items into one score.
+
+    Lifted out of `ladder_steps` because a second caller needs it: the bench
+    lets a reader correct a judge verdict they can see is wrong, and the
+    corrected run has to be scored by **this** function rather than by a copy
+    of it. Convention 9 is explicit about what the copy costs -- an analysis
+    harness re-implemented a production call, got it subtly wrong, and 68 bad
+    verdicts reached a protocol's conclusions. A re-score that drifted from the
+    original would be worse than that, because the two numbers would sit side
+    by side on one page inviting a comparison that is not one.
+    """
+    contents = [i.content for i in items if i.content is not None]
+    notes: list[str] = []
+    if any(i.gate.verdict is GateVerdict.RELATIVE_SUBSTITUTION for i in items):
+        notes.append("Model produced a neighbouring language rather than the target.")
+    if not qualification.trustworthy:
+        evidence = Evidence.UNVERIFIED
+        notes.append(f"Back-translator {qualification.backtranslator} is "
+                     f"{qualification.status.value} for {tag}: {qualification.detail}")
+    elif not contents:
+        evidence = Evidence.UNVERIFIED
+    else:
+        evidence = Evidence.FACT_RECALL
+    refused = [i for i in items if i.gate.verdict is GateVerdict.REFUSED]
+    graded = [i for i in items
+              if i.gate.verdict not in VOID and i.gate.verdict is not GateVerdict.REFUSED]
+    return score(lang_pass=[i.lang_ok for i in graded], content=contents,
+                 evidence=evidence, refusals=len(refused),
+                 contradictions=sum(i.judgement.contradictions for i in items
+                                    if i.judgement and i.judgement.ok),
+                 notes=notes)
+
+
 def item_detail(item: ItemOutcome) -> dict:
     """An item as the bench shows it. Deliberately the whole text: reading the
     raw output is how nearly every real defect in this project was found."""
     return {
         "spec_id": item.spec_id,
+        # The checklist itself, index-aligned with `verdicts`. Without it the
+        # page can say four facts were present and one missing, and cannot say
+        # *which* -- which is the only form in which a reader can tell whether
+        # the judge was right.
+        "facts": list(item.facts),
         "designator": item.designator,
         "prompt": item.prompt,
         "generation": item.generation,
@@ -517,29 +556,10 @@ def ladder_steps(
                tone="ok" if qual.trustworthy else "bad")
 
     def finish(items: list[ItemOutcome], rungs: int) -> LadderResult:
-        contents = [i.content for i in items if i.content is not None]
-        notes = []
-        if any(i.gate.verdict is GateVerdict.RELATIVE_SUBSTITUTION for i in items):
-            notes.append("Model produced a neighbouring language rather than the target.")
-        if not qual.trustworthy:
-            evidence = Evidence.UNVERIFIED
-            notes.append(f"Back-translator {qual.backtranslator} is {qual.status.value} "
-                         f"for {tag}: {qual.detail}")
-        elif not contents:
-            evidence = Evidence.UNVERIFIED
-        else:
-            evidence = Evidence.FACT_RECALL
-        refused = [i for i in items if i.gate.verdict is GateVerdict.REFUSED]
-        graded = [i for i in items
-                  if i.gate.verdict not in VOID and i.gate.verdict is not GateVerdict.REFUSED]
         return LadderResult(
             tag=tag, engine=engine, language=lang, designator=best.value,
             designator_kinds=chosen.kinds, trials=trials,
-            score=score(lang_pass=[i.lang_ok for i in graded], content=contents,
-                        evidence=evidence, refusals=len(refused),
-                        contradictions=sum(i.judgement.contradictions for i in items
-                                           if i.judgement and i.judgement.ok),
-                        notes=notes),
+            score=score_run(items, qualification=qual, tag=tag),
             items=items, backtranslator=bt.id, judge_model=judge_model, pivot=pivot,
             qualification=qual, rungs_run=rungs, resolves_to=resolves, calls=calls)
 

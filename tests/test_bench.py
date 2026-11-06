@@ -398,3 +398,113 @@ def test_the_russian_null_control_opens_with_real_options(client):
                     json=dialect_body(tag="ru-by",
                                       varieties=["ru-ru", "ru-by"])).json()
     assert set(d["plan"]["options"]) == {"Russia", "Belarus"}
+
+
+# -- correcting a judge you can see is wrong ---------------------------------
+
+def finished_session():
+    """A completed ladder session, built from the production primitives."""
+    from llmlc.bt import Qualification, QualStatus
+    from llmlc.probe.gate import GateResult, GateVerdict
+    from llmlc.probe.judge import FactVerdict, Judgement
+    from llmlc.probe.ladder import LadderResult, score_run
+    from llmlc.probe.steps import ItemOutcome
+    from llmlc.scheme import load_scheme
+
+    scheme = load_scheme(settings.scheme)
+    lang = scheme.get("ru")
+    facts = ["an old man buys fish", "at the market", "the price doubled",
+             "he buys less", "he walks home"]
+    items = []
+    for n in range(2):
+        it = ItemOutcome("market-fish-price", "Russian", "текст",
+                         GateResult(GateVerdict.PASS, None, ""), facts=list(facts))
+        it.judgement = Judgement([FactVerdict.PRESENT] * 4 + [FactVerdict.MISSING], "{}")
+        items.append(it)
+    qual = Qualification(QualStatus.QUALIFIED, 80.0, "remote:r", "ru", "reference", "")
+    result = LadderResult(
+        tag="ru", engine="m", language=lang, designator="Russian",
+        designator_kinds=("A",), trials=[], score=score_run(items, qualification=qual, tag="ru"),
+        items=items, backtranslator="remote:r", judge_model="j", pivot="en",
+        qualification=qual, rungs_run=2)
+    s = bench_sessions.Session(id="adj1", engine="m", tag="ru", mode="interactive",
+                               specs_modified=False)
+    bench_sessions._SESSIONS["adj1"] = s
+    bench_sessions._finish(s, result)
+    return s
+
+
+def test_the_item_carries_the_facts_its_verdicts_refer_to():
+    """Four present and one missing is not readable without knowing which one.
+    `which` is the only form in which a reader can tell whether the judge was
+    right."""
+    from llmlc.probe.ladder import item_detail
+
+    s = finished_session()
+    d = item_detail(s._result_obj.items[0])
+    assert len(d["facts"]) == len(d["verdicts"])
+    assert d["facts"][4] == "he walks home" and d["verdicts"][4] == "missing"
+
+
+def test_correcting_a_verdict_rescores_the_run():
+    s = finished_session()
+    before = s.result["score"]["s_content"]
+    out = bench_sessions.adjudicate(
+        s, [{"spec_id": "market-fish-price", "index": 4, "verdict": "present"}])
+    assert out["changed"] == 2                     # both items carried that spec
+    assert out["adjudicated"]["s_content"] > before
+    assert out["applied"][0]["fact"] == "he walks home"
+    assert out["applied"][0]["was"] == "missing"
+
+
+def test_adjudication_never_edits_the_measurement():
+    """A measurement that can be hand-edited after the fact is not a
+    measurement. Both numbers stand, side by side."""
+    s = finished_session()
+    measured = dict(s.result["score"])
+    out = bench_sessions.adjudicate(
+        s, [{"spec_id": "market-fish-price", "index": 4, "verdict": "present"}])
+    assert s.result["score"] == measured
+    assert out["measured"] == measured
+    assert out["adjudicated"] != measured
+
+
+def test_the_rescore_uses_the_production_scorer():
+    """Two numbers on one page inviting a comparison had better be comparable.
+    An override that changes nothing must reproduce the original exactly."""
+    s = finished_session()
+    out = bench_sessions.adjudicate(
+        s, [{"spec_id": "market-fish-price", "index": 0, "verdict": "present"}])
+    assert out["changed"] == 0
+    assert out["adjudicated"] == out["measured"]
+
+
+def test_an_override_naming_a_fact_that_does_not_exist_is_refused():
+    s = finished_session()
+    with pytest.raises(ValueError, match="does not exist"):
+        bench_sessions.adjudicate(
+            s, [{"spec_id": "market-fish-price", "index": 99, "verdict": "present"}])
+
+
+def test_an_unusable_override_says_so_rather_than_being_ignored():
+    s = finished_session()
+    with pytest.raises(ValueError, match="[Nn]ot a usable override"):
+        bench_sessions.adjudicate(s, [{"spec_id": "x", "index": 0, "verdict": "maybe"}])
+
+
+def test_adjudicating_an_unfinished_run_is_refused(client):
+    sid = client.post("/bench", json=body()).json()["id"]
+    r = client.post(f"/bench/{sid}/adjudicate", json={"overrides": []})
+    assert r.status_code == 400 and "no result" in r.json()["detail"]
+
+
+def test_the_endpoint_returns_both_numbers():
+    from fastapi.testclient import TestClient
+    from llmlc.api.main import app
+
+    finished_session()
+    r = TestClient(app).post("/bench/adj1/adjudicate", json={"overrides": [
+        {"spec_id": "market-fish-price", "index": 4, "verdict": "present"}]})
+    d = r.json()
+    assert r.status_code == 200
+    assert d["measured"]["s_content"] < d["adjudicated"]["s_content"]

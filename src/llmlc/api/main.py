@@ -815,6 +815,31 @@ def bench_step(session_id: str) -> dict:
     return {"step": step, "session": session.public()}
 
 
+class Adjudication(BaseModel):
+    """Corrections to a judge's verdicts, by specification and fact index."""
+
+    overrides: list[dict]
+
+
+@app.post("/bench/{session_id}/adjudicate")
+def bench_adjudicate(session_id: str, body: Adjudication) -> dict:
+    """Re-score a finished run with a reader's corrections to the judge.
+
+    Spends nothing: it re-runs the scorer over judgements already paid for.
+    Not gated like a step for that reason, and because refusing to let someone
+    check the arithmetic would be the wrong instinct entirely.
+
+    The measurement is not edited. This returns both numbers.
+    """
+    session = bench_sessions.get(session_id)
+    if session is None:
+        raise HTTPException(404, "No such bench session.")
+    try:
+        return bench_sessions.adjudicate(session, body.overrides)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @app.get("/bench/{session_id}")
 def bench_state(session_id: str) -> dict:
     session = bench_sessions.get(session_id)

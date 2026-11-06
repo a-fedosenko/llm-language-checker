@@ -6,7 +6,7 @@ most negatives free, and what the designator sweep is scored on.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from llmlc.bt import RemoteBackTranslator
 from llmlc.client import OpenAICompatClient
@@ -28,6 +28,10 @@ class ItemOutcome:
     back_translation: str | None = None
     judgement: Judgement | None = None
     error: str | None = None
+    #: The fact checklist this item is graded against, carried on the item so a
+    #: reader can see which fact a verdict refers to. Index-aligned with
+    #: `judgement.verdicts`.
+    facts: list[str] = field(default_factory=list)
     #: Exactly what was sent. The corpus has had it all along, but a verdict you
     #: can only check by opening a JSONL file is a verdict most people take on
     #: trust -- and "read the raw evidence before believing a number" is the
@@ -69,7 +73,7 @@ def generate_and_gate(*, client: OpenAICompatClient, engine: str, lang: Language
                       expect_script=lang.script, relatives=relatives, accept_lang=accept,
                       abstain_lang=abstain)
     return ItemOutcome(spec.id, designator, gen.text, gate, error=gen.error,
-                       prompt=shown)
+                       facts=list(spec.facts), prompt=shown)
 
 
 def judge_item(item: ItemOutcome, *, client: OpenAICompatClient, judge_model: str,

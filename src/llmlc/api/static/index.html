@@ -439,6 +439,7 @@
     <div class="note" id="d-plan" hidden></div>
     <div class="note" id="d-next" hidden></div>
     <div id="d-steps"></div>
+    <div class="note" id="d-adjudication" hidden></div>
     <div id="d-result"></div>
 
     <!-- Below the steps, and sticky: the list grows with every step, and
@@ -559,6 +560,8 @@ const HELP = {
     'The scenario the model is asked to describe, and the facts that scenario commits it to. The model chooses every word; the facts are the grading checklist. Editing either makes the run incomparable to the stored results, so it is not saved — the raw output still goes to the corpus.'],
   'block.support': ['Language support',
     'One model against every locale in the active scheme. The status answers whether the model can be used for that language; the score says how well it carried meaning. Everything about how a verdict was reached — the designator, the gate verdict, the interval, the back-translator — is on the Results tab.'],
+  'bench.facts': ['The fact checklist',
+    'What the judge was asked to find in the back-translation, one row per fact with the verdict it received. "Four present, one missing" is not readable — <i>which</i> one is the only form in which you can tell whether the judge was right, and the judge is a model: protocol 016 found 90% of one metric\'s disagreements with fact recall were adequate translations. Marking a verdict re-scores the run and shows both numbers side by side. It never edits the measurement, and an adjudicated run is not saved.'],
   'bench.probe': ['What to run',
     'Two different questions. The <b>ladder</b> asks whether the model can write this language at all, scored by back-translation and fact recall. The <b>dialect battery</b> asks whether it commands a specific regional variety — it writes the variety, rewrites neutral text into it, and other models are asked blind which variety they are looking at. A model can pass one and fail the other, which is why they are separate.'],
   'bench.varieties': ['Varieties to contrast',
@@ -1112,6 +1115,9 @@ async function startBench() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body) });
     bench.id = d.id;
+    bench.lastSession = d.id;
+    factFixes = [];
+    $('#d-adjudication').hidden = true;
     sessionStorage.setItem('benchSession', d.id);
     benchButtons({ live: true, busy: false });
     $('#d-cost').textContent = 'nothing spent yet';
@@ -1259,7 +1265,6 @@ function renderStep(s) {
   else if (d.panel && d.panel.length > 1)
     add('panel', d.panel.join(', ') + ' — first to qualify is used');
   add('recall', d.recall);
-  if (d.verdicts) add('facts', d.verdicts.join(', '));
   if (d.tier) { add('tier', d.tier); add('eligibility', d.s_lang); add('adequacy', d.s_content);
                 add('interval', d.ci ? `[${d.ci[0]}, ${d.ci[1]}]` : null);
                 add('workflow', d.workflow); }
@@ -1268,6 +1273,26 @@ function renderStep(s) {
   // reconstruct from the answer, and it is where a designator that does not say
   // what you thought it said becomes visible — which is how `sr-RS` and `sr-ME`
   // were found to be the same experiment.
+  // The checklist, one fact per row, paired with the verdict it received.
+  // "four present, one missing" is not readable: which one is the only form in
+  // which a reader can tell whether the judge was right, and the judge is a
+  // model (protocol 016 found 90% of one metric's disagreements with fact
+  // recall were adequate translations).
+  let factsHtml = '';
+  if (d.verdicts && d.facts) {
+    factsHtml = `<table class="facts" data-spec="${esc(d.spec_id || '')}">` +
+      d.facts.map((f, i) => {
+        const v = d.verdicts[i] || 'missing';
+        return `<tr class="fv-${esc(v)}">
+          <td class="fv">${esc(v)}</td>
+          <td>${esc(f)}</td>
+          <td class="fx"><button class="btn ghost tiny" data-fix="${i}"
+            data-spec="${esc(d.spec_id || '')}" data-to="${v === 'present' ? 'missing' : 'present'}"
+            title="The judge is a model and can be wrong. Marking it here re-scores the run and shows both numbers — it never edits the measurement.">mark ${
+              v === 'present' ? 'missing' : 'present'}</button></td></tr>`;
+      }).join('') + '</table>';
+  }
+
   if (d.prompt) texts.push(['asked', d.prompt]);
   if (d.generation) texts.push(['generated', d.generation]);
   if (d.back_translation) texts.push(['read back', d.back_translation]);
@@ -1285,6 +1310,7 @@ function renderStep(s) {
       <div class="verdict">${esc(s.summary)}</div>
       ${rows.length ? `<dl>${rows.map(([k, v]) =>
         `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}
+      ${factsHtml}
       ${texts.map(([k, v]) => `<pre><b>${esc(k)}</b>\n${esc(v)}</pre>`).join('')}
     </div>`);
   // Scroll to the controls, not to the step: the next thing the reader wants
@@ -1362,6 +1388,56 @@ function renderBenchSession(sess) {
   benchButtons({ live: false, busy: false });
   $('#d-next').hidden = true;
   refreshSessions();
+}
+
+// Corrections the reader has made, by spec id and fact index. Kept on the page
+// until the run finishes: a verdict can be seen to be wrong the moment the
+// back-translation appears, which is several steps before there is a result to
+// re-score.
+let factFixes = [];
+
+$('#d-steps').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('[data-fix]');
+  if (!btn) return;
+  const spec = btn.dataset.spec, index = Number(btn.dataset.fix), to = btn.dataset.to;
+  factFixes = factFixes.filter(f => !(f.spec_id === spec && f.index === index));
+  factFixes.push({ spec_id: spec, index, verdict: to });
+  const row = btn.closest('tr');
+  row.className = `fv-${to} is-fixed`;
+  row.querySelector('.fv').textContent = `${to} (corrected)`;
+  btn.dataset.to = to === 'present' ? 'missing' : 'present';
+  btn.textContent = `mark ${btn.dataset.to}`;
+  await runAdjudication();
+});
+
+async function runAdjudication() {
+  // Only once there is a result to re-score. Before that the correction is
+  // remembered and applied when the run ends, so a reader can mark a verdict
+  // the moment they see it rather than having to remember it to the end.
+  if (!bench.lastSession || !factFixes.length) return;
+  try {
+    const d = await j(`/bench/${bench.lastSession}/adjudicate`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ overrides: factFixes }) });
+    renderAdjudication(d);
+  } catch (e) {
+    $('#d-adjudication').hidden = false;
+    $('#d-adjudication').className = 'note bad';
+    $('#d-adjudication').textContent = e.message;
+  }
+}
+
+function renderAdjudication(d) {
+  const box = $('#d-adjudication');
+  box.hidden = false;
+  box.className = 'note warn';
+  const m = d.measured, a = d.adjudicated;
+  box.innerHTML = `<strong>With your corrections applied:</strong>
+    adequacy <b>${num(a.s_content)}</b> [${num(a.ci[0])}, ${num(a.ci[1])}] — <b>${esc(a.tier)}</b>,
+    against the measured ${num(m.s_content)} [${num(m.ci[0])}, ${num(m.ci[1])}] — ${esc(m.tier)}.
+    <br>${d.applied.map(x =>
+      `<code>${esc(x.fact || '')}</code>: ${esc(x.was)} → <b>${esc(x.now)}</b>`).join('<br>')}
+    <br><span class="ev">${esc(d.note)}</span>`;
 }
 
 $('#d-probe').addEventListener('change', switchProbe);
