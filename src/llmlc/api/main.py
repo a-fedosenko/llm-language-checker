@@ -197,9 +197,16 @@ def languages(
         items = [x for x in items
                  if ql in x.tag.lower()
                  or (x.name and ql in x.name.lower())
-                 or (x.local_name and ql in x.local_name.lower())]
+                 or (x.local_name and ql in x.local_name.lower())
+                 # Searchable by place, because that is what a picker now shows
+                 # and typing what you can see should find it.
+                 or (x.region_name and ql in x.region_name.lower())]
+    page = items[offset: offset + limit]
     return {"total": len(items), "offset": offset, "limit": limit,
-            "items": items[offset: offset + limit]}
+            # `label` is additive: the model is returned unchanged beside it.
+            # Computed here because only the scheme knows whether this family
+            # is written in more than one script.
+            "items": [{**x.model_dump(), "label": _tag_label(s, x)} for x in page]}
 
 
 @app.get("/languages/{tag}")
@@ -993,6 +1000,40 @@ def bench_dialect_start(body: DialectStart, request: Request) -> dict:
     session.plan["scenario"] = scenario
     session.plan["attestors_asked"] = panel
     return session.public()
+
+
+def _tag_label(scheme: Scheme, lang: Language) -> str:
+    """What separates this tag from its siblings, for a picker.
+
+    The language name does not. A TMS locale list holds eight Portuguese tags
+    and nine Serbian ones, and every row of "Portuguese · português" is the
+    same row -- the field offered a choice between eight identical labels.
+
+    The **region** is what discriminates, so it leads. The **script** follows
+    only where the family is actually written in more than one: `sr-me-cyrl`
+    against `sr-me-latn` needs it, and appending "Latin" to all eight
+    Portuguese rows would be the original problem with an extra word.
+
+    The language name appears only where there is no region to show -- the
+    umbrella tag -- because that is the one row where it *is* the distinguishing
+    fact.
+
+    Keyed on `lang.region`, the subtag, not `region_name`: a locale list's
+    unqualified tag has no region and still inherits a region *name* from the
+    catalogue's likely-subtag resolution, so `pt` would otherwise label itself
+    "Brazil" and collide with `pt-br`. Same trap as the designator's.
+    """
+    from llmlc.probe.dialect import family_of
+    from llmlc.probe.designator import script_name_for
+
+    parts = []
+    if lang.region and lang.region_name:
+        parts.append(lang.region_name)
+    if lang.script and len({v.script for v in family_of(scheme, lang) if v.script}) > 1:
+        parts.append(script_name_for(lang.script) or lang.script)
+    if not parts:
+        parts.append(lang.name or lang.tag)
+    return " · ".join(parts)
 
 
 def _contrastable(scheme: Scheme, lang: Language) -> list:

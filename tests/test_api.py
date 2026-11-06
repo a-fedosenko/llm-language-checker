@@ -80,3 +80,44 @@ def test_results_survive_with_no_database():
     from llmlc.api import results as store
     rows = store._from_files()
     assert isinstance(rows, list)
+
+
+def test_a_tag_label_shows_what_separates_it_from_its_siblings():
+    """The language name does not. Eight Portuguese locales produced eight rows
+    reading "Portuguese · português" — a choice between eight identical labels,
+    which is no choice."""
+    d = client.get("/languages", params={"q": "pt-", "limit": 20}).json()
+    labels = {x["tag"]: x["label"] for x in d["items"] if x["tag"].startswith("pt-")}
+    assert labels.get("pt-br") == "Brazil" and labels.get("pt-pt") == "Portugal"
+    assert len(set(labels.values())) == len(labels), "every row must be distinct"
+
+
+def test_the_script_appears_only_where_the_family_is_written_in_two():
+    """`sr-me-cyrl` against `sr-me-latn` needs it. Appending "Latin" to all
+    eight Portuguese rows would be the original problem with an extra word."""
+    sr = client.get("/languages", params={"q": "sr-me", "limit": 10}).json()["items"]
+    by = {x["tag"]: x["label"] for x in sr}
+    assert by.get("sr-me-cyrl") == "Montenegro · Cyrillic"
+    assert by.get("sr-me-latn") == "Montenegro · Latin"
+
+    pt = client.get("/languages", params={"q": "pt-br", "limit": 5}).json()["items"]
+    assert "Latin" not in next(x["label"] for x in pt if x["tag"] == "pt-br")
+
+
+def test_the_umbrella_falls_back_to_the_language_name():
+    """The one row where the language name *is* the distinguishing fact. Keyed
+    on the region subtag, not the region name: an unqualified tag has no region
+    and still inherits one from the catalogue's likely-subtag resolution, so
+    `pt` would otherwise label itself "Brazil" and collide with `pt-br`."""
+    d = client.get("/languages", params={"q": "pt", "limit": 40}).json()["items"]
+    pt = next((x for x in d if x["tag"] == "pt"), None)
+    if pt is None:
+        import pytest
+        pytest.skip("this locale list has no bare `pt`")
+    assert pt["label"] == "Portuguese"
+
+
+def test_a_tag_is_findable_by_the_place_the_picker_shows():
+    """Typing what you can see should find it."""
+    d = client.get("/languages", params={"q": "Montenegro", "limit": 10}).json()
+    assert {x["tag"] for x in d["items"]} >= {"sr-me-cyrl", "sr-me-latn"}
