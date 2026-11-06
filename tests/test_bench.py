@@ -537,3 +537,54 @@ def test_a_long_running_server_does_not_blame_a_restart(client, monkeypatch):
 
     monkeypatch.setattr(main, "_STARTED_AT", __import__("time").time() - 86400)
     assert "likely cause" not in client.get("/bench/nope").json()["detail"]
+
+
+# -- the picker the page builds its lists from -------------------------------
+
+def test_the_options_endpoint_offers_the_whole_family(client):
+    """Nobody should have to know Montenegrin Cyrillic Serbian is spelled
+    `sr-me-cyrl`."""
+    d = client.get("/dialect/options", params={"tag": "sr-me-cyrl"}).json()
+    tags = {v["tag"] for v in d["varieties"]}
+    assert {"sr", "sr-rs-cyrl", "sr-me-cyrl", "sr-me-latn", "sr-xk-cyrl"} <= tags
+    assert d["neutral"] == "sr"
+
+
+def test_the_umbrella_is_offered_but_marked_as_the_neutral_arm(client):
+    """Shown and disabled rather than hidden: a reader scanning Serbian tags
+    should see `sr` and see why it cannot be picked, not wonder where it went."""
+    d = client.get("/dialect/options", params={"tag": "sr-me-cyrl"}).json()
+    sr = next(v for v in d["varieties"] if v["tag"] == "sr")
+    assert sr["umbrella"] is True and sr["default"] is False
+
+
+def test_the_picker_preselects_exactly_what_a_run_would_take(client):
+    """One definition, because the picker and the run both need it. A page
+    offering different defaults from the ones a run takes is a page describing
+    a different experiment."""
+    d = client.get("/dialect/options", params={"tag": "sr-me-cyrl"}).json()
+    assert {v["tag"] for v in d["varieties"] if v["default"]} == {"sr-me-cyrl", "sr-rs-cyrl"}
+
+    started = client.post("/bench/dialect", json=dialect_body()).json()
+    assert {v["tag"] for v in started["plan"]["varieties"]} == {"sr-me-cyrl", "sr-rs-cyrl"}
+
+
+def test_the_attestor_list_says_who_the_family_guard_excludes(client):
+    """Not knowable from outside, and the reason a panel is shorter than the
+    model list."""
+    d = client.get("/dialect/options",
+                   params={"tag": "sr-me-cyrl", "engine": "gemini-gemini-3-8-flash"}).json()
+    by_model = {a["model"]: a for a in d["attestors"]}
+    assert by_model["gemini-gemini-3-6-flash"]["eligible"] is False
+    assert all(not a["default"] for a in d["attestors"] if not a["eligible"])
+
+
+def test_the_attestor_list_is_empty_without_an_engine(client):
+    """Eligibility is relative to the model under test, so there is nothing
+    honest to show before one is named."""
+    d = client.get("/dialect/options", params={"tag": "sr-me-cyrl"}).json()
+    assert d["attestors"] == []
+
+
+def test_an_unknown_tag_is_a_404_from_the_picker_too(client):
+    assert client.get("/dialect/options", params={"tag": "zz-nope"}).status_code == 404

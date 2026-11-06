@@ -25,9 +25,16 @@ def row(**kw):
 
 
 def test_insert_then_update_same_identity():
+    # Explicit, increasing timestamps rather than two calls to `now()`. The
+    # merge rule compares `tested_at` when the method versions match, so the
+    # assertion otherwise depends on the clock advancing between two statements
+    # -- which it usually does. Seen to fail once in a full-suite run and not
+    # reproducible after; a test whose outcome depends on wall-clock resolution
+    # is worth making deterministic whether or not that was the cause.
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
     with session() as s:
-        _, a = upsert_result(s, row())
-        _, b = upsert_result(s, row(tier="Assisted"))
+        _, a = upsert_result(s, row(tested_at=t0))
+        _, b = upsert_result(s, row(tier="Assisted", tested_at=t0 + timedelta(seconds=1)))
     assert (a, b) == ("inserted", "updated")
     with session() as s:
         assert results_for(s)[0].tier == "Assisted"

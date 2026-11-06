@@ -416,14 +416,16 @@
         <label class="f" for="d-judge" data-help="scan.judge">Judge</label>
         <input id="d-judge" list="model-list" placeholder="(default)">
       </div>
-      <div class="field d-dialect-only" hidden>
-        <label class="f" for="d-varieties" data-help="bench.varieties">Varieties to contrast</label>
-        <input id="d-varieties" placeholder="(the tag and its home sibling)" autocomplete="off">
-        <span class="ev" id="d-varieties-note"></span>
+    </div>
+
+    <div class="grid d-dialect-only" hidden>
+      <div class="field">
+        <label class="f" data-help="bench.varieties">Varieties to contrast</label>
+        <div class="pick" id="d-varieties"><span class="ev">type a language tag above</span></div>
       </div>
-      <div class="field d-dialect-only" hidden>
-        <label class="f" for="d-attestors" data-help="bench.attestors">Attestor panel</label>
-        <input id="d-attestors" list="model-list" placeholder="(routed by the record)">
+      <div class="field">
+        <label class="f" data-help="bench.attestors">Attestor panel</label>
+        <div class="pick" id="d-attestors"><span class="ev">name a model under test above</span></div>
       </div>
     </div>
 
@@ -814,12 +816,76 @@ const PROBE_LEAD = {
     <b>It spends your API budget</b>: about 6 calls plus 5 per eligible attestor.`,
 };
 
+// What the server says this tag and engine could run, and what it would run by
+// default. Fetched rather than derived here: a page that computed its own
+// defaults would pre-select a different experiment from the one an unspecified
+// run performs (convention 9).
+async function loadDialectOptions() {
+  if ($('#d-probe').value !== 'dialect') return;
+  const tag = $('#d-tag').value.trim(), engine = $('#d-engine').value.trim();
+  if (!tag) return;
+  try {
+    const q = new URLSearchParams({ tag, scheme: $('#d-scheme').value });
+    if (engine) q.set('engine', engine);
+    const d = await j(`/dialect/options?${q}`);
+    renderVarietyPicker(d);
+    renderAttestorPicker(d);
+  } catch (e) {
+    $('#d-varieties').innerHTML = `<span class="ev">${esc(e.message)}</span>`;
+  }
+}
+
+function renderVarietyPicker(d) {
+  dialectDefaults.varieties = d.varieties.filter(v => v.default).map(v => v.tag);
+  // The umbrella is shown and disabled rather than hidden: a reader scanning a
+  // list of Serbian tags should see `sr` and see *why* it cannot be picked,
+  // not wonder where it went. It is the conversion source, never a contrast arm.
+  $('#d-varieties').innerHTML = d.varieties.map(v => `
+    <label class="${v.umbrella ? 'off' : ''}">
+      <input type="checkbox" value="${esc(v.tag)}" ${v.default ? 'checked' : ''}
+             ${v.umbrella ? 'disabled' : ''}>
+      <code>${esc(v.tag)}</code> <span>${esc(v.region || '')}</span>
+      <span class="why">${v.umbrella ? 'neutral arm — the conversion source'
+                                      : esc(v.designator)}</span>
+    </label>`).join('');
+}
+
+function renderAttestorPicker(d) {
+  dialectDefaults.attestors = d.attestors.filter(a => a.default).map(a => a.model);
+  const box = $('#d-attestors');
+  if (!d.attestors.length) {
+    box.innerHTML = '<span class="ev">name a model under test above</span>';
+    return;
+  }
+  box.innerHTML = d.attestors.map(a => `
+    <label class="${a.eligible ? '' : 'off'}">
+      <input type="checkbox" value="${esc(a.model)}" ${a.default ? 'checked' : ''}
+             ${a.eligible ? '' : 'disabled'}>
+      <code>${esc(a.model)}</code>
+      <span class="why">${a.eligible
+        ? (a.known === true ? 'qualified here before'
+           : a.known === false ? 'failed a control here before — still tried'
+           : 'not measured on this variety yet')
+        : 'same family as the model under test'}</span>
+    </label>`).join('');
+}
+
+const picked = id => [...document.querySelectorAll(`#${id} input:checked`)].map(i => i.value);
+
+// What the server said it would pick on its own. Kept so the page can tell
+// "the reader left the defaults alone" from "the reader chose this set" -- they
+// are the same list and not the same request: an explicit panel is *forced*,
+// which skips the capability record's ordering, and leaving the defaults alone
+// should not silently opt out of it.
+let dialectDefaults = { varieties: [], attestors: [] };
+const sameSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));
+
 function switchProbe() {
   const dialect = $('#d-probe').value === 'dialect';
   for (const el of document.querySelectorAll('.d-ladder-only')) el.hidden = dialect;
   for (const el of document.querySelectorAll('.d-dialect-only')) el.hidden = !dialect;
   $('#d-lead').innerHTML = PROBE_LEAD[dialect ? 'dialect' : 'ladder'];
-  $('#d-varieties-note').textContent = '';
+  if (dialect) loadDialectOptions();
 }
 
 async function loadBench() {
@@ -1082,14 +1148,26 @@ function benchRequest() {
   // a field silently ignored is a field a reader thinks they set.
   const list = s => s.split(/[,\s]+/).map(x => x.trim()).filter(Boolean);
   if ($('#d-probe').value === 'dialect') {
-    const varieties = list($('#d-varieties').value);
-    const attestors = list($('#d-attestors').value);
+    const varieties = picked('d-varieties');
+    const attestors = picked('d-attestors');
+    if (varieties.length < 2)
+      throw new Error('Pick at least two varieties to contrast. The umbrella tag '
+        + 'is the conversion source, not a contrast arm — "Serbian" and "Serbian '
+        + '(Montenegro)" are not two varieties anyone could be asked to tell apart.');
+    if (!attestors.length)
+      throw new Error('Pick at least one attestor. Nobody judging means nothing '
+        + 'measured, which the battery would report as `indeterminate` after '
+        + 'spending the production half.');
     return ['/bench/dialect', {
       engine: $('#d-engine').value.trim(),
       tag: $('#d-tag').value.trim(),
       scheme: $('#d-scheme').value,
-      varieties: varieties.length ? varieties : null,
-      attestors: attestors.length ? attestors : null,
+      // Sent only where the reader actually chose. The same list, left
+      // untouched, must not read as a forced panel: forcing skips the
+      // capability record's ordering, and accepting a default is not a choice
+      // to override it.
+      varieties: sameSet(varieties, dialectDefaults.varieties) ? null : varieties,
+      attestors: sameSet(attestors, dialectDefaults.attestors) ? null : attestors,
     }];
   }
   return ['/bench', {
@@ -1441,6 +1519,8 @@ function renderAdjudication(d) {
 }
 
 $('#d-probe').addEventListener('change', switchProbe);
+$('#d-tag').addEventListener('change', loadDialectOptions);
+$('#d-engine').addEventListener('change', loadDialectOptions);
 switchProbe();
 $('#d-start').addEventListener('click', startBench);
 $('#d-step').addEventListener('click', stepBench);

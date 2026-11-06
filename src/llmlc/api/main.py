@@ -928,25 +928,7 @@ def bench_dialect_start(body: DialectStart, request: Request) -> dict:
                 raise HTTPException(404, f"No tag {t_!r} in scheme {scheme.meta.name!r}.")
             chosen.append(v)
     else:
-        # The whole field is a different and much harder task than the one being
-        # measured -- Spanish carries 22 regional tags and chance falls to 4.5%
-        # -- so an unspecified run takes the tag and one sibling rather than
-        # everything, and says so in the plan.
-        named = [v for v in family if not v.inclusive and v.region_name]
-        others = [v for v in named if v.region_name != lang.region_name]
-        # The *home* variety, not whichever comes first in the catalogue. The
-        # umbrella's likely-subtag region is the variety an unqualified request
-        # actually gets -- `sr` resolves to Serbia -- so that is what a reader
-        # means by "the other one", and it is the sibling `markers/serbian.json`
-        # already expresses itself against. Catalogue order would have paired
-        # Montenegro with Bosnia, which is a real contrast but not the one
-        # anyone asked for.
-        home = (scheme.get(neutral_guess).region_name
-                if (neutral_guess := next((v.tag for v in family if v.inclusive), None))
-                else None)
-        sibling = next((v for v in others if v.region_name == home), None) \
-            or (others[0] if others else None)
-        chosen = [v for v in (sibling, lang) if v is not None]
+        chosen = _default_varieties(scheme, lang, family)
 
     if len([v for v in chosen if not v.inclusive]) < 2:
         raise HTTPException(
@@ -986,6 +968,126 @@ def bench_dialect_start(body: DialectStart, request: Request) -> dict:
     return session.public()
 
 
+def _default_varieties(scheme: Scheme, lang: Language, family: list) -> list:
+    """The pair a run takes when the caller names none: this tag and its *home*
+    sibling.
+
+    Not the whole field. Spanish carries 22 regional tags, and a 22-way blind
+    identification is a different and much harder task than the one being
+    measured -- chance falls to 4.5%, and an attestor that tells Mexican from
+    Peninsular Spanish perfectly well can still miss by answering Uruguay.
+
+    Home, not whichever comes first in the catalogue. The umbrella's
+    likely-subtag region is the variety an unqualified request actually gets --
+    `sr` resolves to Serbia -- so that is what a reader means by "the other
+    one", and it is the sibling `markers/serbian.json` already expresses itself
+    against. Catalogue order paired Montenegro with Bosnia: a real contrast,
+    but not the one anyone asked for.
+
+    One definition, because the picker and the run both need it. A page
+    offering different defaults from the ones a run would take is a page
+    describing a different experiment (convention 9).
+    """
+    named = [v for v in family if not v.inclusive and v.region_name]
+    others = [v for v in named if v.region_name != lang.region_name]
+    umbrella = next((v.tag for v in family if v.inclusive), None)
+    home = scheme.get(umbrella).region_name if umbrella else None
+    sibling = (next((v for v in others if v.region_name == home), None)
+               or (others[0] if others else None))
+    return [v for v in (sibling, lang) if v is not None]
+
+
+@app.get("/dialect/options")
+def dialect_options(
+    tag: str = Query(..., description="The variety under test"),
+    engine: str | None = Query(None, description="Model under test; the family "
+                                                 "guard needs it to say who may attest"),
+    scheme: str | None = Query(None),
+) -> dict:
+    """What a dialect run could ask, and what it would ask by default.
+
+    Served so the page can offer a picker rather than a text box. Nobody should
+    have to know that Montenegrin Cyrillic Serbian is spelled `sr-me-cyrl`, and
+    nobody can know from outside which attestors the family guard leaves
+    standing.
+
+    The defaults come from the same functions the run uses, never from a second
+    opinion on them: a picker that pre-selected something other than what an
+    unspecified run would take would be describing a different experiment.
+    """
+    from llmlc.db.qualcache import DbCapabilityRecord
+    from llmlc.probe.dialect import _designator_for, family_of
+    from llmlc.probe.panel import Role
+
+    s = get_scheme(scheme or settings.scheme)
+    lang = s.get(tag)
+    if lang is None:
+        raise HTTPException(404, f"No tag {tag!r} in scheme {s.meta.name!r}.")
+
+    family = family_of(s, lang)
+    default = {v.tag for v in _default_varieties(s, lang, family)}
+    umbrella = next((v.tag for v in family if v.inclusive), None)
+
+    varieties = [{
+        "tag": v.tag,
+        "region": v.region_name,
+        "script": v.script,
+        "designator": _designator_for(s, v),
+        "default": v.tag in default,
+        # The umbrella is offered so a reader can see it and see that it is not
+        # selectable, rather than wondering why `sr` is missing from a list of
+        # Serbian tags.
+        "umbrella": bool(v.inclusive),
+    } for v in sorted(family, key=lambda v: (not v.inclusive, v.tag))]
+
+    attestors: list[dict] = []
+    if engine:
+        chosen = set(_attestor_field(engine))
+        record = DbCapabilityRecord()
+        known = record.known(sorted(chosen), tag=tag, role=Role.DISCRIMINATION,
+                             script=lang.script)
+        from llmlc.probe.panel import eligible
+
+        for m in _attestor_candidates():
+            ok = bool(eligible([m], producer=engine))
+            attestors.append({
+                "model": m, "eligible": ok, "default": m in chosen,
+                # What the capability record already knows, so a reader can see
+                # why the order is what it is. It routes; it never vouches, and
+                # every one of these still faces the controls.
+                "known": known.get(m),
+            })
+
+    return {"tag": tag, "neutral": umbrella, "varieties": varieties,
+            "attestors": attestors}
+
+
+def _attestor_candidates() -> list[str]:
+    """Every model that could conceivably attest, before the family guard.
+
+    One definition, because the picker and the run both need it and they must
+    not disagree: a picker built from `_model_list()` alone showed nothing
+    whenever that list was empty, while a run fell back to the default panel
+    and found attestors anyway -- a page describing a run that would not happen.
+    """
+    #: Models that cannot answer a chat prompt at all. Dropped by name rather
+    #: than discovered by spending three control calls finding out.
+    NOT_CHAT = ("embedding", "whisper", "tts", "rerank")
+
+    try:
+        ids = [m for m in _model_list()
+               if not any(k in m.lower() for k in NOT_CHAT)]
+    except Exception:  # noqa: BLE001 -- a picker failing must not stop a run
+        ids = []
+    if not ids:
+        # `_model_list()` can come back empty -- an unreachable gateway, or no
+        # custom list -- and an empty field is then reported by the family guard
+        # as "no attestor left after excluding the model under test", blaming
+        # the guard for a configuration problem.
+        ids = [m.strip() for m in runner.DEFAULT_PANEL.split(",") if m.strip()]
+    return ids
+
+
 def _attestor_field(engine: str) -> list[str]:
     """Every configured model that could attest, the producer's family aside.
 
@@ -1005,21 +1107,7 @@ def _attestor_field(engine: str) -> list[str]:
     """
     from llmlc.probe.panel import eligible
 
-    #: Models that cannot answer a chat prompt at all. Dropped by name rather
-    #: than discovered by spending three control calls finding out.
-    NOT_CHAT = ("embedding", "whisper", "tts", "rerank")
-
-    try:
-        ids = [m for m in _model_list()
-               if not any(k in m.lower() for k in NOT_CHAT)]
-    except Exception:  # noqa: BLE001 -- a picker failing must not stop a run
-        ids = []
-    if not ids:
-        # `_model_list()` can come back empty -- an unreachable gateway, or no
-        # custom list -- and an empty field is then reported by the family guard
-        # as "no attestor left after excluding the model under test", blaming
-        # the guard for a configuration problem.
-        ids = [m.strip() for m in runner.DEFAULT_PANEL.split(",") if m.strip()]
+    ids = _attestor_candidates()
 
     # One per vendor family, not every id. Two costs: a gateway listing eleven
     # models would run eleven attestors at five calls each, and -- the reason
