@@ -310,3 +310,91 @@ def test_the_plan_names_the_panel_and_what_the_family_guard_dropped(client):
     assert d["plan"]["panel"] == ["beta-reader"]
     assert d["plan"]["panel_dropped"] == ["alpha-flash"]
     assert d["plan"]["judge"]
+
+
+# -- the dialect battery, driven from the bench ------------------------------
+
+def dialect_body(**kw):
+    return {"engine": "alpha-pro", "tag": "sr-me-cyrl", **kw}
+
+
+def test_a_dialect_session_is_gated_like_a_scan(client, monkeypatch):
+    monkeypatch.setattr(settings, "scan_trigger", "off")
+    r = client.post("/bench/dialect", json=dialect_body())
+    assert r.status_code == 403 and "SCAN_TRIGGER" in r.json()["detail"]
+
+
+def test_an_unknown_tag_is_a_404(client):
+    r = client.post("/bench/dialect", json=dialect_body(tag="zz-nope"))
+    assert r.status_code == 404 and "zz-nope" in r.json()["detail"]
+
+
+def test_a_dialect_session_says_what_it_will_ask_before_spending(client):
+    d = client.post("/bench/dialect", json=dialect_body()).json()
+    assert d["kind"] == "dialect" and d["steps"] == []
+    plan = d["plan"]
+    assert plan["neutral"] == "sr"
+    assert {v["tag"] for v in plan["varieties"]} == {"sr-me-cyrl", "sr-rs-cyrl"}
+    # The designators are the ladder's, not a second opinion on them.
+    assert any("Montenegro" in v["designator"] for v in plan["varieties"])
+
+
+def test_a_family_with_no_second_named_variety_is_refused_with_a_reason(client):
+    """Rather than opening a session that cannot ask a question. The umbrella is
+    the conversion source, not a contrast arm."""
+    r = client.post("/bench/dialect", json=dialect_body(tag="sr", varieties=["sr"]))
+    assert r.status_code == 400 and "two named varieties" in r.json()["detail"]
+
+
+def test_the_panel_can_be_forced_by_hand(client):
+    d = client.post("/bench/dialect",
+                    json=dialect_body(attestors=["beta-reader"])).json()
+    assert d["plan"]["attestors_asked"] == ["beta-reader"]
+
+
+def test_forcing_the_panel_does_not_buy_past_the_family_guard(client):
+    """Naming the panel is a preference; not grading your own output is a rule
+    (protocol 005)."""
+    r = client.post("/bench/dialect",
+                    json=dialect_body(attestors=["alpha-sibling"]))
+    assert r.status_code == 400 and "self-consistency" in r.json()["detail"]
+
+
+def test_a_dialect_session_is_listed_beside_a_ladder_one(client):
+    client.post("/bench/dialect", json=dialect_body())
+    kinds = {s.get("kind") for s in client.get("/bench").json()["sessions"]}
+    assert kinds == {"dialect"}
+
+
+def test_a_dialect_session_closes_like_any_other(client):
+    sid = client.post("/bench/dialect", json=dialect_body()).json()["id"]
+    assert client.delete(f"/bench/{sid}").json()["closed"] is True
+
+
+def test_the_default_sibling_is_the_home_variety_not_catalogue_order(client):
+    """The umbrella's likely-subtag region is the variety an unqualified request
+    actually gets -- `sr` resolves to Serbia -- so that is what a reader means
+    by "the other one", and it is the sibling markers/serbian.json already
+    expresses itself against. Catalogue order paired Montenegro with Bosnia,
+    which is a real contrast but not the one anyone asked for."""
+    d = client.post("/bench/dialect", json=dialect_body()).json()
+    assert {v["tag"] for v in d["plan"]["varieties"]} == {"sr-me-cyrl", "sr-rs-cyrl"}
+
+
+def test_the_varieties_can_be_named_explicitly(client):
+    """Spanish carries 22 regional tags and a 22-way blind choice is a harder
+    task than the one being measured, so the caller chooses the field."""
+    d = client.post("/bench/dialect",
+                    json=dialect_body(tag="es-mx",
+                                      varieties=["es-es", "es-mx"])).json()
+    assert {v["tag"] for v in d["plan"]["varieties"]} == {"es-es", "es-mx"}
+    assert d["plan"]["neutral"] == "es"
+
+
+def test_the_russian_null_control_opens_with_real_options(client):
+    """The probe has to be *able* to find a distinction here and report that it
+    did not, rather than never asking."""
+    d = client.post("/bench/dialect",
+                    json=dialect_body(tag="ru-by",
+                                      varieties=["ru-ru", "ru-by"])).json()
+    assert set(d["plan"]["options"]) == {"Russia", "Belarus"}

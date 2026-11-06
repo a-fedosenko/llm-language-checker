@@ -148,7 +148,17 @@ This is protocol 020's trigger in mirror image: there two tags produced one prom
 
 **`markers/` is retained, not deleted.** The three files stop being the instrument and become fixtures: `serbian.json` and `english.json` are the known-answer calibration for H1 and H2, and `not-distinguishable.json` is a human decision about register, which a measurement does not invalidate. The owner's reason for keeping them is additionally that they are interesting artifacts in their own right and the approach may be revisited.
 
-**The Bench.** The `Demo` tab, `api/demo.py` and their prose were renamed to **Bench** before this protocol was written, because "demo" implied a showcase and the thing is an instrument driven by hand. The attestation probes must be reachable there one at a time, including the routing — which attestors were chosen, why, forcible to a full panel, and a record markable stale. `attest_steps()` is a generator drained by the batch runner, exactly as `ladder_steps()` is, so that bench and scan cannot disagree about what the method does (convention 11).
+**The Bench.** The `Demo` tab, `api/demo.py` and their prose were renamed to **Bench** before this protocol was written, because "demo" implied a showcase and the thing is an instrument driven by hand.
+
+`attest_steps()` is a generator and `run_attestation()` is a *drain* over it — one traversal, exactly as `ladder_steps()`/`run_ladder()` already are (convention 11). `tests/test_attest_steps.py` pins that stepping and draining reach the same result and spend the same calls across seven control-flow cases, including every way the battery can fail. There is no bench-only path through the battery, so a verdict shown by hand can be reproduced by a scan and the reverse.
+
+The first step is `plan` and costs nothing: it names the designators, the option set, the eligible attestors, **who the family guard dropped**, and *why the attestors are in that order* — no priors, ordered by N prior records, or forced by hand. Routing that reordered a panel silently would be invisible machinery, and auditability is the whole argument for this redesign. `forced_attestors` is the override; the family guard still applies to it, because not grading your own output is a rule rather than a setting.
+
+The free half runs first — production, conversion, consistency — before any attestor is paid, so a conversion that moved nothing settles a negative with no panel call.
+
+**A design error the stepping surfaced.** The battery initially contrasted the *umbrella* against a variety, which leaves one answerable option: not a question, and the wrong question anyway, since "Serbian" and "Serbian (Montenegro)" are not two varieties a speaker could be asked to tell apart. The umbrella's job is to be the conversion *source*. A contrast runs between two **named** varieties, and the battery now refuses to start without them.
+
+Where the varieties are not named explicitly, the default sibling is the **home** variety rather than whichever comes first in the catalogue — the umbrella's likely-subtag region is what an unqualified request actually gets (`sr` resolves to Serbia), and it is the sibling `markers/serbian.json` already expresses itself against. Catalogue order had paired Montenegro with Bosnia: a real contrast, but not the one anyone asked for.
 
 ## Results
 

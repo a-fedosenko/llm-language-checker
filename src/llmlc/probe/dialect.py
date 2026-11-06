@@ -33,6 +33,7 @@ from __future__ import annotations
 import difflib
 import re
 from dataclasses import dataclass, field
+from typing import Generator
 
 from llmlc.client import OpenAICompatClient
 from llmlc.probe import attest
@@ -113,6 +114,62 @@ def family_of(scheme: Scheme, lang: Language) -> list[Language]:
     region name above.
     """
     return [l for l in scheme.languages.values() if l.lang == lang.lang]
+
+
+# -- producing a variety, and naming it the way the ladder does ---------------
+
+def _designator_for(scheme: Scheme, lang: Language) -> str:
+    """The designator the *ladder* would ask by, not a second opinion on it.
+
+    Convention 9's shape: two call sites deriving one prompt independently is
+    how an analysis path comes to describe a run that is not the one that
+    happened. `candidates_for` is the single definition, here as everywhere.
+    """
+    from llmlc.probe.ladder import candidates_for
+
+    return candidates_for(scheme, lang)[0].value
+
+
+@dataclass
+class Produced:
+    """One generation under one variety's designator, already gated."""
+
+    text: str | None = None
+    gate_verdict: str | None = None
+    error: str | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None and bool(self.text)
+
+    @property
+    def note(self) -> str:
+        return self.gate_verdict or self.error or "no output"
+
+
+def _produce(*, client: OpenAICompatClient, engine: str, lang: Language,
+             designator: str, scenario: str, corpus: Corpus,
+             relatives: set[str], accept: set[str],
+             abstain: set[str] | None = None) -> Produced:
+    """Generate one item under a variety's designator and gate it.
+
+    Uses the production primitive rather than a copy of it, so a change to how
+    generation is prompted reaches the dialect battery automatically.
+    """
+    from llmlc.probe.specs import Spec
+    from llmlc.probe.steps import generate_and_gate
+
+    item = generate_and_gate(client=client, engine=engine, lang=lang,
+                             designator=designator,
+                             spec=Spec(id="variety", scenario=scenario, facts=[]),
+                             corpus=corpus, relatives=relatives, accept=accept,
+                             abstain=abstain)
+    if item.error:
+        return Produced(None, item.gate.verdict.value, item.error)
+    if not item.gate.passed:
+        return Produced(None, item.gate.verdict.value,
+                        item.gate.detail or item.gate.verdict.value)
+    return Produced(item.generation, item.gate.verdict.value)
 
 
 # -- P3 and P4: the free half -------------------------------------------------
@@ -582,3 +639,342 @@ class DialectResult:
             "panel": self.panel.as_dict() if self.panel else None,
             "notes": list(self.notes),
         }
+
+
+# -- one traversal, two ways to consume it ------------------------------------
+
+#: What each attestation step is for, in the terms the tool reports in. Served
+#: with the step rather than restated in the page, for the reason `STEP_HELP` in
+#: the ladder already exists: text describing what the code does belongs beside
+#: the code, or it goes stale the first time a threshold moves.
+ATTEST_HELP: dict[str, tuple[str, str]] = {
+    "plan": (
+        "What this will ask, and of whom",
+        "The varieties under test, the designators they will be asked by, and "
+        "the attestors eligible to judge — the producer's whole family is "
+        "dropped, because a model grading its own output measures "
+        "self-consistency. Nothing has been spent yet.",
+    ),
+    "produced": (
+        "Write the variety",
+        "The model is asked for the same scenario under each variety's own "
+        "designator, and each reply goes through the local gate before anything "
+        "else looks at it. Eligibility is deterministic and is never handed to "
+        "a model.",
+    ),
+    "converted": (
+        "Rewrite into the variety",
+        "Neutral text in, variety text out. The diff is the measurement, and no "
+        "judge is involved — this is where a model says in its own output what "
+        "it thinks the variety is. An empty diff is a negative settled locally.",
+    ),
+    "consistency": (
+        "Did it do the same thing twice?",
+        "The conversion again, independently. A model cannot simulate "
+        "consistency it does not have: genuine command repeats its "
+        "substitutions, improvisation does not. Runs that changed nothing are "
+        "excluded, because two empty diffs agree perfectly and mean nothing.",
+    ),
+    "controls": (
+        "Can this attestor be trusted here?",
+        "Two controls whose answers are certain by construction: one text shown "
+        "as both halves of a pair, which cannot be two varieties; and one pair "
+        "shown in both orders, which must get corresponding answers. An "
+        "attestor failing either is discarded for this family rather than "
+        "counted.",
+    ),
+    "identified": (
+        "Name the variety, blind",
+        "The attestor is shown the text with no label and no expected answer, "
+        "and names which variety it is. Every marker it cites is checked "
+        "against the text it was cited for.",
+    ),
+    "separated": (
+        "Tell the pair apart, blind",
+        "Both texts, unlabelled, in an order decided by the texts themselves. "
+        "The attestor may answer that they cannot be told apart, which is "
+        "frequently the true answer and is the one a null result needs.",
+    ),
+    "verdict": (
+        "What the probes add up to",
+        "A transparent function of the outcomes above — no weights. No "
+        "competent attestor means `indeterminate`, which is a result and never "
+        "a negative: 'nobody could check' is not 'the model cannot do it'.",
+    ),
+}
+
+
+def attest_tone(ok: bool | None) -> str:
+    """Three states, because an abstention is not a failure."""
+    return "ok" if ok is True else "warn" if ok is None else "bad"
+
+
+@dataclass
+class AttestStep:
+    """One action the battery took, as it happened.
+
+    Deliberately the same shape as `ladder.Step`, so the bench renders both
+    through one path and a reader learns one vocabulary.
+    """
+
+    kind: str
+    summary: str
+    detail: dict = field(default_factory=dict)
+    calls: dict = field(default_factory=dict)
+    next_kind: str | None = None
+    terminal: bool = False
+    tone: str = ""
+
+    @property
+    def title(self) -> str:
+        return ATTEST_HELP.get(self.kind, (self.kind, ""))[0]
+
+    @property
+    def explains(self) -> str:
+        return ATTEST_HELP.get(self.kind, ("", ""))[1]
+
+    def as_dict(self) -> dict:
+        nxt = ATTEST_HELP.get(self.next_kind or "")
+        return {"kind": self.kind, "title": self.title, "summary": self.summary,
+                "explains": self.explains, "detail": self.detail,
+                "calls": dict(self.calls), "terminal": self.terminal,
+                "tone": self.tone,
+                "next": ({"kind": self.next_kind, "title": nxt[0], "explains": nxt[1]}
+                         if nxt else None)}
+
+
+def attest_steps(*, scheme: Scheme, tag: str, engine: str, client: OpenAICompatClient,
+                 attestors: list[str], varieties: list[Language],
+                 neutral_tag: str, scenario: str, corpus: Corpus,
+                 record=None, forced_attestors: list[str] | None = None,
+                 ) -> "Generator[AttestStep, None, DialectResult]":
+    """The battery, one step at a time, returning the result.
+
+    **There is one traversal and this is it** (convention 11). `run_attestation`
+    is a *drain* over this generator, not a second implementation: if the bench
+    and a scan could disagree about what the method does, the bench would be a
+    lie told in the project's own voice, and convention 9 records what the
+    drift costs when an analysis path re-implements a production one.
+
+    Every `yield` sits *after* the work it reports, so abandoning the generator
+    cannot leave a call half-paid-for.
+
+    `forced_attestors`, when given, replaces the routing entirely — the bench's
+    override, for a human who wants a specific panel or the full field. The
+    family guard still applies: it is not a setting, it is the rule that a model
+    may not grade its own output.
+
+    **`varieties` are the named varieties under test and `neutral_tag` is the
+    umbrella, and they do different jobs.** The umbrella is the *source* for the
+    conversion probe — neutral text to be rewritten into a variety — and it is
+    never a contrast arm. Pairing it against a variety leaves one answerable
+    option, which is not a question; and it would be the wrong question anyway,
+    since "Serbian" and "Serbian (Montenegro)" are not two varieties a speaker
+    could be asked to tell apart. The contrast runs between two *named*
+    varieties, which is why at least two are required.
+    """
+    from llmlc.probe.panel import (Panel, Role, capabilities_from, eligible,
+                                   order_by_record, qualify_attestor)
+
+    lang = scheme.get(tag)
+    neutral = scheme.get(neutral_tag)
+    if lang is None or neutral is None:
+        raise KeyError(f"Unknown tag {tag!r} or {neutral_tag!r} in "
+                       f"scheme {scheme.meta.name!r}")
+
+    from llmlc.probe.ladder import (accepted_codes, indistinguishable_codes,
+                                    relative_codes)
+
+    accept = accepted_codes(lang)
+    relatives = relative_codes(scheme, lang)
+    abstain = indistinguishable_codes(lang)
+
+    named = [v for v in varieties if not v.inclusive]
+    if len(named) < 2:
+        raise ValueError(
+            f"a contrast needs two named varieties; got {[v.tag for v in named]}. "
+            "The umbrella tag is the conversion source, not a contrast arm.")
+    blind = blind_for(scheme, named, salt=scenario)
+    designator = _designator_for(scheme, lang)
+    sibling = next((v for v in named if v.tag != tag), None)
+    out = DialectResult(tag=tag, engine=engine, designator=designator)
+    calls = {"produce": 0, "convert": 0, "control": 0, "attest": 0}
+
+    # Routing is decided and *shown* before anything is spent. A record that
+    # silently reorders the panel is invisible machinery, and auditability is
+    # the whole argument for this redesign.
+    field = eligible(attestors, producer=engine)
+    if forced_attestors is not None:
+        field = eligible(forced_attestors, producer=engine)
+        routing = "forced by hand"
+    elif record is not None:
+        known = record.known(field, tag=tag, role=Role.DISCRIMINATION,
+                             script=lang.script)
+        field = order_by_record(field, known=known)
+        routing = (f"ordered by {len(known)} prior record(s)" if known
+                   else "no priors; the field is in panel order")
+    else:
+        routing = "no record consulted"
+
+    yield AttestStep("plan",
+                     f"{designator!r} against {blind.options!r}; "
+                     f"{len(field)} eligible attestor(s)",
+                     {"designator": designator, "options": list(blind.options),
+                      "attestors": field, "routing": routing,
+                      "dropped_by_family_guard": [a for a in attestors if a not in field],
+                      "neutral": neutral.tag, "abstain": sorted(abstain)},
+                     calls, next_kind="produced",
+                     tone="ok" if field else "bad")
+
+    # -- the free half, first: it costs no attestor and can settle a negative --
+
+    produced: dict[str, str] = {}
+    for variety in [neutral, *named]:
+        d = _designator_for(scheme, variety)
+        item = _produce(client=client, engine=engine, lang=variety, designator=d,
+                        scenario=scenario, corpus=corpus,
+                        relatives=relative_codes(scheme, variety),
+                        accept=accepted_codes(variety),
+                        abstain=indistinguishable_codes(variety))
+        calls["produce"] += 1
+        if item.ok:
+            produced[variety.tag] = item.text or ""
+        yield AttestStep("produced", f"{d!r}: {item.note}",
+                         {"tag": variety.tag, "designator": d,
+                          "text": item.text, "gate": item.gate_verdict,
+                          "error": item.error},
+                         calls, next_kind="converted",
+                         tone="ok" if item.ok else "bad")
+
+    neutral_text = produced.get(neutral.tag) or scenario
+    conversions: list[Conversion] = []
+    for n in range(CONSISTENCY_RUNS):
+        c = convert(client=client, engine=engine, lang=lang, text=neutral_text,
+                    designator=designator, corpus=corpus, relatives=relatives,
+                    accept=accept, abstain=abstain)
+        calls["convert"] += 1
+        conversions.append(c)
+        yield AttestStep("converted",
+                         (f"run {n + 1}: {len(c.edits)} edit(s), "
+                          f"{c.rate:.0%} of the text"
+                          if c.ok else f"run {n + 1}: {c.error}"),
+                         c.as_dict(), calls,
+                         next_kind="converted" if n + 1 < CONSISTENCY_RUNS else "consistency",
+                         tone=attest_tone(c.converted if c.ok else False))
+
+    out.conversions = consistency(conversions)
+    yield AttestStep("consistency",
+                     (f"agreement {out.conversions.agreement:.2f}"
+                      if out.conversions.ok else
+                      "not scoreable: fewer than two runs changed anything"),
+                     out.conversions.as_dict(), calls, next_kind="controls",
+                     tone=attest_tone(out.conversions.systematic
+                                      if out.conversions.ok else None))
+
+    # -- the paid half ------------------------------------------------------
+
+    panel = Panel()
+    out.panel = panel
+    # The contrast pair is two *named* varieties. The neutral text stays out of
+    # it: it is the conversion source, and it is not a variety anyone could be
+    # asked to name.
+    pair = (produced.get(sibling.tag) if sibling else None, produced.get(tag))
+    if not all(pair):
+        out.notes.append(
+            "No usable pair was produced, so no attestor could be qualified and "
+            "nothing was attested. This is a gap in the production half, not a "
+            "verdict about discrimination.")
+        yield AttestStep("verdict", f"{out.verdict.value} — {out.notes[-1]}",
+                         out.as_dict(), calls, terminal=True, tone="warn")
+        return out
+
+    for attestor in field:
+        comp = qualify_attestor(client, attestor, family=blind.language, blind=blind,
+                                neutral=pair[0], first=pair[0], second=pair[1],
+                                tag=tag, corpus=corpus)
+        calls["control"] += 3
+        panel.competences.append(comp)
+        yield AttestStep("controls",
+                         f"{attestor}: {'qualified' if comp.qualified else 'discarded'}"
+                         + (f" ({', '.join(comp.failed)})" if comp.failed else ""),
+                         comp.as_dict(), calls, next_kind="identified",
+                         tone="ok" if comp.qualified else "bad")
+
+    if panel.empty:
+        out.notes.append(
+            "No attestor passed the controls for this family, so nothing was "
+            "measured. `indeterminate` is a statement about the instrument and "
+            "must not be read as a negative about the model.")
+        yield AttestStep("verdict", f"{out.verdict.value} — {out.notes[-1]}",
+                         out.as_dict(), calls, terminal=True, tone="warn")
+        return out
+
+    text = produced.get(tag)
+    expected = lang.region_name or lang.tag
+    for attestor in panel.qualified:  # noqa: B007 -- `expected` is set above
+        if text:
+            r = blind_read(client, attestor, text=text, blind=blind,
+                           expected=expected, tag=tag, corpus=corpus)
+            calls["attest"] += 1
+            out.reads.append(r)
+            yield AttestStep("identified",
+                             f"{attestor}: {r.identification.answer!r}"
+                             + ("" if r.correct else f" (expected {expected!r})"),
+                             r.as_dict(), calls, next_kind="separated",
+                             tone=attest_tone(True if r.correct
+                                              else None if not r.identification.decided
+                                              else False))
+        if sibling:
+            s = contrast_read(client, attestor, first=pair[0], second=pair[1],
+                              blind=blind,
+                              expected_first=sibling.region_name or sibling.tag,
+                              expected_second=expected,
+                              tag=tag, corpus=corpus)
+            calls["attest"] += 1
+            out.contrasts.append(s)
+            yield AttestStep("separated",
+                             f"{attestor}: {s.separation.a!r} / {s.separation.b!r}",
+                             s.as_dict(), calls, next_kind="verdict",
+                             tone=attest_tone(True if s.correct
+                                              else None if s.merged else False))
+
+    if record is not None:
+        for cap in capabilities_from(panel, tag=tag, role=Role.DISCRIMINATION,
+                                     script=lang.script,
+                                     probes=["identity", "order"]):
+            record.put(cap)
+
+    yield AttestStep("verdict",
+                     f"{out.verdict.value} (confidence {out.confidence})",
+                     out.as_dict(), calls, terminal=True,
+                     tone=attest_tone(True if out.verdict in _POSITIVE()
+                                      else None if out.verdict in _NOT_A_CLAIM()
+                                      else False))
+    return out
+
+
+def _POSITIVE():
+    from llmlc.probe.variant import POSITIVE
+    return POSITIVE
+
+
+def _NOT_A_CLAIM():
+    from llmlc.probe.variant import NOT_A_CLAIM
+    return NOT_A_CLAIM
+
+
+def run_attestation(**kw) -> DialectResult:
+    """Run the battery to completion. The one-shot path, used by every caller
+    outside the bench.
+
+    A drain over `attest_steps`, never a second implementation of it — the
+    result of running every step must be identical to the result of stepping
+    through them, and the only way to guarantee that is for there to be one
+    sequence (conventions 9 and 11).
+    """
+    gen = attest_steps(**kw)
+    while True:
+        try:
+            next(gen)
+        except StopIteration as done:
+            return done.value

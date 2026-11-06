@@ -474,6 +474,28 @@ class ScanTrigger(BaseModel):
     scheme: str | None = None
 
 
+class DialectStart(BaseModel):
+    """A dialect-attestation run over one variety.
+
+    `varieties` are the named varieties under test and must number at least two:
+    the contrast runs between two of them. `neutral` is the umbrella tag, used
+    as the conversion source and never as a contrast arm -- "Serbian" and
+    "Serbian (Montenegro)" are not two varieties anyone could be asked to tell
+    apart. Both default from the tag's own family.
+    """
+
+    engine: str
+    tag: str
+    varieties: list[str] | None = None
+    neutral: str | None = None
+    attestors: list[str] | None = Field(
+        None, description="Force the panel by hand instead of letting the "
+                          "capability record order it. The family guard still "
+                          "applies: it is a rule, not a setting.")
+    scenario: str | None = None
+    scheme: str | None = None
+
+
 class BenchStart(BaseModel):
     engine: str
     tag: str
@@ -816,6 +838,132 @@ def specs() -> list[dict]:
 
     return [{"id": s.id, "scenario": s.scenario, "facts": list(s.facts)}
             for s in load_specs()]
+
+
+@app.post("/bench/dialect", status_code=201)
+def bench_dialect_start(body: DialectStart, request: Request) -> dict:
+    """Open a dialect-attestation session over one variety.
+
+    Gated exactly like `POST /scans` and `POST /bench`: it reaches a model with
+    the user's own key. A battery costs roughly 4 production calls, 2
+    conversions, and 3 control calls plus 2 attestations per eligible attestor.
+    """
+    _check_trigger_allowed(request)
+    try:
+        client = build_client()
+    except NotConfigured as e:
+        raise HTTPException(400, str(e)) from e
+
+    scheme = load_scheme(body.scheme or settings.scheme)
+    lang = scheme.get(body.tag)
+    if lang is None:
+        raise HTTPException(404, f"No tag {body.tag!r} in scheme {scheme.meta.name!r}.")
+
+    from llmlc.probe.dialect import family_of
+
+    family = family_of(scheme, lang)
+    if body.varieties is not None:
+        chosen = []
+        for t_ in body.varieties:
+            v = scheme.get(t_)
+            if v is None:
+                raise HTTPException(404, f"No tag {t_!r} in scheme {scheme.meta.name!r}.")
+            chosen.append(v)
+    else:
+        # The whole field is a different and much harder task than the one being
+        # measured -- Spanish carries 22 regional tags and chance falls to 4.5%
+        # -- so an unspecified run takes the tag and one sibling rather than
+        # everything, and says so in the plan.
+        named = [v for v in family if not v.inclusive and v.region_name]
+        others = [v for v in named if v.region_name != lang.region_name]
+        # The *home* variety, not whichever comes first in the catalogue. The
+        # umbrella's likely-subtag region is the variety an unqualified request
+        # actually gets -- `sr` resolves to Serbia -- so that is what a reader
+        # means by "the other one", and it is the sibling `markers/serbian.json`
+        # already expresses itself against. Catalogue order would have paired
+        # Montenegro with Bosnia, which is a real contrast but not the one
+        # anyone asked for.
+        home = (scheme.get(neutral_guess).region_name
+                if (neutral_guess := next((v.tag for v in family if v.inclusive), None))
+                else None)
+        sibling = next((v for v in others if v.region_name == home), None) \
+            or (others[0] if others else None)
+        chosen = [v for v in (sibling, lang) if v is not None]
+
+    if len([v for v in chosen if not v.inclusive]) < 2:
+        raise HTTPException(
+            400, "A contrast needs two named varieties. The umbrella tag is the "
+                 "conversion source, not a contrast arm — pass `varieties` "
+                 "explicitly for a family that has only one named variety.")
+
+    neutral = body.neutral or next((v.tag for v in family if v.inclusive), None)
+    if neutral is None or scheme.get(neutral) is None:
+        raise HTTPException(400, f"No umbrella tag for {body.tag!r}; pass `neutral`.")
+
+    panel = body.attestors if body.attestors is not None else _attestor_field(body.engine)
+    if (missing := check_models([body.engine, *panel])):
+        raise HTTPException(400, f"Not in the custom model list: {', '.join(missing)}.")
+
+    from llmlc.db.qualcache import DbCapabilityRecord
+    from llmlc.probe.panel import eligible
+
+    if not eligible(panel, producer=body.engine):
+        raise HTTPException(400, "No attestor left after excluding the model under "
+                                 "test: a model judging its own output measures "
+                                 "self-consistency, not dialect knowledge.")
+
+    scenario = body.scenario or _default_scenario()
+    try:
+        session = bench_sessions.start_dialect(
+            engine=body.engine, tag=body.tag, scheme=scheme, client=client,
+            attestors=panel, varieties=chosen, neutral_tag=neutral,
+            scenario=scenario, record=DbCapabilityRecord(),
+            forced_attestors=body.attestors)
+    except RuntimeError as e:
+        raise HTTPException(409, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    session.plan["scenario"] = scenario
+    session.plan["attestors_asked"] = panel
+    return session.public()
+
+
+def _attestor_field(engine: str) -> list[str]:
+    """Every configured model that could attest, the producer's family aside.
+
+    Wider than the back-translator panel on purpose: that panel is two measured
+    readers for a job where reading ability is the whole question, while an
+    attestor only has to recognise a variety, and the controls decide which of
+    them can. Narrowing the field in advance would decide by assumption what
+    the controls exist to measure.
+    """
+    from llmlc.probe.panel import eligible
+
+    try:
+        ids = [m["model_id"] for m in custom_models()]
+    except Exception:  # noqa: BLE001 -- no custom list is the aggregator route
+        ids = []
+    if not ids:
+        # `custom_models()` returns an empty list rather than raising when no
+        # list is configured, so an `except` alone never fires and the field
+        # came back empty -- which the family guard then reported as "no
+        # attestor left after excluding the model under test", blaming the
+        # guard for a missing configuration.
+        ids = [m.strip() for m in runner.DEFAULT_PANEL.split(",") if m.strip()]
+    return eligible(ids, producer=engine)
+
+
+def _default_scenario() -> str:
+    """The first shipped specification's scenario.
+
+    Reused rather than written fresh so a dialect run and a ladder run describe
+    the same situation, and a reader comparing them is reading two measurements
+    of one thing.
+    """
+    from llmlc.probe.specs import load_specs
+
+    specs = load_specs()
+    return specs[0].scenario if specs else "A woman missed the morning bus."
 
 
 @app.get("/bench")

@@ -22,6 +22,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from llmlc.probe.corpus import Corpus
+from llmlc.probe.dialect import attest_steps
 from llmlc.probe.ladder import Step, ladder_steps
 from llmlc.probe.specs import Spec, load_specs
 
@@ -41,6 +42,10 @@ class Session:
     tag: str
     mode: str
     specs_modified: bool
+    #: "ladder" | "dialect". A session drives one generator, and which one is
+    #: fixed when it starts: the two answer different questions and sharing a
+    #: session would make a page have to guess which verdict it is showing.
+    kind: str = "ladder"
     created_at: float = field(default_factory=time.time)
     touched_at: float = field(default_factory=time.time)
     steps: list[dict] = field(default_factory=list)
@@ -61,6 +66,7 @@ class Session:
     def public(self) -> dict:
         return {
             "id": self.id, "engine": self.engine, "tag": self.tag, "mode": self.mode,
+            "kind": self.kind,
             "status": self.status, "error": self.error,
             "specs_modified": self.specs_modified,
             # Stated on every response, not buried in the start call. A run whose
@@ -89,8 +95,8 @@ def get(session_id: str) -> Session | None:
 
 
 def listing() -> list[dict]:
-    return [{"id": s.id, "engine": s.engine, "tag": s.tag, "status": s.status,
-             "steps": len(s.steps)} for s in _SESSIONS.values()]
+    return [{"id": s.id, "engine": s.engine, "tag": s.tag, "kind": s.kind,
+             "status": s.status, "steps": len(s.steps)} for s in _SESSIONS.values()]
 
 
 def specs_for(overrides: list[dict] | None) -> tuple[list[Spec], bool]:
@@ -205,6 +211,55 @@ def start(*, engine: str, tag: str, scheme, client, backtranslators, judge_model
         return session
 
 
+def start_dialect(*, engine: str, tag: str, scheme, client, attestors: list[str],
+                  varieties, neutral_tag: str, scenario: str,
+                  record=None, forced_attestors: list[str] | None = None) -> Session:
+    """Open a dialect-attestation session.
+
+    Deliberately a sibling of `start` rather than a flag on it: the two drive
+    different generators and return different verdicts, and a session that
+    could be either would make every reader of `result` ask which.
+
+    The generator is `attest_steps`, which is the *same* one a batch run drains
+    (convention 11). There is no bench-only path through the battery, so a
+    verdict shown here can be reproduced by a scan and vice versa.
+    """
+    with _LOCK:
+        _reap()
+        live = [s for s in _SESSIONS.values() if s.status == "running"]
+        if len(live) >= MAX_SESSIONS:
+            raise RuntimeError(
+                f"{len(live)} bench session(s) already open, which is the limit. "
+                f"They are listed above and can be closed there — reloading the "
+                f"page mid-run leaves one behind, and this is where it turns up.")
+        sid = uuid.uuid4().hex[:12]
+        corpus = Corpus()
+        session = Session(id=sid, engine=engine, tag=tag, mode="interactive",
+                          specs_modified=False, kind="dialect", corpus=corpus,
+                          plan=dialect_plan(scheme, tag, varieties, neutral_tag))
+        session._gen = attest_steps(
+            scheme=scheme, tag=tag, engine=engine, client=client,
+            attestors=attestors, varieties=varieties, neutral_tag=neutral_tag,
+            scenario=scenario, corpus=corpus, record=record,
+            forced_attestors=forced_attestors)
+        _SESSIONS[sid] = session
+        return session
+
+
+def dialect_plan(scheme, tag: str, varieties, neutral_tag: str) -> dict:
+    """What a dialect run will ask, worked out before anything is spent."""
+    from llmlc.probe.dialect import _designator_for
+
+    named = [v for v in varieties if not v.inclusive]
+    return {
+        "tag": tag,
+        "neutral": neutral_tag,
+        "varieties": [{"tag": v.tag, "region": v.region_name,
+                       "designator": _designator_for(scheme, v)} for v in named],
+        "options": [v.region_name for v in named if v.region_name],
+    }
+
+
 def advance(session: Session, *, on_result=None) -> dict | None:
     """Take one step. Returns the step, or None when the run is over.
 
@@ -246,6 +301,18 @@ def advance(session: Session, *, on_result=None) -> dict | None:
 
 
 def _finish(session: Session, result, *, on_result=None) -> None:
+    # Dispatched on the session's kind rather than by sniffing the result's
+    # attributes: a `hasattr` check here would silently produce a half-filled
+    # verdict the day either result type grew a field, and the session already
+    # knows which generator it opened.
+    if session.kind == "dialect":
+        session.result = result.as_dict()
+        _close_corpus(session)
+        # Not persisted as a `result` row: a dialect verdict is not a language
+        # tier and does not belong in that table. Its findings reached the
+        # capability record as the battery ran, and the corpus has every text.
+        return
+
     session.result = {
         "tag": result.tag, "engine": result.engine,
         "designator": result.designator,
