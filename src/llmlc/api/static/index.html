@@ -98,6 +98,19 @@
   /* A group chip is a shortcut over the statuses beside it, not a sixth value.
      Set apart so it does not read as one, and separated from the breakdown. */
   .chip.group { border-style: dashed; margin-right: 10px; }
+  /* The panel, as removable chips. A scrolling list of checkboxes hides the
+     answer to the only question a reader has -- *who is on the panel* -- among
+     the models that are not, and makes removing one a hunt. Chips put the
+     selection where it is read and make the × the obvious way out. */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; min-height: 26px; }
+  .chip.sel { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px 2px 9px;
+              border: 1px solid var(--line); border-radius: 999px; background: var(--card);
+              font-family: var(--mono, monospace); font-size: 13.5px; }
+  .chip.sel .x { cursor: pointer; border: 0; background: none; color: var(--muted);
+                 font-size: 15px; line-height: 1; padding: 0 2px; }
+  .chip.sel .x:hover { color: var(--bad, #f85149); }
+  .chips .ev { align-self: center; }
+
   /* The picker lists. A two-column grid, not a flex row: with flex the
      checkbox wrapped onto its own line *above* its label as soon as the row ran
      out of width, which it does inside a narrow grid column holding a model id
@@ -450,9 +463,10 @@
         <span class="ev" id="d-against-note"></span>
       </div>
       <div class="field">
-        <label class="f" data-help="bench.attestors">Attestor panel
+        <label class="f" for="d-attestor-add" data-help="bench.attestors">Attestor panel
           <span class="ev" id="d-attestors-count"></span></label>
-        <div class="pick" id="d-attestors"><span class="ev">name a model under test above</span></div>
+        <div class="chips" id="d-attestor-chips"></div>
+        <select id="d-attestor-add"><option value="">name a model under test above</option></select>
       </div>
     </div>
 
@@ -596,7 +610,7 @@ const HELP = {
   'bench.varieties': ['Contrast against',
     'The other arm. A contrast is a <b>pair</b>: the battery writes one text under each variety\'s own designator and an attestor is shown two, so there is one choice here and not a set — a third variety would add an option to the blind list that no text was produced for, an answer nobody could be right about. The default is the <i>home</i> sibling, the variety an unqualified request actually gets. The umbrella tag never appears: it is the source text the conversion rewrites, not something anyone could be asked to tell a variety apart from.'],
   'bench.attestors': ['Attestor panel',
-    'Who judges, blind. <b>At most three</b>: two is the minimum at which agreement means anything, three gives a tie-break, and past that each extra attestor costs five calls for a vote that rarely moves a verdict. One is allowed and is stamped low confidence, because a single-judge verdict is one opinion. The default takes one model per vendor family — five spellings of one vendor\'s model concurring is not independent agreement. Every one of them still faces the controls, because the record routes and never vouches; the family guard is a rule rather than a setting, so a model may not judge its own output whatever you tick.'],
+    'Who judges, blind. Add one at a time; the × removes it. <b>At most three</b>: two is the minimum at which agreement means anything, three gives a tie-break, and past that each extra attestor costs five calls for a vote that rarely moves a verdict. One is allowed and is stamped low confidence, because a single-judge verdict is one opinion. The default takes one model per vendor family — five spellings of one vendor\'s model concurring is not independent agreement. Every one of them still faces the controls, because the record routes and never vouches; the family guard is a rule rather than a setting, so a model may not judge its own output whatever you tick.'],
   'support.scheme': ['Locale list',
     'Which list of languages the table runs down. The default is the 602-tag Catmint TMS list, whose dialects are named explicitly and whose script subtag appears last and only where it tells two dialects apart — sr-me-cyrl, but en-gb. Build a scheme from your own TMS export with scripts/build_scheme_from_tms.py.'],
   'support.status': ['Status',
@@ -889,52 +903,72 @@ function renderVarietyPicker(d) {
 }
 
 let maxAttestors = 3;
+//: The panel as chosen, in order. Held here rather than read back out of the
+//: DOM because the selection is the thing a reader is managing: it has to
+//: survive the list being re-rendered, and "who is on the panel" must be
+//: answerable without scanning a scrolling list of who is not.
+let attestorField = [];          // every candidate the server offered
+let attestorPick = [];           // the chosen subset
 
 function renderAttestorPicker(d) {
-  dialectDefaults.attestors = d.attestors.filter(a => a.default).map(a => a.model);
+  attestorField = d.attestors || [];
   maxAttestors = d.max_attestors || 3;
-  const box = $('#d-attestors');
-  if (!d.attestors.length) {
-    box.innerHTML = '<span class="ev">name a model under test above</span>';
-    $('#d-attestors-count').textContent = '';
-    return;
-  }
-  box.innerHTML = d.attestors.map(a => `
-    <label class="${a.eligible ? '' : 'off'}">
-      <input type="checkbox" value="${esc(a.model)}" ${a.default ? 'checked' : ''}
-             ${a.eligible ? '' : 'disabled'}>
-      <span class="txt"><code>${esc(a.model)}</code>
-        <span class="why">${a.eligible
-          ? (a.known === true ? 'qualified here before'
-             : a.known === false ? 'failed a control here before — still tried'
-             : 'not measured on this variety yet')
-          : 'same family as the model under test'}</span></span>
-    </label>`).join('');
-  enforceAttestorCap();
+  dialectDefaults.attestors = attestorField.filter(a => a.default).map(a => a.model);
+  attestorPick = [...dialectDefaults.attestors];
+  drawAttestors();
 }
 
-// Two is the minimum at which agreement means anything and three gives a
-// tie-break; past that each extra attestor costs five calls for a vote that
-// rarely moves a verdict. The cap is enforced by disabling the unticked rest
-// rather than by refusing the click, so the reason is visible instead of the
-// box simply not responding.
-function enforceAttestorCap() {
-  const boxes = [...document.querySelectorAll('#d-attestors input')];
-  const n = boxes.filter(b => b.checked).length;
-  for (const b of boxes) {
-    const blocked = !b.checked && n >= maxAttestors;
-    b.disabled = blocked || b.closest('label').classList.contains('off');
-    b.closest('label').classList.toggle('full', blocked);
-  }
-  const note = $('#d-attestors-count');
-  note.textContent = n >= maxAttestors ? `${n} of ${maxAttestors} — the most a panel uses`
-    : n === 1 ? '1 attestor: a single-judge verdict, stamped low confidence'
+function attestorWhy(a) {
+  if (!a.eligible) return 'same family as the model under test — a model may not judge its own output';
+  return a.known === true ? 'qualified on this variety before'
+       : a.known === false ? 'failed a control on this variety before — still tried'
+       : 'not measured on this variety yet';
+}
+
+function drawAttestors() {
+  const chips = $('#d-attestor-chips'), add = $('#d-attestor-add');
+  const by = Object.fromEntries(attestorField.map(a => [a.model, a]));
+
+  chips.innerHTML = attestorPick.length
+    ? attestorPick.map(m => `<span class="chip sel" title="${esc(attestorWhy(by[m] || {}))}">
+        ${esc(m)}<button class="x" data-drop="${esc(m)}" title="remove">×</button></span>`).join('')
+    : '<span class="ev">nobody on the panel yet</span>';
+
+  // The dropdown offers only what can still be added, so the cap is a list that
+  // runs out rather than a click that does nothing.
+  const free = attestorField.filter(a => a.eligible && !attestorPick.includes(a.model));
+  const full = attestorPick.length >= maxAttestors;
+  add.disabled = full || !free.length;
+  add.innerHTML = full
+    ? `<option value="">panel full — remove one to swap</option>`
+    : !attestorField.length
+      ? `<option value="">name a model under test above</option>`
+      : !free.length
+        ? `<option value="">no other model is eligible</option>`
+        : `<option value="">add an attestor…</option>` + free.map(a =>
+            `<option value="${esc(a.model)}">${esc(a.model)} — ${esc(attestorWhy(a))}</option>`).join('');
+  add.value = '';
+
+  const n = attestorPick.length;
+  $('#d-attestors-count').textContent = !attestorField.length ? ''
+    : n >= maxAttestors ? `${n} of ${maxAttestors} — the most a panel uses`
+    : n === 1 ? '1 — a single-judge verdict, stamped low confidence'
     : n === 0 ? 'pick at least one'
     : `${n} of ${maxAttestors}`;
 }
 
-document.addEventListener('change', (ev) => {
-  if (ev.target.closest('#d-attestors')) enforceAttestorCap();
+$('#d-attestor-add').addEventListener('change', (ev) => {
+  const m = ev.target.value;
+  if (m && !attestorPick.includes(m) && attestorPick.length < maxAttestors)
+    attestorPick.push(m);
+  drawAttestors();
+});
+
+$('#d-attestor-chips').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('[data-drop]');
+  if (!btn) return;
+  attestorPick = attestorPick.filter(m => m !== btn.dataset.drop);
+  drawAttestors();
 });
 
 const picked = id => [...document.querySelectorAll(`#${id} input:checked`)].map(i => i.value);
@@ -1222,7 +1256,7 @@ function benchRequest() {
   if ($('#d-probe').value === 'dialect') {
     const tag = $('#d-tag').value.trim();
     const against = $('#d-against').value;
-    const attestors = picked('d-attestors');
+    const attestors = [...attestorPick];
     if (!against)
       throw new Error('Pick a variety to contrast against. A dialect claim is '
         + 'comparative: it needs a sibling.');
