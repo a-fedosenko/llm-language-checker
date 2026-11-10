@@ -167,28 +167,87 @@ def pending_items(s: Session, job_id: int) -> list[JobItem]:
         .order_by(JobItem.id)))
 
 
-def get_capability(s: Session, model: str, tag: str, role: str,
-                   method_version: str, script: str | None = None):
+def _capability_where(stmt, model, tag, role, method_version, script):
     from llmlc.db.models import Capability
 
-    return s.scalar(select(Capability).where(
-        Capability.model == model, Capability.tag == tag, Capability.role == role,
-        Capability.method_version == method_version, Capability.script.is_(script)
-        if script is None else Capability.script == script))
+    stmt = stmt.where(Capability.model == model, Capability.tag == tag,
+                      Capability.role == role,
+                      Capability.method_version == method_version)
+    return stmt.where(Capability.script.is_(None) if script is None
+                      else Capability.script == script)
 
 
-def put_capability(s: Session, row: dict):
+def get_capability(s: Session, model: str, tag: str, role: str,
+                   method_version: str, script: str | None = None):
+    """The row that counts. History is reached through `capability_history`."""
+    from llmlc.db.models import Capability
+
+    return s.scalar(_capability_where(
+        select(Capability).where(Capability.current.is_(True)),
+        model, tag, role, method_version, script))
+
+
+def capability_history(s: Session, model: str, tag: str, role: str,
+                       method_version: str, script: str | None = None) -> list:
+    """Every measurement of this identity, newest first, current included."""
+    from llmlc.db.models import Capability
+
+    stmt = _capability_where(select(Capability), model, tag, role,
+                             method_version, script)
+    return list(s.scalars(stmt.order_by(Capability.measured_at.desc(),
+                                        Capability.id.desc())))
+
+
+def put_capability(s: Session, row: dict, *, promote: bool | None = None):
+    """Append a measurement. Never overwrites one.
+
+    `promote` decides whether the new row becomes the one that counts:
+
+      True   supersede whatever was current
+      False  record it as history and leave the current row alone
+      None   **promote only if nothing is current yet** -- the default, and the
+             rule the whole design turns on. A first measurement has nothing to
+             override and is useless un-promoted; a later one disagreeing with
+             a result somebody trusts should not replace it because a button
+             was clicked. Neither case needs a password: the old row is still
+             there either way, which is what a password was being asked to
+             protect.
+    """
     from llmlc.db.models import Capability
 
     existing = get_capability(s, row["model"], row["tag"], row["role"],
                               row["method_version"], row.get("script"))
-    if existing:
-        for k, v in row.items():
-            setattr(existing, k, v)
-        return existing
-    obj = Capability(**row)
+    becomes_current = bool(promote) if promote is not None else existing is None
+    if existing is not None and becomes_current:
+        existing.current = False
+    obj = Capability(**{**row, "current": becomes_current})
     s.add(obj)
     return obj
+
+
+def promote_capability(s: Session, capability_id: int):
+    """Make one stored measurement the one that counts.
+
+    The deliberate gesture, and the only one needed: nothing is destroyed by it,
+    so there is nothing to guard. The row it supersedes stays in history and can
+    be promoted back.
+    """
+    from llmlc.db.models import Capability
+
+    row = s.get(Capability, capability_id)
+    if row is None:
+        raise KeyError(f"No capability {capability_id}")
+    if row.current:
+        return row
+    current = get_capability(s, row.model, row.tag, row.role,
+                             row.method_version, row.script)
+    if current is not None:
+        current.current = False
+    # Flushed before the new row is flagged, or the partial unique index sees
+    # two current rows for one identity mid-transaction and refuses.
+    s.flush()
+    row.current = True
+    return row
 
 
 def capabilities_for(s: Session, tag: str, role: str, method_version: str,
@@ -203,7 +262,8 @@ def capabilities_for(s: Session, tag: str, role: str, method_version: str,
 
     stmt = select(Capability).where(
         Capability.tag == tag, Capability.role == role,
-        Capability.method_version == method_version)
+        Capability.method_version == method_version,
+        Capability.current.is_(True))
     stmt = stmt.where(Capability.script.is_(None) if script is None
                       else Capability.script == script)
     return list(s.scalars(stmt))

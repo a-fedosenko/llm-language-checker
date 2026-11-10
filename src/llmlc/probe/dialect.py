@@ -545,6 +545,11 @@ class DialectResult:
     contrasts: list[ContrastRead] = field(default_factory=list)
     panel: "Panel | None" = None
     notes: list[str] = field(default_factory=list)
+    #: The corpus file this run wrote to, and the sibling it was contrasted
+    #: against. Carried on the result so a stored record can point back at the
+    #: text without the caller having to reconstruct either.
+    corpus_path: str | None = None
+    sibling_tag: str | None = None
 
     # -- what the paid half concluded ----------------------------------------
 
@@ -808,7 +813,9 @@ def attest_steps(*, scheme: Scheme, tag: str, engine: str, client: OpenAICompatC
     blind = blind_for(scheme, named, salt=scenario)
     designator = _designator_for(scheme, lang)
     sibling = next((v for v in named if v.tag != tag), None)
-    out = DialectResult(tag=tag, engine=engine, designator=designator)
+    out = DialectResult(tag=tag, engine=engine, designator=designator,
+                        corpus_path=str(getattr(corpus, "path", "") or "") or None,
+                        sibling_tag=sibling.tag if sibling else None)
     calls = {"produce": 0, "convert": 0, "control": 0, "attest": 0}
 
     # Routing is decided and *shown* before anything is spent. A record that
@@ -1003,6 +1010,18 @@ def _producer_capability(out: DialectResult, lang: Language):
         confidence=out.confidence,
         probes=["identification", "contrast", "conversion", "consistency"],
         detail=out.verdict.value + (f" — {out.notes[0]}" if out.notes else ""),
+        # Where the text is, and enough of the finding to read the row without
+        # opening it. A stored verdict with no way back to the output that
+        # justifies it is not much of a verdict (convention 6).
+        evidence={
+            "verdict": out.verdict.value,
+            "confidence": out.confidence,
+            "designator": out.designator,
+            "corpus": out.corpus_path,
+            "panel": (out.panel.qualified if out.panel else []),
+            "discarded": (out.panel.disqualified if out.panel else []),
+            "contrasted_with": out.sibling_tag,
+        },
     )
 
 

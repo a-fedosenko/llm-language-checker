@@ -611,3 +611,93 @@ def test_the_attestor_list_is_empty_without_an_engine(client):
 
 def test_an_unknown_tag_is_a_404_from_the_picker_too(client):
     assert client.get("/dialect/options", params={"tag": "zz-nope"}).status_code == 404
+
+
+# -- what is already on file, and what a re-run does to it -------------------
+
+def stored_cap(engine, tag, verdict, qualified=True, promote=None):
+    from llmlc.db.qualcache import DbCapabilityRecord
+    from llmlc.probe.panel import Capability, CapabilityKey, Role
+    from llmlc.scheme import load_scheme
+
+    lang = load_scheme(settings.scheme).get(tag)
+    key = CapabilityKey(engine, tag, Role.GENERATION, lang.script)
+    cap = Capability(key, qualified, confidence="high", detail=verdict)
+    cap.evidence = {"verdict": verdict}
+    DbCapabilityRecord().put(cap, promote=promote)
+    return key
+
+
+def test_a_stored_verdict_is_shown_before_anything_is_spent(client):
+    """The commonest reason to pay for twenty calls is not knowing the answer is
+    already on disk."""
+    stored_cap("alpha-pro", "sr-me-cyrl", "full-command")
+    d = client.get("/dialect/stored",
+                   params={"engine": "alpha-pro", "tag": "sr-me-cyrl"}).json()
+    assert d["current"]["verdict"] == "full-command"
+    assert d["current"]["measured_at"] is not None
+
+
+def test_the_picker_carries_the_stored_verdict_so_selection_is_enough(client):
+    """No second request and no extra click: choosing a language and a model is
+    the gesture that should answer "do I already know this?"."""
+    stored_cap("alpha-pro", "sr-me-cyrl", "production")
+    d = client.get("/dialect/options",
+                   params={"tag": "sr-me-cyrl", "engine": "alpha-pro"}).json()
+    assert d["stored"]["current"]["verdict"] == "production"
+
+
+def test_nothing_on_file_is_an_empty_answer_not_an_error(client):
+    d = client.get("/dialect/stored",
+                   params={"engine": "never-run", "tag": "sr-me-cyrl"}).json()
+    assert d["current"] is None and d["history"] == []
+
+
+def test_a_re_run_appends_and_the_trusted_verdict_still_counts(client):
+    """The rule the whole design turns on."""
+    stored_cap("alpha-pro", "sr-me-cyrl", "full-command")
+    stored_cap("alpha-pro", "sr-me-cyrl", "no-evidence", qualified=False)
+    d = client.get("/dialect/stored",
+                   params={"engine": "alpha-pro", "tag": "sr-me-cyrl"}).json()
+    assert d["current"]["verdict"] == "full-command"
+    assert len(d["history"]) == 2
+
+
+def test_promoting_changes_which_counts_and_keeps_both(client):
+    stored_cap("alpha-pro", "sr-me-cyrl", "full-command")
+    stored_cap("alpha-pro", "sr-me-cyrl", "no-evidence", qualified=False)
+    d = client.get("/dialect/stored",
+                   params={"engine": "alpha-pro", "tag": "sr-me-cyrl"}).json()
+    fresh = next(h for h in d["history"] if not h["current"])
+
+    r = client.post("/dialect/promote", json={"capability_id": fresh["id"]})
+    assert r.status_code == 200
+
+    after = client.get("/dialect/stored",
+                       params={"engine": "alpha-pro", "tag": "sr-me-cyrl"}).json()
+    assert after["current"]["verdict"] == "no-evidence"
+    assert len(after["history"]) == 2, "promotion moves a pointer, it does not delete"
+
+
+def test_promoting_an_unknown_measurement_is_a_404(client):
+    assert client.post("/dialect/promote", json={"capability_id": 99999}).status_code == 404
+
+
+def test_the_record_is_served_in_the_shape_somebody_would_publish(client):
+    """"Which model handles which dialect in which role" is plausibly more
+    useful than any single model's verdict."""
+    stored_cap("alpha-pro", "sr-me-cyrl", "full-command")
+    stored_cap("beta-pro", "sr-me-cyrl", "no-evidence", qualified=False)
+    d = client.get("/dialect/record", params={"role": "generation"}).json()
+    by_model = d["tags"]["sr-me-cyrl"]["generation"]
+    assert by_model["alpha-pro"]["verdict"] == "full-command"
+    assert by_model["beta-pro"]["qualified"] is False
+
+
+def test_the_published_record_holds_only_what_counts(client):
+    """History is a working record and belongs to whoever is deciding; the
+    published artifact is what they decided."""
+    stored_cap("alpha-pro", "sr-me-cyrl", "full-command")
+    stored_cap("alpha-pro", "sr-me-cyrl", "no-evidence", qualified=False)
+    d = client.get("/dialect/record", params={"role": "generation"}).json()
+    assert d["tags"]["sr-me-cyrl"]["generation"]["alpha-pro"]["verdict"] == "full-command"

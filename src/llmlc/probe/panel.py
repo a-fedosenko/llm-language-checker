@@ -368,6 +368,12 @@ class Capability:
     probes: list[str] = field(default_factory=list)
     detail: str = ""
     measured_at: float | None = None
+    #: Pointer into the corpus, and a summary of what the run concluded.
+    evidence: dict | None = None
+    #: Set when the record came from the database, so a caller can promote a
+    #: specific stored measurement rather than guessing which row it was.
+    row_id: int | None = None
+    current: bool = True
 
     def as_dict(self) -> dict:
         return {**self.key.as_dict(), "qualified": self.qualified,
@@ -396,16 +402,52 @@ class CapabilityRecord:
     """
 
     def __init__(self, rows: list[Capability] | None = None) -> None:
-        self._rows: dict[CapabilityKey, Capability] = {}
+        # Newest first per identity, so `get` is the head and the rest is
+        # history. Kept here as well as in the database because the two must
+        # not differ about what a record *is*: a scratch record that silently
+        # forgot history would make the bench show something a scan could not.
+        self._rows: dict[CapabilityKey, list[Capability]] = {}
         for r in rows or []:
             self.put(r)
 
-    def put(self, cap: Capability) -> Capability:
-        self._rows[cap.key] = cap
+    def put(self, cap: Capability, *, promote: bool | None = None) -> Capability:
+        """Append a measurement. Never overwrites one.
+
+        `promote=None` promotes only when nothing is stored yet: a first
+        measurement has nothing to override, a later one disagreeing with a
+        trusted result should not replace it unasked. See `repo.put_capability`,
+        which this mirrors.
+        """
+        held = self._rows.setdefault(cap.key, [])
+        cap.current = bool(promote) if promote is not None else not held
+        if cap.current:
+            for other in held:
+                other.current = False
+        held.insert(0, cap)          # newest first; `current` says which counts
         return cap
 
     def get(self, key: CapabilityKey) -> Capability | None:
-        return self._rows.get(key)
+        """The row that counts.
+
+        Found by the flag, not by position. Ordering is chronology and
+        currency is a decision, and conflating them is how a promoted older
+        measurement comes to be reported as the newest one.
+        """
+        return next((c for c in self._rows.get(key) or [] if c.current), None)
+
+    def history(self, key: CapabilityKey) -> list[Capability]:
+        """Every measurement of this identity, newest first."""
+        return list(self._rows.get(key) or [])
+
+    def promote(self, key: CapabilityKey, cap: Capability) -> Capability:
+        """Make one stored measurement the one that counts.
+
+        Moves a pointer; deletes nothing, so it can be undone by promoting the
+        other back.
+        """
+        for other in self._rows.get(key) or []:
+            other.current = other is cap
+        return cap
 
     def known(self, attestors: list[str], *, tag: str, role: Role,
               script: str | None = None) -> dict[str, bool]:
@@ -423,7 +465,8 @@ class CapabilityRecord:
         return out
 
     def rows(self) -> list[Capability]:
-        return list(self._rows.values())
+        """Current rows only. History is reached through `history`."""
+        return [c for held in self._rows.values() for c in held if c.current]
 
 
 def capabilities_from(panel: Panel, *, tag: str, role: Role,

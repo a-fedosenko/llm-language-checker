@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import (JSON, DateTime, Float, ForeignKey, Index, Integer, String,
-                        Text, UniqueConstraint)
+                        Text, UniqueConstraint, text)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -223,8 +223,19 @@ class Capability(Base):
 
     __tablename__ = "capability"
     __table_args__ = (
-        UniqueConstraint("model", "tag", "role", "method_version", "script",
-                         name="uq_capability_identity"),
+        # **Unique among *current* rows only.** Every measurement is kept; one
+        # per identity is flagged current and is what routing and the published
+        # table read. A plain unique constraint made `put_capability` overwrite
+        # in place, so a re-run destroyed the verdict it disagreed with -- the
+        # one thing a reader wants to compare it against.
+        #
+        # Nothing is ever destroyed, so nothing needs protecting from
+        # destruction: the deliberate gesture is *promotion*, not overwrite.
+        # Same instinct as the corpus being append-only, as an adjudication
+        # never editing a measurement, and as an invalidated protocol being
+        # kept with its status rather than deleted.
+        Index("uq_capability_current", "model", "tag", "role", "method_version",
+              "script", unique=True, sqlite_where=text("current = 1")),
         Index("ix_capability_tag_role", "tag", "role"),
     )
 
@@ -244,8 +255,15 @@ class Capability(Base):
     #: made it rather than taken on trust.
     probes: Mapped[list | None] = mapped_column(JSON, nullable=True)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
-    #: Pointer into the corpus: the evidence a reader audits.
+    #: Pointer into the corpus, and a summary of what the run concluded. A
+    #: stored verdict with no way back to the text that justifies it is not
+    #: much of a verdict -- convention 6 is that nearly every real defect here
+    #: was found by reading raw output, and a row has to say where that is.
     evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    #: Whether this is the row that counts. Exactly one per identity, enforced
+    #: by a partial unique index; the rest are history and are never deleted.
+    current: Mapped[bool] = mapped_column(default=True, index=True)
 
     method_version: Mapped[str] = mapped_column(String(32), index=True)
     measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),

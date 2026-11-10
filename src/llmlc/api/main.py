@@ -1159,11 +1159,131 @@ def dialect_options(
 
     return {"tag": tag, "neutral": umbrella, "varieties": varieties,
             "attestors": attestors, "unrunnable": None,
+            # Carried here so selecting a language and a model is enough to see
+            # what is already known, with no second request and no extra click.
+            "stored": _stored_verdict(engine, tag, lang.script) if engine else None,
             # The contrast is a *pair*: `attest_steps` produces one text per arm
             # and `separate` takes two. A third tick would add an option to the
             # blind list that no text was ever produced for -- an answer nobody
             # could be right about, quietly lowering every score.
             "max_varieties": 2, "max_attestors": MAX_ATTESTORS}
+
+
+def _stored_verdict(engine: str, tag: str, script: str | None) -> dict:
+    """What is already known about this model on this variety.
+
+    Shown **before** a run is started, which is the point: the commonest reason
+    to spend twenty calls is not knowing that the answer is already on disk.
+    """
+    from llmlc.db.qualcache import DbCapabilityRecord
+    from llmlc.probe.panel import CapabilityKey, Role
+
+    rec = DbCapabilityRecord()
+    key = CapabilityKey(engine, tag, Role.GENERATION, script)
+    try:
+        history = rec.history(key)
+    except Exception:  # noqa: BLE001 -- no database is "nothing stored", not a 500
+        return {"current": None, "history": []}
+
+    def shown(c) -> dict:
+        return {"id": c.row_id, "current": c.current, "qualified": c.qualified,
+                "verdict": (c.evidence or {}).get("verdict") or c.detail,
+                "confidence": c.confidence, "detail": c.detail,
+                "measured_at": c.measured_at, "evidence": c.evidence}
+
+    return {"current": next((shown(c) for c in history if c.current), None),
+            "history": [shown(c) for c in history]}
+
+
+@app.get("/dialect/stored")
+def dialect_stored(
+    engine: str = Query(...),
+    tag: str = Query(...),
+    scheme: str | None = Query(None),
+) -> dict:
+    """The verdict already on file for this model and variety, with its history.
+
+    Every measurement is kept and one is flagged current. A re-run appends; it
+    does not replace a result somebody trusts unless asked to.
+    """
+    s = get_scheme(scheme or settings.scheme)
+    lang = s.get(tag)
+    if lang is None:
+        raise HTTPException(404, f"No tag {tag!r} in scheme {s.meta.name!r}.")
+    return {"engine": engine, "tag": tag, **_stored_verdict(engine, tag, lang.script)}
+
+
+class Promotion(BaseModel):
+    capability_id: int
+
+
+@app.post("/dialect/promote")
+def dialect_promote(body: Promotion) -> dict:
+    """Make one stored measurement the one that counts.
+
+    The only deliberate gesture the design needs, and it needs no guarding:
+    nothing is destroyed by it. The measurement it supersedes stays in history
+    and can be promoted back, which is why there is no unlock code here -- a
+    password would be protecting against a loss that cannot happen.
+    """
+    from llmlc.db import session
+    from llmlc.db.repo import promote_capability
+
+    try:
+        with session() as s:
+            row = promote_capability(s, body.capability_id)
+            out = {"id": row.id, "model": row.model, "tag": row.tag,
+                   "role": row.role, "current": True, "detail": row.detail}
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
+    return out
+
+
+@app.get("/dialect/record")
+def dialect_record(
+    role: str | None = Query(None, pattern="^(generation|discrimination|comprehension)$"),
+    tag: str | None = Query(None),
+    engine: str | None = Query(None),
+) -> dict:
+    """The capability record, current rows only — the publishable artifact.
+
+    "Which model handles which dialect in which role" is plausibly more useful
+    to a reader than any single model's verdict, so it is served in the shape
+    somebody would publish rather than as rows to be reassembled.
+
+    Current rows only. History is a working record and belongs to whoever is
+    deciding what counts; the published artifact is what they decided.
+    """
+    from sqlalchemy import select
+
+    from llmlc.db import session
+    from llmlc.db.models import Capability
+    from llmlc.export.artifacts import METHOD_VERSION
+
+    stmt = select(Capability).where(Capability.current.is_(True),
+                                    Capability.method_version == METHOD_VERSION)
+    if role:
+        stmt = stmt.where(Capability.role == role)
+    if tag:
+        stmt = stmt.where(Capability.tag == tag)
+    if engine:
+        stmt = stmt.where(Capability.model == engine)
+
+    out: dict[str, dict] = {}
+    try:
+        with session() as s:
+            for r in s.scalars(stmt.order_by(Capability.tag, Capability.role,
+                                             Capability.model)):
+                out.setdefault(r.tag, {}).setdefault(r.role, {})[r.model] = {
+                    "qualified": r.qualified, "verdict": (r.evidence or {}).get("verdict"),
+                    "confidence": r.confidence, "detail": r.detail,
+                    "measured_at": r.measured_at.isoformat(),
+                    "evidence": r.evidence,
+                }
+    except Exception:  # noqa: BLE001 -- no database is an empty record
+        out = {}
+    return {"method_version": METHOD_VERSION, "scheme": settings.scheme,
+            "tags": out}
 
 
 def _attestor_candidates() -> list[str]:

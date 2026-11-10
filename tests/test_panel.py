@@ -316,7 +316,7 @@ def test_the_record_offers_no_way_to_skip_a_control():
     self-confirming -- the record would have become the stale stored claim it
     replaced."""
     api = {n for n in dir(CapabilityRecord) if not n.startswith("_")}
-    assert api == {"put", "get", "known", "rows"}
+    assert api == {"put", "get", "known", "rows", "history", "promote"}
     for banned in ("trustworthy", "qualified", "vouch", "skip", "is_ok"):
         assert banned not in api
 

@@ -98,6 +98,12 @@
   /* A group chip is a shortcut over the statuses beside it, not a sixth value.
      Set apart so it does not read as one, and separated from the breakdown. */
   .chip.group { border-style: dashed; margin-right: 10px; }
+  /* Old against new, when a re-run disagrees. */
+  table.compare { border-collapse: collapse; margin: 6px 0; font-size: 15px; }
+  table.compare th, table.compare td { padding: 3px 14px 3px 0; text-align: left;
+                                       border-bottom: 1px solid var(--line); }
+  table.compare th { color: var(--muted); font-weight: 500; }
+
   /* The panel, as removable chips. A scrolling list of checkboxes hides the
      answer to the only question a reader has -- *who is on the panel* -- among
      the models that are not, and makes removing one a hunt. Chips put the
@@ -479,6 +485,7 @@
       <button id="d-specs-reset" class="btn ghost">Reset to the shipped specifications</button>
     </details>
 
+    <div class="note" id="d-stored" hidden></div>
     <div class="note" id="d-plan" hidden></div>
     <div class="note" id="d-next" hidden></div>
     <div id="d-steps"></div>
@@ -872,9 +879,40 @@ async function loadDialectOptions() {
     const d = await j(`/dialect/options?${q}`);
     renderVarietyPicker(d);
     renderAttestorPicker(d);
+    renderStored(d.stored);
+    benchStored = d.stored;
   } catch (e) {
     $('#d-varieties').innerHTML = `<span class="ev">${esc(e.message)}</span>`;
   }
+}
+
+// What was already known when this run started. Held so the end of the run can
+// put the two side by side without asking again — and so a re-run cannot be
+// compared against a record it has itself just written.
+let benchStored = null;
+
+const AGO = ts => {
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  return s < 3600 ? `${Math.round(s / 60)} min ago`
+       : s < 172800 ? `${Math.round(s / 3600)} h ago`
+       : `${Math.round(s / 86400)} days ago`;
+};
+
+function renderStored(stored) {
+  const box = $('#d-stored');
+  const cur = stored && stored.current;
+  if (!cur) { box.hidden = true; return; }
+  // Said before anything is spent. The commonest reason to pay for twenty
+  // calls is not knowing the answer is already on disk.
+  box.hidden = false;
+  box.className = 'note';
+  const n = (stored.history || []).length;
+  box.innerHTML = `<strong>Already measured.</strong>
+    <code>${esc(cur.verdict)}</code>, confidence ${esc(cur.confidence)},
+    ${esc(AGO(cur.measured_at))}.
+    ${n > 1 ? `<span class="ev">${n} measurements on file; this is the current one.</span>` : ''}
+    <br><span class="ev">Running again appends a new measurement — it does not
+    replace this one. You decide afterwards which counts.</span>`;
 }
 
 function renderVarietyPicker(d) {
@@ -1535,6 +1573,69 @@ $('#d-next-variety').addEventListener('click', async () => {
   startBench();
 });
 
+// A re-run never replaces what was there. If it disagrees, both are shown and
+// the reader says which counts — and if it agrees there is nothing to decide,
+// so nothing is asked.
+function renderComparison(r) {
+  const box = $('#d-compare');
+  const was = benchStored && benchStored.current;
+  if (!was) { box.hidden = true; return; }
+  box.hidden = false;
+  // Agreeing on the verdict is not the same as having nothing to decide. A
+  // re-run with a wider panel can reach the same answer on *better* evidence —
+  // `full-command` at high confidence against `full-command` at low — and that
+  // is worth promoting. Confidence is part of the comparison, not a footnote.
+  const sameVerdict = was.verdict === r.verdict;
+  const RANK = { low: 0, medium: 1, high: 2 };
+  const better = (RANK[r.confidence] ?? 0) > (RANK[was.confidence] ?? 0);
+  const settled = sameVerdict && !better;
+  box.className = settled ? 'note' : 'note warn';
+  box.innerHTML = settled
+    ? `<strong>Same as before.</strong> <code>${esc(was.verdict)}</code> at
+       ${esc(was.confidence)} confidence, measured ${esc(AGO(was.measured_at))}
+       and again now. The earlier measurement stays current; nothing to decide.`
+    : `<strong>${sameVerdict
+         ? 'Same verdict, firmer evidence.'
+         : 'This disagrees with what was on file.'}</strong>
+       <table class="compare">
+         <tr><th></th><th>on file</th><th>this run</th></tr>
+         <tr><td>verdict</td><td><code>${esc(was.verdict)}</code></td>
+             <td><code>${esc(r.verdict)}</code></td></tr>
+         <tr><td>confidence</td><td>${esc(was.confidence)}</td>
+             <td>${esc(r.confidence)}</td></tr>
+         <tr><td>measured</td><td>${esc(AGO(was.measured_at))}</td><td>now</td></tr>
+       </table>
+       <span class="ev">The earlier one still counts${sameVerdict
+         ? ', though this run measured the same thing against a stronger panel'
+         : ''}. Both are kept whichever you choose, so this can be undone.</span>
+       <div class="actions"><button class="btn" id="d-promote">Make this run the
+       current result</button></div>`;
+}
+
+$('#d-result').addEventListener('click', async (ev) => {
+  if (!ev.target.closest('#d-promote')) return;
+  // The newest row for this identity is the run that just finished.
+  const q = new URLSearchParams({ engine: $('#d-engine').value.trim(),
+                                  tag: $('#d-tag').value.trim(),
+                                  scheme: $('#d-scheme').value });
+  try {
+    const stored = await j(`/dialect/stored?${q}`);
+    const fresh = (stored.history || []).find(h => !h.current);
+    if (!fresh) return;
+    await j('/dialect/promote', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ capability_id: fresh.id }) });
+    benchStored = await j(`/dialect/stored?${q}`);
+    $('#d-compare').className = 'note';
+    $('#d-compare').innerHTML = `<strong>Done — this run is now the current
+      result.</strong> <span class="ev">The one it superseded is still on file
+      and can be promoted back.</span>`;
+    renderStored(benchStored);
+  } catch (e) {
+    $('#d-compare').innerHTML += `<div class="note bad">${esc(e.message)}</div>`;
+  }
+});
+
 function renderDialectResult(sess) {
   const r = sess.result;
   if (!r) {
@@ -1562,8 +1663,9 @@ function renderDialectResult(sess) {
     <!-- What the run left behind, so "is that it?" has an answer on the page
          rather than in the source. Nothing is pending and nothing needs
          approving: a measurement is not a proposal. -->
+    <div class="note" id="d-compare"></div>
     <div class="note">
-      <strong>Run finished. Nothing is waiting on you.</strong><br>
+      <strong>Run finished.</strong><br>
       <span class="ev">
         Recorded: <b>${esc(r.engine)}</b> can
         ${['production', 'full-command'].includes(r.verdict) ? '' : '<b>not</b> '}write
@@ -1577,6 +1679,7 @@ function renderDialectResult(sess) {
         language tier and does not belong in that table.
       </span>
     </div>`;
+  renderComparison(r);
 }
 
 function renderBenchSession(sess) {

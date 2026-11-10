@@ -239,14 +239,87 @@ def test_script_is_part_of_the_identity(db):
     assert r.get(CapabilityKey("m", "sr-me-latn", Role.DISCRIMINATION, "Latn")) is None
 
 
-def test_re_measuring_updates_rather_than_duplicating(db):
+def test_a_first_measurement_is_current_because_it_overrides_nothing(db):
+    from llmlc.db.qualcache import DbCapabilityRecord
+
+    r = DbCapabilityRecord()
+    key = CapabilityKey("m", "sr", Role.DISCRIMINATION)
+    r.put(Capability(key, True))
+    assert r.get(key).qualified is True, "a first measurement is useless un-promoted"
+
+
+def test_re_measuring_appends_and_leaves_the_trusted_row_standing(db):
+    """The rule the whole design turns on. A later measurement disagreeing with
+    a result somebody trusts must not replace it because a button was clicked --
+    and nothing is destroyed either way, which is what a password was being
+    asked to protect."""
     from llmlc.db.qualcache import DbCapabilityRecord
 
     r = DbCapabilityRecord()
     key = CapabilityKey("m", "sr", Role.DISCRIMINATION)
     r.put(Capability(key, True))
     r.put(Capability(key, False, detail="failed: order"))
-    assert len(r.rows()) == 1 and r.get(key).qualified is False
+
+    assert r.get(key).qualified is True, "the current row stands"
+    hist = r.history(key)
+    assert len(hist) == 2, "and the new one is kept"
+    # Newest first: ordering is chronology, and the flag -- not the position --
+    # says which one counts. Conflating the two is how a promoted older
+    # measurement comes to be reported as the newest one.
+    assert [c.qualified for c in hist] == [False, True]
+    assert [c.current for c in hist] == [False, True]
+
+
+def test_promoting_makes_a_stored_measurement_current_without_losing_the_other(db):
+    from llmlc.db.qualcache import DbCapabilityRecord
+
+    r = DbCapabilityRecord()
+    key = CapabilityKey("m", "sr", Role.DISCRIMINATION)
+    r.put(Capability(key, True))
+    r.put(Capability(key, False, detail="failed: order"))
+    newer = next(c for c in r.history(key) if not c.current)
+
+    r.promote(key, newer)
+    assert r.get(key).qualified is False
+    assert len(r.history(key)) == 2, "promotion moves a pointer, it does not delete"
+
+
+def test_promotion_can_be_undone_because_nothing_was_destroyed(db):
+    from llmlc.db.qualcache import DbCapabilityRecord
+
+    r = DbCapabilityRecord()
+    key = CapabilityKey("m", "sr", Role.GENERATION)
+    r.put(Capability(key, True, detail="full-command"))
+    r.put(Capability(key, False, detail="no-evidence"))
+    newer = next(c for c in r.history(key) if not c.current)
+    r.promote(key, newer)
+    older = next(c for c in r.history(key) if not c.current)
+    r.promote(key, older)
+    assert r.get(key).detail == "full-command"
+
+
+def test_an_explicit_promotion_supersedes_on_the_way_in(db):
+    """A caller that already knows it wants the new one to count says so, rather
+    than writing it and promoting it in two steps."""
+    from llmlc.db.qualcache import DbCapabilityRecord
+
+    r = DbCapabilityRecord()
+    key = CapabilityKey("m", "sr", Role.DISCRIMINATION)
+    r.put(Capability(key, True))
+    r.put(Capability(key, False, detail="failed: order"), promote=True)
+    assert r.get(key).qualified is False and len(r.history(key)) == 2
+
+
+def test_routing_reads_only_the_current_row(db):
+    """History must not leak into the hint: two rows for one attestor would
+    make `known` ambiguous about which measurement it is reporting."""
+    from llmlc.db.qualcache import DbCapabilityRecord
+
+    r = DbCapabilityRecord()
+    key = CapabilityKey("m", "sr", Role.DISCRIMINATION)
+    r.put(Capability(key, True))
+    r.put(Capability(key, False))
+    assert r.known(["m"], tag="sr", role=Role.DISCRIMINATION) == {"m": True}
 
 
 def test_the_routing_query_reads_every_model_for_one_variety(db):

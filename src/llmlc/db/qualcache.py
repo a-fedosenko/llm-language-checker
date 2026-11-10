@@ -44,7 +44,7 @@ class DbCapabilityRecord:
     def __init__(self, method_version: str = METHOD_VERSION) -> None:
         self.method_version = method_version
 
-    def put(self, cap):
+    def put(self, cap, *, promote: bool | None = None):
         from llmlc.db.repo import put_capability
 
         with session() as s:
@@ -54,7 +54,8 @@ class DbCapabilityRecord:
                 "qualified": cap.qualified, "confidence": cap.confidence,
                 "probes": list(cap.probes) or None, "detail": cap.detail or None,
                 "method_version": self.method_version,
-            })
+                "evidence": getattr(cap, "evidence", None) or None,
+            }, promote=promote)
         return cap
 
     def get(self, key):
@@ -80,7 +81,37 @@ class DbCapabilityRecord:
                     capabilities_for(s, tag, role.value, self.method_version, script)}
         return {a: rows[a] for a in attestors if a in rows}
 
+    def history(self, key) -> list:
+        """Every measurement of this identity, current first."""
+        from llmlc.db.repo import capability_history
+
+        with session() as s:
+            return [self._as_capability(r, key) for r in capability_history(
+                s, key.model, key.tag, key.role.value, self.method_version,
+                key.script)]
+
+    def promote(self, key, cap):
+        """Make one stored measurement the one that counts."""
+        from llmlc.db.repo import promote_capability
+
+        with session() as s:
+            promote_capability(s, cap.row_id)
+        return cap
+
+    @staticmethod
+    def _as_capability(row, key):
+        from llmlc.probe.panel import Capability
+
+        cap = Capability(key=key, qualified=row.qualified,
+                         confidence=row.confidence, probes=row.probes or [],
+                         detail=row.detail or "",
+                         measured_at=row.measured_at.timestamp())
+        cap.row_id, cap.current = row.id, row.current
+        cap.evidence = row.evidence
+        return cap
+
     def rows(self) -> list:
+        """Current rows only. History is reached through `history`."""
         from llmlc.db.models import Capability
         from sqlalchemy import select
 
@@ -89,7 +120,8 @@ class DbCapabilityRecord:
         with session() as s:
             out = []
             for r in s.scalars(select(Capability).where(
-                    Capability.method_version == self.method_version)):
+                    Capability.method_version == self.method_version,
+                    Capability.current.is_(True))):
                 out.append(Cap(key=CapabilityKey(r.model, r.tag, Role(r.role), r.script),
                                qualified=r.qualified, confidence=r.confidence,
                                probes=r.probes or [], detail=r.detail or "",
