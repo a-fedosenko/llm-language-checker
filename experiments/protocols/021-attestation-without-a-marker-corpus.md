@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Date** | 2026-11-05 |
-| **Status** | hypotheses recorded; instrument built and smoke-tested on live models; the programme run is pending |
+| **Status** | hypotheses recorded; instrument built, bench-driven and smoke-tested on live models at both calibration ends; **the programme run is pending**, behind a review of the bench UI |
 | **Triggered by** | Marker sets exist for **7 of 534** variant tags, and the owner's decision that the remaining 527 will never be authored: each one needs somebody who reads the language, and that throughput does not exist. The instrument is sound (protocol 012 proved it) and cannot be scaled, which makes it the wrong instrument. |
 | **Artifacts** | S12.5. Planned: `probe/attest.py`, `probe/variant.py`, a capability-record table, `api/bench.py`. `markers/` is retained as fixtures, not deleted — see *Consequences known in advance*. |
 

@@ -16,6 +16,7 @@ starting one is gated exactly like `POST /scans`.
 """
 from __future__ import annotations
 
+import copy
 import threading
 import time
 import uuid
@@ -394,6 +395,12 @@ def adjudicate(session: Session, overrides: list[dict]) -> dict:
     if result is None:
         raise ValueError("This run has no result to adjudicate yet.")
 
+    # The overrides go onto a copy. Applying them to `result.items` would edit
+    # the measurement this function promises not to touch -- and, because a
+    # verdict already corrected is no longer a change, a second pass over the
+    # same correction would report that it had applied nothing.
+    items = copy.deepcopy(result.items)
+
     by_spec: dict[str, dict[int, FactVerdict]] = {}
     for o in overrides:
         try:
@@ -403,7 +410,7 @@ def adjudicate(session: Session, overrides: list[dict]) -> dict:
             raise ValueError(f"Not a usable override: {o!r} ({e})") from e
 
     applied, changed = [], 0
-    for item in result.items:
+    for item in items:
         wants = by_spec.get(item.spec_id)
         if not wants or not (item.judgement and item.judgement.ok):
             continue
@@ -421,7 +428,7 @@ def adjudicate(session: Session, overrides: list[dict]) -> dict:
                             "fact": item.facts[i] if i < len(item.facts) else None,
                             "was": was.value, "now": v.value})
 
-    rescored = score_run(result.items, qualification=result.qualification,
+    rescored = score_run(items, qualification=result.qualification,
                          tag=result.tag)
     session.adjudication = {
         "applied": applied, "changed": changed,

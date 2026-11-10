@@ -18,49 +18,82 @@ We are building **llm-language-checker**: a self-hosted, heuristic tool that mea
 
 ---
 
-# Next session: the dialect problem
+# Next session: review and refactor the Bench
 
-This is what the session is for. Everything else below is background.
+**The dialect method is built and works. The page that drives it does not read well, and that is the job.**
 
-**The complaint, in the owner's words:** the scan method "is not precise at all as it ignores regional differences."
+S12.5 parts 0–5 are done and committed, protocol 021 is written with its hypotheses recorded, and the battery has been smoke-tested against live models at both calibration ends. What has *not* had a single considered pass is the Bench UI: it grew by accretion across a dozen small corrections, each one sound on its own, and the result is a page its own owner called "messy and not really understandable". Treat it as a redesign, not a bug list.
 
-That is correct as stated, and the cause is one line of the data model: the equivalence class is **`iso639_3|script`**. A scan probes one tag per class and the rest inherit, so `srp|Cyrl` holds `sr`, `sr-BA`, `sr-Cyrl-ME`, `sr-XK` and is probed **once — through bare `sr`, which carries no region**. The class collapse is what makes 602 locales cost 363 experiments; it is also what makes the scan dialect-blind. The thing that makes it affordable is the thing that makes it imprecise.
+## What is wrong with it, concretely
 
-## The numbers to think with
+- **It serves two different probes through one form**, and the fields that belong to each are distinguished only by being hidden. Seven controls either way, in a grid that reflows.
+- **The step cards carry too much and say too little.** `renderStep` has a ladder path and a dialect path with different detail keys, and the dialect one dumps a dozen `<dl>` rows that a reader has to triage.
+- **The end of a run accumulated three stacked notes** — verdict, comparison, "what this left behind" — each added to answer a question the previous version raised.
+- **Four distinct notes can be on screen at once** (`#d-note`, `#d-open`, `#d-stored`, `#d-plan`) before a run even starts.
 
-| | |
+**A defect pattern worth knowing before you edit `index.html`.** Two CSS blocks were added by unguarded `str.replace` calls that silently matched nothing, so the facts table and the picker lists rendered unstyled for several commits without anyone noticing. **Every edit to that file must assert its anchor matched.** Relatedly, `.grid { display: grid }` beat the UA stylesheet's `[hidden] { display: none }`, so hidden containers stayed on screen — now fixed once with `[hidden] { display: none !important }`, but the class of bug is worth remembering.
+
+## What is built, and how it hangs together
+
+The method is five probes over two halves. **P3 conversion and P4 self-consistency need no attestor at all** — they are the dialect equivalent of the deterministic negative, and they run first so a negative can be settled without a panel call. **P1 blind identification and P2 contrast** are the paid half. **P5 marker grounding** is not a call: `attest.identify` and `attest.separate` ground their own results and `dialect.grounding` tallies them.
+
+| file | what it owns |
 |---|---|
-| TMS list | 602 tags, 363 classes, **239 inherit** rather than being probed — **227 of those differ only by region** |
-| public catalogue | 9,589 tags, 9,055 classes, 534 inherit, all 534 by region |
-| marker sets authored | **7 of 534** variant tags — en-AU, en-GB, and the Serbian sets (ru-BY is a declared non-difference) |
-| full ladder run | ~9–15 calls per class |
-| marker probe | **4 calls** per variant tag |
+| `probe/attest.py` | the primitives, and **the blinding** — the expected answer is not a parameter of `identify`, so it cannot reach a prompt. `Blind` carries what an attestor may see and nothing else |
+| `probe/dialect.py` | the five probes, the verdict aggregation, `attest_steps` and its drain `run_attestation` |
+| `probe/panel.py` | the two manufactured controls, the family guard, `CapabilityRecord` |
+| `probe/variant.py` | `DialectVerdict`, beside `VariantEvidence` rather than inside it |
+| `api/bench.py` | sessions for both probes, and `adjudicate` |
 
-## The reframe worth testing before redesigning anything
+**One traversal, two consumers** (convention 11): `attest_steps` is a generator, `run_attestation` drains it, and `tests/test_attest_steps.py` pins that stepping and draining reach the same result and spend the same calls across seven control-flow cases.
 
-S6 already split this into **two measurements**, and they are not the same question:
+### The three rules the design rests on
 
-- the **ladder**, per class — *can the model write this language at all*
-- the **marker probe**, per variant tag — *does it mark this region*
+1. **An attestor is never told the answer**, enforced by signature rather than by prompt wording. A test asserts that the same call with a *different* expectation produces a byte-identical prompt.
+2. **Controls are manufactured, not collected** — which is how this escapes the problem that killed the marker corpus. Two survive, because only these have answers certain by construction: **identity** (one text as both halves of a pair; it cannot be two varieties) and **order** (one pair shown both ways; the answer must follow the text, not the slot). Two of the three controls in the original design turned out to need knowledge *about the dialect*, which is exactly what we do not have.
+3. **The record routes, it never vouches.** `CapabilityRecord` exposes `put`, `get`, `known`, `rows`, `history`, `promote` and nothing that answers "is this attestor trustworthy" — a test pins the public surface. Controls run every time regardless of what is stored.
 
-So "measure every region" need not mean running the ladder 227 more times (~2,050 calls/engine). It can mean ladder-per-class plus a 4-call marker probe per variant (~910 calls/engine), which is less than half the cost **and measures the right thing** — re-running the ladder for `sr-ME` would mostly re-measure whether the model writes Serbian, which is already known.
+### Storage
 
-On that reading the architecture is right and the gap is **authoring throughput**: 7 marker sets exist because each one needs somebody who reads the language. Serbian took an afternoon and is still `reviewed: false`.
+**Append-only with a current flag.** Schema head **d7b2c0a94e13**. A re-run never replaces a verdict somebody trusts: `put_capability(promote=None)` promotes only when nothing is current yet, and promotion is an explicit gesture that deletes nothing and can be undone. There is deliberately **no unlock code** — a password on an overwrite still overwrites, and nothing is destroyed here for it to protect.
 
-**The counter-case, which may be decisive.** A model's *base capability* could differ by region — fluent `ar-EG`, poor `ar-MA` — and no marker set would catch that, because markers measure marking, not adequacy. If that happens, the class collapse really is wrong and the 65% is justified. **It is cheap to test on one language before deciding for all of them**: run the ladder directly on two regional tags of one macrolanguage and compare adequacy, not markers.
+This differs from `upsert_result`, which auto-promotes fresher ladder results, and the difference is intended: a ladder result comes from an unattended scan over hundreds of languages; a dialect verdict is produced one at a time by a person who is right there.
 
-## What is already built that bears on it
+`GET /dialect/record` serves the publishable JSON. `GET /dialect/stored` is what the page shows on selection.
 
-- **Method 3.0.0 puts the region in the prompt** — `Serbian (Montenegro, Cyrillic script)`, in a system message casting the model as a speaker of that variety. Verified to change the output: `дете` against `дијете`. **But it is inert in a scan**, because the class representative has no region. It only fires where a tag is probed directly, which is what the bench does.
-- **`variant_evidence` has four states** (proven / proven-failed / not-distinguishable / untested) so the remaining work stays countable.
-- **The marker instrument grew three things** while authoring Serbian, all in `probe/markers.py`: **stem markers** (`пјешач-`) because the inflection list was English-only and any Slavic set silently scored near zero; **worked examples checked at load time**, which is the only guard available to an author who cannot read the language, and which caught a real error on the first draft; and **`also`**, so one set serves every spelling of a language.
-- **`markers/serbian.json`** — 58 index-aligned pairs on the yat reflex, Cyrillic and Latin. Cyrillic works end to end (`proven`, rate 1.00). **Latin cannot be probed**: see the carried-forward item below.
+## What is actually measured
 
-## The two decisions this blocks
+**Two verdicts**, both `openai-gpt-4o`: `pt-pt` → `full-command` (high, two measurements on file), `sr-ba-latn` → `no-evidence` (low). Everything else in `capability` is attestor competence.
 
-1. **Split equivalence classes by region?** +239 probes on the TMS list, ~+2,150 calls per engine, **~65% more per scan**. Do not re-run the programme before settling it, or it gets run twice.
-2. **Protocol 020's H2** (`experiments/protocols/020-region-aware-prompts.md`) — whether method 3.0.0's system/user split moves the verdict on languages with no regional variant. Still open, still unrun, and still what gates the 14,200-call re-run. Its H1 and H3 were superseded by [021](../experiments/protocols/021-attestation-without-a-marker-corpus.md), which answers them with blind identification rather than chrF++ between two generations.
+**`sr-me-cyrl` and `ru-kz` have attestor rows but no verdict** — those runs predate the producer record existing, and their verdicts are gone. Not retroactive. Re-run them if you want them.
 
+## What the smoke test found
+
+Recorded in protocol 021's Results, with n=1 per arm stated plainly.
+
+- **`sr-me-cyrl`** → `full-command`, high. Both attestors named Montenegro unprompted citing **Пјешачила**, the ijekavian yat reflex, grounded in the text. Consistent with 012's `proven` 1.00.
+- **`ru-kz`** → `no-evidence`. Zero conversion edits; all three attestors independently said `generic` and `indistinguishable`. **The instrument that fires on a known positive stays silent on a known null**, same models, same prompts. That is what H5 needs.
+- **A control rejected an attestor on live data.** `groq-qwen3-8-27b` failed the order control — shown one pair twice it answered Serbia/Montenegro, then indistinguishable/indistinguishable.
+- **`ru-by` produced Belarusian**, and the gate was right to convict. Protocol 010's failure reproducing, exactly as 020's H3 predicted — 020 expected it at `gsw-CH` and it arrived at `ru-BY`. A region whose name is also a language's name cannot be probed through the region-qualified designator; the Russian null runs through `ru-kz` instead.
+
+## Defects this work found and fixed
+
+- **`pt` and `pt-br` produced the identical prompt.** `candidates_for` passed `region_name` unconditionally, and an umbrella tag has no region subtag while still inheriting a region *name*. The neutral arm was being asked to be the dialect it is contrasted against — every contrast would have been null by construction, and the null would have looked like a finding.
+- **`scope` held two different claims** — ISO macrolanguage and the TMS umbrella flag — making `kk` a macrolanguage with no members. Now `scope` and `inclusive`.
+- **The conversion copy check convicted the correct answer.** In a conversion the user message *is* the text being transformed, so returning it unchanged was recorded as `copy`. The whole Russian arm came back convicted for being right.
+- **The order control was a repeat test half the time.** Obtaining the two presentations by swapping arguments re-salts the coin; measured at 1,014 of 2,000 pairs showing the same order twice.
+- **A third variety would have been a phantom option.** `sibling` takes only the first non-tag variety, so a third tick added a blind option no text was produced for. Hence exactly two.
+- **The producer's verdict was recorded nowhere** — only attestor competence was.
+
+## What remains
+
+**Part 6, the programme run, has not started** — deliberately, pending bench review. Protocol 021's sample is five families (SR, ES, PT, EN, RU), ~20 calls per variety with a three-attestor panel.
+
+**020's H2 is still open and still gates the four-engine re-run.** Its H1 and H3 are superseded by 021.
+
+**The limit on H5, stated in 021 and worth re-reading before interpreting any null:** an attestor answering `indistinguishable` to everything passes both controls. Catching over-merging needs a pair known to be distinguishable, which is the knowledge we lack by assumption — available only for Serbian and English from protocol 012. A clean Russian null is consistent both with the method working *and* with every attestor merging everything, and only the calibration arms can tell those apart.
+
+---
 ---
 
 
@@ -141,11 +174,21 @@ Beyond that set nobody can be qualified, so the honest output is `unverified`. *
 
 ## Done since the last handoff
 
+**S12.5 — dialect attestation, parts 0–5.** The marker corpus is retired as the instrument (the seven authored sets stay as calibration fixtures); measurement moves to evidence the models produce and we verify. Protocol 021 carries the hypotheses and the smoke test. The operating scheme became `catmint`. See the section at the top for the architecture, the rules, and the defects it found.
+
+
+
 **The Catmint locale scan** (jobs 14–17, 154 locales × 4 engines) and the control-gap ranking in `data/results/control_gap.json`: the high-value slice is **27 locales, not 120**. Written up in doc 03. It also exposed a control-lookup bug — `ko` carries script `Kore`, the control text carries `Hang` — now fixed so a control answers for a script-*compatible* spelling and only that.
 
 **S9 — README and methodology.** `docs/04 - Methodology.md` is new; the README gained a *What it found* section, the coverage ceiling, a *What a result does not mean* list, and three factual corrections (stale status block, `SCAN_TRIGGER` documented as the library default rather than what compose sets, `SCAN_TRIGGER_MAX_CALLS` as 2000 against an actual 5000).
 
 ## Next step
+
+**1. Review and refactor the Bench UI.** See the top. It works and it does not read well, and it has had no considered pass — only a dozen small corrections.
+
+**2. Then part 6**, the programme run, once the bench is worth sitting at.
+
+
 
 **1. A protocol on the `Assisted`/`Proficient` cut.** 13% of tiers flip when a qualified reader is swapped, and five `Assisted` languages scored content 0.00 while being routed as "MT-assist, mandatory human pass" — fluent text, no meaning. Protocol 018 measured cuts at 0.50/0.70/0.85 as non-monotonic, so 0.95 was the only monotonic option; the live runs are better evidence than that simulation. This decides whether three tiers are honest or two.
 
@@ -160,6 +203,10 @@ Beyond that set nobody can be qualified, so the honest output is `unverified`. *
 - **Whether to build the local GPU back-translator.** Not built; the GPU is unused; `hardware.detect()` now reports `profile: api` with `capable_of: gpu-int8` rather than claiming MADLAD read the text. The argument for finishing it is **reproducibility**, not cost — a vendor endpoint cannot be pinned, and a published dataset whose instrument has been retired cannot be re-graded. Detection logic survives behind `hardware.LOCAL_BACKTRANSLATOR`. Do not switch instruments mid-programme: convention 4 would strand every existing result.
 
 ## Open, carried forward
+
+- **Dialect verdicts are not joined to the support table.** A `capability` row with role `generation` says deepseek writes `pt-pt`; nothing surfaces that beside the language tier a reader sees on the Support tab. Joining them is a real design question — a `Result` row needs a tier, a back-translator and a judge, none of which a dialect run has — and is probably S13 rather than a patch.
+- **`sr-me-cyrl` and `ru-kz` have attestor records but no verdict.** Their runs predate the producer record. Re-run to fill them.
+- **The capability record has no staleness view.** `measured_at` is stored and nothing reports on it, so a year-old verdict reads exactly like a fresh one in the published JSON.
 
 - **Serbian in Latin script cannot be marker-probed, and the reason is not a bug.** GlotLID reads ijekavian Serbian in Latin as Bosnian or Croatian — correctly, in that the three written standards overlap almost entirely in that script — so the gate returns `relative_substitution` and marker scoring never runs. The Latin marker set exists and validates against its examples; the Cyrillic one works end to end (`proven`, rate 1.00), because `srp_Cyrl` is identified cleanly. Whether `srp`/`bos`/`hrv`/`cnr` should satisfy one another *when the script is Latin* widens what counts as a pass, so it is a protocol and not a wider accept list. Same shape as the carried-forward `mag`-in-Bhojpuri item below.
 

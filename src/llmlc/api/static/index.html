@@ -878,6 +878,43 @@ const PROBE_LEAD = {
 // default. Fetched rather than derived here: a page that computed its own
 // defaults would pre-select a different experiment from the one an unspecified
 // run performs (convention 9).
+// Whichever probe is selected, say what is already on disk for this engine and
+// tag before anything is spent. The ladder had no such check: its form read
+// the same two fields, offered no sign that the pair had been measured before,
+// and a re-run cost a full ladder to re-learn what was already a result row.
+async function loadStoredForSelection() {
+  if ($('#d-probe').value === 'dialect') return loadDialectOptions();
+  return loadLadderStored();
+}
+
+async function loadLadderStored() {
+  const tag = $('#d-tag').value.trim(), engine = $('#d-engine').value.trim();
+  const box = $('#d-stored');
+  if (!tag || !engine) { box.hidden = true; return; }
+  try {
+    // 404 is the ordinary answer here - it means nobody has measured this pair
+    const d = await j(`/results/${encodeURIComponent(engine)}/${encodeURIComponent(tag)}`);
+    renderStoredLadder(d);
+  } catch (e) {
+    box.hidden = true;
+  }
+}
+
+function renderStoredLadder(r) {
+  const box = $('#d-stored');
+  box.hidden = false;
+  box.className = 'note';
+  const when = r.tested_at ? new Date(r.tested_at).toLocaleString() : 'date not recorded';
+  const ci = r.ci && r.ci[0] != null ? ` [${num(r.ci[0])}, ${num(r.ci[1])}]` : '';
+  box.innerHTML = `<strong>Already measured.</strong>
+    <b>${esc(r.tier || 'no tier')}</b>, adequacy ${num(r.s_content)}${ci},
+    eligibility ${num(r.s_lang)}, evidence ${esc(r.evidence || '')} — ${esc(when)}.
+    ${r.stale ? ' <span class="flag warn">measured under an older method</span>' : ''}
+    <br><span class="ev">${esc(r.workflow || '')}</span>
+    <br><span class="ev">Running again appends a new measurement and the newer one
+    becomes the current result for this pair.</span>`;
+}
+
 async function loadDialectOptions() {
   if ($('#d-probe').value !== 'dialect') return;
   const tag = $('#d-tag').value.trim(), engine = $('#d-engine').value.trim();
@@ -1035,7 +1072,9 @@ function switchProbe() {
   for (const el of document.querySelectorAll('.d-dialect-only')) el.hidden = !dialect;
   $('#d-lead').innerHTML = PROBE_LEAD[dialect ? 'dialect' : 'ladder'];
   suggestTags();
-  if (dialect) loadDialectOptions();
+  //a notice about the other probe's record would be about a different question
+  $('#d-stored').hidden = true;
+  loadStoredForSelection();
 }
 
 async function loadBench() {
@@ -1728,6 +1767,9 @@ function renderBenchSession(sess) {
   benchButtons({ live: false, busy: false });
   $('#d-next').hidden = true;
   refreshSessions();
+  // The corrections a reader made while the run was still going: there was no
+  // result to re-score at the time, and this is the first moment there is one.
+  runAdjudication();
 }
 
 // Corrections the reader has made, by spec id and fact index. Kept on the page
@@ -1754,7 +1796,9 @@ async function runAdjudication() {
   // Only once there is a result to re-score. Before that the correction is
   // remembered and applied when the run ends, so a reader can mark a verdict
   // the moment they see it rather than having to remember it to the end.
-  if (!bench.lastSession || !factFixes.length) return;
+  // `bench.id` is the run still being live - the session only grows a result
+  // when it finishes, and asking before that answers an error, not a score.
+  if (bench.id || !bench.lastSession || !factFixes.length) return;
   try {
     const d = await j(`/bench/${bench.lastSession}/adjudicate`, { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1781,8 +1825,8 @@ function renderAdjudication(d) {
 }
 
 $('#d-probe').addEventListener('change', switchProbe);
-$('#d-tag').addEventListener('change', loadDialectOptions);
-$('#d-engine').addEventListener('change', loadDialectOptions);
+$('#d-tag').addEventListener('change', loadStoredForSelection);
+$('#d-engine').addEventListener('change', loadStoredForSelection);
 switchProbe();
 $('#d-start').addEventListener('click', startBench);
 $('#d-step').addEventListener('click', stepBench);

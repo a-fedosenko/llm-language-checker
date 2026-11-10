@@ -116,6 +116,25 @@ def test_the_ug_case_no_longer_reads_as_plain_light_review():
     assert "fallback" in r["workflow"] and "2 refusal(s) of 3" in r["workflow"]
 
 
+def test_a_measured_pair_carries_what_the_bench_shows_before_a_rerun():
+    """The bench form says "Already measured" for the engine and tag a reader
+    has selected, so a pair that is already on disk is not paid for twice. It
+    reads this row: every field it renders has to be here, or the notice shows
+    blanks and a reader re-runs anyway."""
+    r = client.get("/results/m1/de")
+    assert r.status_code == 200
+    d = r.json()
+    for field in ("tier", "s_content", "ci", "s_lang", "evidence",
+                  "workflow", "tested_at", "stale"):
+        assert field in d, field
+    assert d["tier"] == "Assisted" and d["s_content"] == 0.8
+
+
+def test_an_unmeasured_pair_is_a_404_so_the_notice_stays_hidden():
+    assert client.get("/results/m1/no-such-tag").status_code == 404
+    assert client.get("/results/no-such-engine/de").status_code == 404
+
+
 def test_tier_is_not_capped_by_availability():
     """Capping would restate a refusal as an inability, which is a different claim."""
     assert client.get("/results/m1/ug").json()["tier"] == "Proficient"

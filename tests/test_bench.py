@@ -492,6 +492,34 @@ def test_adjudication_never_edits_the_measurement():
     assert out["adjudicated"] != measured
 
 
+def test_adjudication_leaves_the_judged_verdicts_alone():
+    """The stored score is a snapshot and was never what got edited -- the
+    verdicts behind it were. Applying an override in place made the run's own
+    record say the judge had answered something it never answered."""
+    s = finished_session()
+    item = next(i for i in s._result_obj.items if i.spec_id == "market-fish-price")
+    before = list(item.judgement.verdicts)
+
+    bench_sessions.adjudicate(
+        s, [{"spec_id": "market-fish-price", "index": 4, "verdict": "present"}])
+
+    assert item.judgement.verdicts == before
+
+
+def test_the_same_correction_twice_reports_the_same_change():
+    """A reader who corrects, looks away and corrects again must not be told
+    the second time that their correction changed nothing."""
+    s = finished_session()
+    override = [{"spec_id": "market-fish-price", "index": 4, "verdict": "present"}]
+
+    first = bench_sessions.adjudicate(s, override)
+    second = bench_sessions.adjudicate(s, override)
+
+    assert second["changed"] == first["changed"]
+    assert second["applied"] == first["applied"]
+    assert second["adjudicated"] == first["adjudicated"]
+
+
 def test_the_rescore_uses_the_production_scorer():
     """Two numbers on one page inviting a comparison had better be comparable.
     An override that changes nothing must reproduce the original exactly."""
