@@ -183,7 +183,16 @@
   footer { margin-top: 26px; font-size: 15.6px; color: var(--muted); }
   code { font-family: ui-monospace, monospace; font-size: 15.6px; }
   .pager { display: flex; gap: 10px; align-items: center; margin-top: 12px; font-size: 16.2px; color: var(--muted); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  /* `display: grid` on an author rule beats the UA stylesheet's `[hidden] {
+     display: none }`, so a hidden grid stayed on screen -- which is how the
+     dialect fields came to be showing with the ladder selected. Stated once,
+     here, rather than remembered at every call site. */
+  [hidden] { display: none !important; }
+  /* `start`, not the default stretch: these fields are different heights (one
+     carries chips above its select, another a note below it) and stretching
+     them made a row of controls sit at four different baselines. */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          gap: 12px; align-items: start; }
   label.f { display: block; font-size: 15px; color: var(--muted); margin-bottom: 4px; }
   .field { margin-bottom: 14px; }
   .field input, .field select { width: 100%; }
@@ -452,6 +461,9 @@
         <label class="f" for="d-scheme" data-help="support.scheme">Locale list</label>
         <select id="d-scheme"></select>
       </div>
+      <!-- Probe-specific fields live in the *same* grid as the common ones, so
+           a column is a column whichever probe is selected. Two grids gave two
+           sets of widths and a row that looked like a different form. -->
       <div class="field d-ladder-only">
         <label class="f" for="d-bt" data-help="bench.bt">Back-translator panel</label>
         <input id="d-bt" list="model-list" placeholder="(default panel)">
@@ -460,18 +472,15 @@
         <label class="f" for="d-judge" data-help="scan.judge">Judge</label>
         <input id="d-judge" list="model-list" placeholder="(default)">
       </div>
-    </div>
-
-    <div class="grid d-dialect-only" hidden>
-      <div class="field">
+      <div class="field d-dialect-only" hidden>
         <label class="f" for="d-against" data-help="bench.varieties">Contrast against</label>
         <select id="d-against"><option value="">type a language tag above</option></select>
         <span class="ev" id="d-against-note"></span>
       </div>
-      <div class="field">
+      <div class="field d-dialect-only" hidden>
         <label class="f" for="d-attestor-add" data-help="bench.attestors">Attestor panel
           <span class="ev" id="d-attestors-count"></span></label>
-        <div class="chips" id="d-attestor-chips"></div>
+        <div class="chips" id="d-attestor-chips"><span class="ev">—</span></div>
         <select id="d-attestor-add"><option value="">name a model under test above</option></select>
       </div>
     </div>
@@ -1347,7 +1356,10 @@ async function startBench() {
     renderPlan(d.plan);
     await refreshSessions();
     const dialect = d.kind === 'dialect';
-    if (!dialect && $('#d-mode').value === 'auto') await runBenchToEnd();
+    // Automatic applies to both. It was skipped for the battery, so choosing it
+    // quietly left the run sitting on its first step — a control that does
+    // nothing is worse than one that is absent.
+    if ($('#d-mode').value === 'auto') await runBenchToEnd();
     else describeNext({ kind: dialect ? 'plan' : 'generated' });
   } catch (e) {
     bench.id = null;
